@@ -52,7 +52,7 @@ export function UpdateNotice({ updateStatus }: UpdateNoticeProps) {
           type="button"
           data-testid="update-notice-button"
           size="sm"
-          className="h-8 rounded-lg bg-slate-950 dark:bg-slate-100 px-3 text-sm font-semibold text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-300"
+          className="h-8 rounded-lg bg-slate-950 dark:bg-slate-100 px-3 text-sm font-semibold text-white dark:text-gray-900 hover:bg-slate-800 dark:hover:bg-slate-300"
           onClick={() => void handleUpdate()}
           title={`Copy ${updateStatus.updateCommand}`}
         >

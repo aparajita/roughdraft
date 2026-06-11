@@ -372,8 +372,8 @@ function CommentActionButton({
           ? "rounded-full border border-transparent transition-colors duration-150"
           : "h-7 rounded-full border border-transparent px-2.5 text-[11px] font-medium tracking-[0.08em] uppercase transition-colors duration-150",
         tone === "danger"
-          ? "text-stone-400 hover:bg-rose-100 hover:text-rose-700 dark:text-stone-500 dark:hover:bg-rose-900/40 dark:hover:text-rose-400"
-          : "text-stone-400 hover:bg-[#DED8CE]/45 hover:text-stone-600 dark:text-stone-500 dark:hover:bg-slate-700 dark:hover:text-stone-300",
+          ? "text-gray-400 hover:bg-rose-100 hover:text-rose-700 dark:text-gray-500 dark:hover:bg-rose-900/40 dark:hover:text-rose-400"
+          : "text-gray-400 hover:bg-[#DED8CE]/45 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-300",
         className,
       )}
       onPointerDown={(event) => event.stopPropagation()}

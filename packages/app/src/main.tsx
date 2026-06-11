@@ -4,16 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { App } from "./App";
 import "./style.css";
 
-const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
-function applyColorScheme(dark: boolean) {
-  document.documentElement.classList.toggle("dark", dark);
-}
-
-applyColorScheme(darkQuery.matches);
-darkQuery.addEventListener("change", (event) => {
-  applyColorScheme(event.matches);
-});
+document.documentElement.classList.add("dark");
 
 const rootElement = document.getElementById("root");
 

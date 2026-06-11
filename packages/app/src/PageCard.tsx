@@ -1864,7 +1864,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     .map((commentId) => comments.get(commentId))
     .filter((comment): comment is CriticComment => Boolean(comment));
   const contentCardClass =
-    "rounded-[0.75rem] border border-[#E9E9E8] dark:border-slate-700 bg-white dark:bg-card shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)]";
+    "rounded-[0.75rem] border border-[#E9E9E8] dark:border-border bg-white dark:bg-card shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)]";
   const documentShellClass = cn(
     "document-page-shell",
     layout === "embedded-demo"

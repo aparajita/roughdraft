@@ -74,10 +74,12 @@
 
 @layer components {
   .tiptap {
-    @apply min-h-[120px] text-slate-800 dark:text-slate-200 outline-none;
+    @apply min-h-[120px] outline-none;
     --editor-font-size: 16px;
     font-size: var(--editor-font-size);
     line-height: 1.58;
+    color: var(--foreground);
+    font-family: var(--gh-font-text);
   }
 
   .tiptap p.is-editor-empty:first-child::before {
@@ -89,21 +91,24 @@
   }
 
   .tiptap h1 {
-    @apply mt-[0.1em] mb-[0.7em] font-semibold text-slate-950 dark:text-slate-50;
+    @apply mt-[0.1em] mb-[0.7em] font-semibold;
+    color: var(--foreground);
     font-size: 2.15em;
     line-height: 1.1;
     letter-spacing: -0.03em;
   }
 
   .tiptap h2 {
-    @apply mt-[1.8em] mb-[0.5em] font-semibold text-slate-950 dark:text-slate-50;
+    @apply mt-[1.8em] mb-[0.5em] font-semibold;
+    color: var(--foreground);
     font-size: 1.65em;
     line-height: 1.2;
     letter-spacing: -0.02em;
   }
 
   .tiptap h3 {
-    @apply mt-[1.45em] mb-[0.35em] font-semibold text-slate-950 dark:text-slate-50;
+    @apply mt-[1.45em] mb-[0.35em] font-semibold;
+    color: var(--foreground);
     font-size: 1.25em;
     line-height: 1.28;
     letter-spacing: -0.01em;
@@ -118,7 +123,9 @@
   }
 
   .tiptap a {
-    @apply text-sky-700 dark:text-sky-400 underline decoration-sky-500/50 dark:decoration-sky-400/50 underline-offset-4;
+    @apply underline underline-offset-4;
+    color: var(--gh-link);
+    text-decoration-color: var(--gh-link);
   }
 
   .tiptap .comment-anchor {
@@ -339,7 +346,10 @@
   }
 
   .tiptap code {
-    @apply rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[0.9em] text-slate-900 dark:text-slate-200;
+    @apply rounded px-1.5 py-0.5 text-[0.9em];
+    background-color: var(--gh-inline-code-bg);
+    color: var(--foreground);
+    font-family: var(--font-mono);
   }
 
   .tiptap .comment-decoration code,
@@ -361,6 +371,7 @@
     background-color: var(--code-block-background);
     border-color: var(--code-block-border);
     color: var(--code-block-foreground);
+    font-family: var(--font-mono);
   }
 
   .tiptap pre code {
@@ -368,7 +379,9 @@
   }
 
   .tiptap blockquote {
-    @apply border-l-4 border-slate-300 dark:border-slate-600 pl-4 text-slate-600 dark:text-slate-400;
+    @apply border-l-4 pl-4;
+    border-color: var(--border);
+    color: var(--muted-foreground);
     margin: 1.3em 0;
   }
 
@@ -411,15 +424,12 @@
   }
 
   .tiptap li::marker {
-    color: rgb(51 65 85);
-  }
-
-  .dark .tiptap li::marker {
-    color: rgb(148 163 184);
+    color: var(--foreground);
   }
 
   .tiptap hr {
-    @apply my-6 border-0 border-t border-slate-200 dark:border-slate-700;
+    @apply my-6 border-0 border-t;
+    border-color: var(--border);
   }
 
   .tiptap img {
@@ -438,11 +448,14 @@
 
   .tiptap th,
   .tiptap td {
-    @apply relative min-w-[1em] border border-slate-200 dark:border-slate-700 px-3 py-2 text-left align-top;
+    @apply relative min-w-[1em] border px-3 py-2 text-left align-top;
+    border-color: var(--border);
   }
 
   .tiptap th {
-    @apply bg-slate-50 dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100;
+    @apply font-semibold;
+    background-color: var(--muted);
+    color: var(--foreground);
   }
 
   .tiptap td > *,
@@ -599,6 +612,7 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", sans-serif;
+  --font-mono: var(--gh-font-mono);
   --font-die-grotesk-a: "Die Grotesk A", sans-serif;
   --font-die-grotesk-b: "Die Grotesk B", sans-serif;
   --font-die-grotesk-c: "Die Grotesk C", sans-serif;
@@ -680,43 +694,59 @@
   --code-block-background: oklch(0.985 0.002 84.7);
   --code-block-border: oklch(0.92 0.005 84.2);
   --code-block-foreground: oklch(0.141 0.006 67.1);
+
+  /* GitHub-dark palette — sourced from github-markdown-dark.css; applied to the served document. */
+  --gh-canvas: #020408;
+  --gh-canvas-subtle: #161b22;
+  --gh-fg: #c9d1d9;
+  --gh-link: #58a6ff;
+  --gh-border: #30363d;
+  --gh-quote-fg: #8b949e;
+  --gh-inline-code-bg: rgba(110, 118, 129, 0.4);
+  --gh-font-text:
+    "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --gh-font-mono:
+    "Consolas", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
 .dark {
-  --background: oklch(0.141 0.006 67.1);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 56.1);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 56.1);
-  --popover-foreground: oklch(0.985 0 0);
+  /* Neutral surfaces, text, and borders follow the GitHub-dark palette. */
+  --background: var(--gh-canvas);
+  --foreground: var(--gh-fg);
+  --card: var(--gh-canvas);
+  --card-foreground: var(--gh-fg);
+  --popover: var(--gh-canvas-subtle);
+  --popover-foreground: var(--gh-fg);
+  /* Primary/destructive/chart actions keep the original theme — the GitHub
+     palette in use defines neutral surfaces only, not action colors. */
   --primary: oklch(0.92 0.005 84.2);
   --primary-foreground: oklch(0.21 0.006 56.1);
-  --secondary: oklch(0.274 0.006 61.4);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 61.4);
-  --muted-foreground: oklch(0.705 0.012 67.8);
-  --accent: oklch(0.274 0.006 61.4);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: var(--gh-canvas-subtle);
+  --secondary-foreground: var(--gh-fg);
+  --muted: var(--gh-canvas-subtle);
+  --muted-foreground: var(--gh-quote-fg);
+  --accent: var(--gh-border);
+  --accent-foreground: var(--gh-fg);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.014 66.4);
+  --border: var(--gh-border);
+  --input: var(--gh-border);
+  --ring: var(--gh-link);
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.21 0.006 56.1);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar: var(--gh-canvas);
+  --sidebar-foreground: var(--gh-fg);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.274 0.006 61.4);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.014 66.4);
-  --code-block-background: oklch(0.141 0.006 67.1);
-  --code-block-border: oklch(1 0 0 / 10%);
-  --code-block-foreground: oklch(0.985 0 0);
+  --sidebar-accent: var(--gh-canvas-subtle);
+  --sidebar-accent-foreground: var(--gh-fg);
+  --sidebar-border: var(--gh-border);
+  --sidebar-ring: var(--gh-link);
+  --code-block-background: var(--gh-canvas-subtle);
+  --code-block-border: var(--gh-border);
+  --code-block-foreground: var(--gh-fg);
 }
 
 @keyframes document-save-status-saved-fade {

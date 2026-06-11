@@ -175,10 +175,10 @@ function SelectionMenuButton({
     <button
       type="button"
       data-testid={`selection-menu-action-${toTestIdSegment(label)}`}
-      className={`inline-flex size-9 items-center justify-center rounded-xl border text-slate-600 dark:text-slate-400 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600 ${
+      className={`inline-flex size-9 items-center justify-center rounded-xl border text-gray-600 dark:text-gray-400 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600 ${
         active
           ? "border-sky-200 bg-sky-100 text-sky-950 shadow-[0_8px_18px_rgba(14,116,144,0.14)] dark:border-sky-500/30 dark:bg-sky-400/20 dark:text-sky-100"
-          : "border-transparent hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100"
+          : "border-transparent hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-100"
       } disabled:cursor-not-allowed disabled:opacity-40`}
       onMouseDown={(event) => {
         event.preventDefault();
@@ -767,7 +767,7 @@ export function EditorContextMenu({
           <button
             type="button"
             data-testid="selection-menu-action-comment"
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#E8E3DB] px-3 py-2 text-left text-sm font-bold text-black shadow-[inset_0_1px_0_rgba(255,251,245,0.72)] transition hover:bg-[#ded8ce] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-slate-600 dark:focus-visible:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#E8E3DB] px-3 py-2 text-left text-sm font-bold text-black shadow-[inset_0_1px_0_rgba(255,251,245,0.72)] transition hover:bg-[#ded8ce] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:bg-slate-700 dark:text-gray-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-slate-600 dark:focus-visible:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!onAddComment || editor?.state.selection.empty}
             onMouseDown={(event) => {
               event.preventDefault();
@@ -838,7 +838,7 @@ export function EditorContextMenu({
           />
           <button
             type="button"
-            className="inline-flex size-9 items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600"
+            className="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
               applyLink(linkDraft);
@@ -861,7 +861,7 @@ export function EditorContextMenu({
           </button>
           <button
             type="button"
-            className="inline-flex size-9 items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 transition hover:bg-rose-50 dark:hover:bg-rose-900/40 hover:text-rose-600 dark:hover:text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 dark:focus-visible:ring-rose-800"
+            className="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 transition hover:bg-rose-50 dark:hover:bg-rose-900/40 hover:text-rose-600 dark:hover:text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 dark:focus-visible:ring-rose-800"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
               editor?.chain().focus().unsetLink().run();
@@ -885,7 +885,7 @@ export function EditorContextMenu({
           <button
             type="button"
             data-testid="editor-context-menu-action-add-comment"
-            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!editor || editor.state.selection.empty}
             onClick={() => {
               onAddComment?.();
@@ -900,7 +900,7 @@ export function EditorContextMenu({
           <button
             type="button"
             data-testid="editor-context-menu-action-suggest-insertion"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!editor || !onSuggestInsertion}
             onClick={() => {
               onSuggestInsertion?.();
@@ -912,7 +912,7 @@ export function EditorContextMenu({
           <button
             type="button"
             data-testid="editor-context-menu-action-suggest-deletion"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!editor || editor.state.selection.empty}
             onClick={() => {
               onSuggestDeletion?.();
@@ -924,7 +924,7 @@ export function EditorContextMenu({
           <button
             type="button"
             data-testid="editor-context-menu-action-suggest-replacement"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!editor || editor.state.selection.empty}
             onClick={() => {
               onSuggestReplacement?.();
@@ -982,7 +982,7 @@ export function EditorContextMenu({
           <button
             type="button"
             data-testid="editor-context-menu-action-paste"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700"
+            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700"
             onClick={() => void handlePasteText()}
           >
             Paste
@@ -990,7 +990,7 @@ export function EditorContextMenu({
           <button
             type="button"
             data-testid="editor-context-menu-action-paste-markdown"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700"
+            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700"
             onClick={() => void handlePasteMarkdown()}
           >
             Paste Markdown

@@ -763,7 +763,7 @@ export function DocumentWorkspace({
                       <button
                         type="button"
                         data-testid="document-file-menu-trigger"
-                        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-1 py-0.5 font-mono text-[0.7rem] tracking-[0.01em] text-stone-400 outline-none transition hover:bg-[#EEE9E1] hover:text-stone-600 focus-visible:ring-2 focus-visible:ring-stone-300/70 dark:text-stone-500 dark:hover:bg-slate-800 dark:hover:text-stone-300 dark:focus-visible:ring-slate-600/70"
+                        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-1 py-0.5 font-mono text-[0.7rem] tracking-[0.01em] text-gray-400 outline-none transition hover:bg-[#EEE9E1] hover:text-gray-600 focus-visible:ring-2 focus-visible:ring-stone-300/70 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-gray-300 dark:focus-visible:ring-slate-600/70"
                         title={documentFilenameLabel}
                         aria-label="Document file actions"
                       >
@@ -789,12 +789,12 @@ export function DocumentWorkspace({
                           key={action}
                           type="button"
                           data-testid={`document-file-menu-${action}`}
-                          className="flex h-8 items-center justify-between rounded-md px-2 text-left text-[0.72rem] leading-none text-stone-700 outline-none transition hover:bg-[#EEE9E1] focus-visible:bg-[#EEE9E1] dark:text-stone-300 dark:hover:bg-slate-700 dark:focus-visible:bg-slate-700"
+                          className="flex h-8 items-center justify-between rounded-md px-2 text-left text-[0.72rem] leading-none text-gray-700 outline-none transition hover:bg-[#EEE9E1] focus-visible:bg-[#EEE9E1] dark:text-gray-300 dark:hover:bg-slate-700 dark:focus-visible:bg-slate-700"
                           onClick={() => void handleCopyFileMenuAction(action)}
                         >
                           <span>{label}</span>
                           {copiedFileAction === action ? (
-                            <Check className="size-3 text-stone-500 dark:text-stone-400" />
+                            <Check className="size-3 text-gray-500 dark:text-gray-400" />
                           ) : null}
                         </button>
                       ))}
@@ -815,7 +815,7 @@ export function DocumentWorkspace({
                     <SelectTrigger
                       data-testid="document-mode-trigger"
                       aria-label="Document mode"
-                      className="h-[1.5rem] px-1 font-mono text-[0.7rem] leading-[1.25rem] font-normal tracking-[0.01em] text-stone-400 dark:text-stone-500 hover:text-stone-500 dark:hover:text-stone-400"
+                      className="h-[1.5rem] px-1 font-mono text-[0.7rem] leading-[1.25rem] font-normal tracking-[0.01em] text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400"
                     >
                       <ActiveDocumentInteractionModeIcon className="size-[0.68rem]" />
                       <span className="truncate">

@@ -128,7 +128,7 @@ test.describe("homepage workflow storyboard", () => {
     ).toHaveCount(3);
     await expect(
       roughdraftPopup.getByTestId("homepage-workflow-popup-header"),
-    ).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    ).toHaveCSS("background-color", "oklch(0.129 0.042 264.695)");
     await expect(
       storyboard.getByTestId("homepage-workflow-document-title"),
     ).toBeVisible();
