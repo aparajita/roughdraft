@@ -1869,15 +1869,15 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     "document-page-shell",
     layout === "embedded-demo"
       ? "grid grid-cols-1 gap-3 p-4 min-[900px]:grid-cols-[minmax(0,min(100%,42rem))_minmax(13rem,16rem)] min-[900px]:items-start min-[900px]:justify-start"
-      : "flex flex-col gap-6 min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,46.5rem)_minmax(24rem,1fr)] min-[1100px]:items-start min-[1100px]:justify-between min-[1100px]:gap-8",
+      : "flex flex-col gap-6 min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,60rem)_minmax(24rem,1fr)] min-[1100px]:items-start min-[1100px]:justify-between min-[1100px]:gap-8",
     !hasReviewRail && "document-page-shell-no-comments",
     layout !== "embedded-demo" &&
       !hasReviewRail &&
-      "min-[1100px]:grid-cols-[minmax(0,46.5rem)] min-[1100px]:justify-center",
+      "min-[1100px]:grid-cols-[minmax(0,60rem)] min-[1100px]:justify-center",
   );
   const documentMainClass = cn(
     "document-page-main w-full min-w-0",
-    layout === "embedded-demo" ? "max-w-none" : "max-w-[46.5rem]",
+    layout === "embedded-demo" ? "max-w-none" : "max-w-[60rem]",
   );
   const contentInsetClass = layout === "embedded-demo" ? "pb-0" : "pb-24";
   const fallbackClass = cn(
@@ -2019,15 +2019,15 @@ const CodeEditorSurface = memo(function CodeEditorSurface({
     "document-page-shell",
     layout === "embedded-demo"
       ? "grid grid-cols-1 gap-3 p-4 min-[900px]:grid-cols-[minmax(0,min(100%,42rem))_minmax(13rem,16rem)] min-[900px]:items-start min-[900px]:justify-start"
-      : "flex flex-col gap-6 min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,46.5rem)_minmax(24rem,1fr)] min-[1100px]:items-start min-[1100px]:justify-between min-[1100px]:gap-8",
+      : "flex flex-col gap-6 min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,60rem)_minmax(24rem,1fr)] min-[1100px]:items-start min-[1100px]:justify-between min-[1100px]:gap-8",
     !hasCommentRailSpace && "document-page-shell-no-comments",
     layout !== "embedded-demo" &&
       !hasCommentRailSpace &&
-      "min-[1100px]:grid-cols-[minmax(0,46.5rem)] min-[1100px]:justify-center",
+      "min-[1100px]:grid-cols-[minmax(0,60rem)] min-[1100px]:justify-center",
   );
   const documentMainClass = cn(
     "document-page-main w-full min-w-0",
-    layout === "embedded-demo" ? "max-w-none" : "max-w-[46.5rem]",
+    layout === "embedded-demo" ? "max-w-none" : "max-w-[60rem]",
   );
   const contentInsetClass = layout === "embedded-demo" ? "pb-0" : "pb-24";
   const reviewRailClass = cn(
