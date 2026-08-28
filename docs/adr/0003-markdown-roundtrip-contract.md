@@ -6,11 +6,15 @@ Roughdraft renders Markdown through rich text and code editing surfaces. Acciden
 
 ## Decision
 
-Roughdraft should preserve user-authored Markdown unless an edit requires a minimal, understandable serialization change. Frontmatter, local links, image paths, tables, task lists, code fences, inline code, raw supported HTML blocks, and CriticMarkup need explicit tests.
+Roughdraft should preserve user-authored Markdown unless an edit requires a minimal, understandable serialization change. Frontmatter, local links, image paths, tables, task lists, code fences, inline code, and raw supported HTML blocks need explicit tests.
+
+The review layer is part of the same contract. A read/write cycle that makes no review change preserves anchor elements, their ids, and their other attributes; endmatter keys and record keys, including ones the implementation does not recognize; anchors appearing inside code spans and fenced code blocks, as literal text; and a trailing YAML block that is not endmatter, as document content.
 
 ## Consequences
 
 Round-trip tests are part of the product contract. New Markdown support should add fixture coverage before broad parser refactors.
+
+The rich text surface serializes through Turndown, which drops elements it has no rule for and rewrites `<del>` as strikethrough. Every anchor element needs an explicit serialization rule, and a document carrying each anchor form belongs in the round-trip fixtures.
 
 ## What This Explicitly Does Not Mean
 

@@ -5,18 +5,19 @@
   "description": "A JSON review index for comments and suggestions parsed from Roughdraft Flavored Markdown. The Markdown source remains the normative storage format.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "version", "source", "comments", "suggestions"],
+  "required": ["format", "version", "comments", "suggestions"],
   "properties": {
     "format": {
       "const": "roughdraft-flavored-markdown"
     },
     "version": {
-      "const": "0.2"
+      "const": "1.0"
     },
     "source": {
       "type": "object",
       "additionalProperties": false,
       "required": ["markdown"],
+      "description": "The document the index was built from. Conformance fixtures carry it so they are self-contained; an API exposing an index for a document the caller already holds may omit it.",
       "properties": {
         "markdown": {
           "type": "string",
@@ -48,14 +49,12 @@
   "$defs": {
     "id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^rd-[cs][0-9]+$"
     },
     "metadata": {
       "type": "object",
-      "additionalProperties": {
-        "type": "string"
-      },
-      "description": "Unknown metadata attributes preserved from the source document."
+      "description": "Record keys from the endmatter that this specification does not define, preserved as parsed.",
+      "additionalProperties": true
     },
     "author": {
       "type": "string",
@@ -68,16 +67,37 @@
     "anchor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["text"],
+      "required": ["kind"],
+      "description": "The resolved location of a comment's anchor element in the body.",
       "properties": {
+        "kind": {
+          "enum": ["span", "div", "point"],
+          "description": "span anchors inline text, div anchors whole blocks, point anchors a location with no text of its own."
+        },
         "text": {
           "type": "string",
-          "description": "The highlighted anchor text from {==...==}."
+          "description": "The text enclosed by the anchor element. Absent for a point anchor."
         },
         "markdown": {
           "type": "string",
-          "description": "The highlighted anchor content before inline Markdown rendering, when available."
+          "description": "The content enclosed by the anchor element before Markdown rendering, when available."
         }
+      },
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "point"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "text": false
+        }
+      },
+      "else": {
+        "required": ["text"]
       }
     },
     "comment": {
@@ -89,7 +109,8 @@
           "$ref": "#/$defs/id"
         },
         "body": {
-          "type": "string"
+          "type": "string",
+          "description": "Comment text as Markdown, taken from the endmatter record's body."
         },
         "by": {
           "$ref": "#/$defs/author"
@@ -98,13 +119,15 @@
           "$ref": "#/$defs/timestamp"
         },
         "re": {
-          "$ref": "#/$defs/id"
+          "$ref": "#/$defs/id",
+          "description": "The comment or suggestion this replies to."
+        },
+        "scope": {
+          "enum": ["document"],
+          "description": "Present when the comment is about the document as a whole."
         },
         "anchor": {
           "$ref": "#/$defs/anchor"
-        },
-        "targetSuggestionId": {
-          "$ref": "#/$defs/id"
         },
         "status": {
           "enum": ["resolved"]
@@ -114,6 +137,14 @@
         },
         "metadata": {
           "$ref": "#/$defs/metadata"
+        }
+      },
+      "dependentSchemas": {
+        "scope": {
+          "description": "A comment about the document as a whole has no anchor.",
+          "properties": {
+            "anchor": false
+          }
         }
       }
     },
@@ -126,7 +157,8 @@
           "$ref": "#/$defs/id"
         },
         "kind": {
-          "enum": ["addition", "deletion", "substitution"]
+          "enum": ["insert", "delete", "replace"],
+          "description": "Read from the anchor element: ins inserts, del deletes, and a span wrapping both replaces."
         },
         "by": {
           "$ref": "#/$defs/author"
@@ -136,18 +168,19 @@
         },
         "text": {
           "type": "string",
-          "description": "The inserted or deleted text for addition and deletion suggestions."
+          "description": "The inserted or deleted text, for insert and delete suggestions."
         },
         "oldText": {
           "type": "string",
-          "description": "The replaced text for substitution suggestions."
+          "description": "The text the document has now, for replace suggestions."
         },
         "newText": {
           "type": "string",
-          "description": "The replacement text for substitution suggestions."
+          "description": "The text the edit proposes, for replace suggestions."
         },
         "commentIds": {
           "type": "array",
+          "description": "Ids of comments whose re names this suggestion.",
           "items": {
             "$ref": "#/$defs/id"
           },
@@ -168,7 +201,7 @@
           "if": {
             "properties": {
               "kind": {
-                "const": "substitution"
+                "const": "replace"
               }
             },
             "required": ["kind"]

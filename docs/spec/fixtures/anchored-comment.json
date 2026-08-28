@@ -1,17 +1,18 @@
 {
   "format": "roughdraft-flavored-markdown",
-  "version": "0.2",
+  "version": "1.0",
   "source": {
-    "markdown": "Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.\\n\\n---\\ncomments:\\n  c1:\\n    by: user\\n    at: \"2026-04-28T12:00:00.000Z\"\\n"
+    "markdown": "Ship <span id=\"rd-c1\">guest checkout</span> in the beta.\n\n---\nroughdraft: \"1.0\"\ncomments:\n  rd-c1:\n    body: Confirm this excludes SSO-only workspaces.\n    by: user\n    at: \"2026-04-28T12:00:00.000Z\"\n"
   },
   "comments": [
     {
-      "id": "c1",
-      "body": "Needs a source.",
+      "id": "rd-c1",
+      "body": "Confirm this excludes SSO-only workspaces.",
       "by": "user",
       "at": "2026-04-28T12:00:00.000Z",
       "anchor": {
-        "text": "this sentence"
+        "kind": "span",
+        "text": "guest checkout"
       }
     }
   ],

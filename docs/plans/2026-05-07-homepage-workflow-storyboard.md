@@ -29,7 +29,7 @@ Handoff expectation for the executor: if the user asks where the work is being p
 ## Relevant existing context
 
 - `docs/adr/0001-single-local-markdown-file.md` says Roughdraft's unit of work is one Markdown file. The storyboard should show `homepage-conversion-plan.md`, not projects, vaults, or multi-file workspaces.
-- `docs/adr/0002-criticmarkup-as-review-format.md` says review feedback is portable CriticMarkup. The storyboard should show inline comments and suggested changes as visible document feedback, not hidden app state.
+- `docs/adr/0002-anchors-and-endmatter-as-review-format.md` says review feedback is portable Markdown plus anchors and endmatter. The storyboard should show inline comments and suggested changes as visible document feedback, not hidden app state.
 - `docs/adr/0003-markdown-roundtrip-contract.md` says Markdown round trips matter. The storyboard should reinforce that the agent resumes by reading the same edited Markdown file.
 - `docs/adr/0004-cli-server-state-model.md` says the CLI opens/reuses a local server. The storyboard should say Roughdraft opens when the agent is ready, but should not introduce new server or sync claims.
 - `Homepage` currently renders hero -> `sneak-peek.png` -> `RoughdraftFormatDemo` -> a small two-card workflow section. The new storyboard replaces the small section and moves above `RoughdraftFormatDemo`.

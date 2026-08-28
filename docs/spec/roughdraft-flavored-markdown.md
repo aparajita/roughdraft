@@ -1,299 +1,225 @@
-# Roughdraft Flavored Markdown 0.2
+# Roughdraft Flavored Markdown 1.0
 
 Status: Draft
 
-Roughdraft Flavored Markdown is regular Markdown plus a portable review layer based on CriticMarkup. Its purpose is to let people and coding agents exchange comments, threaded replies, and pending changes inside the Markdown file itself.
+Roughdraft Flavored Markdown is CommonMark with GitHub Flavored Markdown extensions, plus a review layer. The review layer is two things: **anchors**, which are ordinary HTML elements carrying an `id`, and **endmatter**, a final YAML block holding every comment, reply, and suggestion record in the document.
 
-The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", and "MAY" in this document are to be interpreted as described in RFC 2119.
+The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", and "MAY" are to be interpreted as described in RFC 2119.
 
 ## Scope
 
-This specification defines the review markup that Roughdraft reads and writes. It does not define a replacement for Markdown, a hosted document format, a sync protocol, or a project database.
+This specification defines the review layer that Roughdraft reads and writes. It does not define a replacement for Markdown, a hosted document format, a sync protocol, or a project database.
 
-A conforming document is a Markdown document that may contain Roughdraft review spans. Markdown parsing SHOULD follow CommonMark with GitHub Flavored Markdown extensions. Implementations MAY preserve YAML frontmatter as document metadata. Roughdraft review state lives in the same Markdown file, either as inline review anchors or as final YAML endmatter.
+A conforming document is a Markdown document that MAY contain anchors in its body and MAY carry endmatter. Implementations MUST preserve YAML frontmatter as document metadata.
 
-## Canonical Markers
+## Document Structure
 
-Roughdraft uses these CriticMarkup-compatible markers:
+A document has up to three parts, in order:
+
+1. Optional YAML frontmatter, delimited by `---` lines at the very start of the file.
+2. The body: ordinary Markdown, which MAY contain anchors.
+3. Optional endmatter: the review records.
+
+## Endmatter
+
+Endmatter is the final `---`-delimited YAML block in the file whose parsed mapping contains a top-level `roughdraft` key. A document containing no such block has no review layer.
 
 ```markdown
-{>>comment<<}
-{++inserted text++}
-{--deleted text--}
-{~~old text~>new text~~}
-{==highlighted text==}
+Ship guest checkout in the beta.
+
+---
+roughdraft: "1.0"
+comments:
+  rd-c1:
+    body: Confirm this excludes SSO-only workspaces.
+    by: AI
+    at: "2026-08-28T12:00:00.000Z"
 ```
 
-An implementation MUST treat the opening and closing marker pairs as review delimiters outside inline code and fenced code blocks.
+The `roughdraft` key holds the specification version the document conforms to. Its presence is what identifies the block, so implementations MUST NOT apply heuristics to decide whether a trailing YAML block is endmatter. A trailing block without the key is document content and MUST be preserved as written.
 
-Implementations MUST treat review markers inside inline code spans and fenced code blocks as literal example text. They MUST NOT create comments, suggestions, or highlights from those code contexts.
+Endmatter MUST be the last content in the file and MUST be preceded by a blank line. Its recognized top-level keys are `roughdraft`, `comments`, and `suggestions`. Implementations MUST preserve unrecognized top-level keys and unrecognized keys within a record.
+
+## Anchors
+
+An anchor binds a review record to a location in the body. It is an HTML element whose `id` matches an endmatter record.
+
+```ebnf
+id = "rd-" ( "c" / "s" ) 1*DIGIT
+```
+
+| Form | Binds |
+| --- | --- |
+| `<span id="rd-c1">anchored text</span>` | a comment to an inline span of text |
+| `<div id="rd-c1">` … `</div>` | a comment to one or more whole blocks |
+| `<span id="rd-c1"></span>` | a comment to a point, with no text of its own |
+| `<ins id="rd-s1">new text</ins>` | a suggested insertion |
+| `<del id="rd-s2">old text</del>` | a suggested deletion |
+| `<span id="rd-s3"><del>old</del><ins>new</ins></span>` | a suggested replacement |
+
+The `id` always sits on the outermost element of the anchor. A replacement wraps its `<del>` and `<ins>` in a `<span>` because an `id` MUST be unique within the document.
+
+A `<span>` anchor is inline content and cannot cross a block boundary, which is why a range of blocks takes a `<div>` instead. A `<div>` anchor MUST have a blank line after its opening tag and before its closing tag, so that the Markdown it encloses is still parsed as Markdown:
+
+```markdown
+<div id="rd-c2">
+
+## Scope
+
+Ship guest checkout for returning teams.
+
+</div>
+```
+
+An id MUST appear at most once as an anchor. Anchors MAY nest. Anchors MUST NOT partially overlap, since no HTML element structure can express that.
+
+To allocate an id, a writer takes the highest number carried by any id of the same kind — counting both endmatter record keys and anchors in the body — and adds one. Records that have no anchor, such as replies and document-scope comments, are why the endmatter is scanned as well as the body. A writer MUST perform this scan against the document as it is about to write it, not against a copy read earlier. Two writers holding the same document at the same time can still allocate the same id; reconciling that is outside this specification.
+
+Implementations MUST preserve anchor elements and their `id` attributes across a read/write cycle, and MUST preserve any other attributes present on them.
+
+Anchors inside inline code spans and fenced code blocks are literal text under ordinary CommonMark rules. Implementations need no special handling for them and MUST NOT treat them as review markup.
 
 ## Comments
 
-A comment is written as:
-
-```ebnf
-comment = "{>>" comment-text "<<}" [ metadata ]
-```
-
-Comment text is plain inline Markdown content. Comment text MUST NOT contain the literal closing delimiter `<<}` unless the implementation defines an escaping extension. Writers that do not implement escaping MUST reject comment or reply text containing raw CriticMarkup close delimiters instead of emitting ambiguous review markup.
-
-A comment MAY appear by itself when the feedback applies to the surrounding paragraph or document:
+A comment is a record under `comments`, keyed by its id.
 
 ```markdown
-Add one concrete launch example here.{>>This should come from the customer story.<<}{#c1}
+Ship <span id="rd-c1">guest checkout</span> in the beta.
 
 ---
+roughdraft: "1.0"
 comments:
-  c1:
-    by: user
-    at: "2026-04-28T12:00:00.000Z"
-```
+  rd-c1:
+    body: |
+      Confirm this excludes SSO-only workspaces. The check is:
 
-## Anchored Comments
-
-An anchored comment is a highlight immediately followed by one or more comment blocks:
-
-```ebnf
-anchored-comment = highlight 1*comment
-highlight        = "{==" anchor-text "==}"
-```
-
-Example:
-
-```markdown
-Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.
-
----
-comments:
-  c1:
-    by: user
-    at: "2026-04-28T12:00:00.000Z"
-```
-
-The highlighted text is the visible anchor. Implementations SHOULD attach all immediately following comment blocks to the same anchor until another token interrupts the sequence.
-
-A standalone highlight is valid CriticMarkup. Roughdraft 0.1 reserves it as review syntax, but standalone highlights are not required to produce a review-thread item unless an implementation explicitly supports highlight-only annotations.
-
-## Suggestions
-
-Suggestions represent pending edits. Implementations MUST NOT silently collapse suggestions into normal prose while reading or writing Roughdraft Flavored Markdown.
-
-### Insertion
-
-```ebnf
-addition = "{++" new-text "++}" [ metadata ] *comment
-```
-
-```markdown
-Add {++one concrete example++}{#s1}.
-
----
-suggestions:
-  s1:
+      ```ts
+      if (workspace.ssoOnly) return
+      ```
     by: AI
-    at: "2026-04-28T12:05:00.000Z"
+    at: "2026-08-28T12:00:00.000Z"
 ```
 
-### Deletion
+| Key | Required | Meaning |
+| --- | --- | --- |
+| `body` | Yes | Comment text, as Markdown. |
+| `by` | Yes | Author or agent label. `AI` identifies an agent author. |
+| `at` | Yes | ISO 8601 timestamp. |
+| `re` | No | Id of the comment or suggestion this replies to. |
+| `scope` | No | `document` for a comment about the document as a whole. |
+| `status` | No | `resolved` when the item has been addressed. |
+| `resolved` | No | Short resolution summary. |
 
-```ebnf
-deletion = "{--" old-text "--}" [ metadata ] *comment
-```
+`body` is Markdown of any length and structure. A YAML block scalar carries fenced code, blank lines, lists, and every delimiter sequence without escaping, so implementations MUST NOT reject or transform a comment body on the basis of its content.
 
-```markdown
-Remove {--vague phrasing--}{#s2}.
-
----
-suggestions:
-  s2:
-    by: user
-    at: "2026-04-28T12:06:00.000Z"
-```
-
-### Substitution
-
-```ebnf
-substitution = "{~~" old-text "~>" new-text "~~}" [ metadata ] *comment
-```
-
-```markdown
-Use {~~rough~>specific~~}{#s3} wording.
-
----
-suggestions:
-  s3:
-    by: AI
-    at: "2026-04-28T12:07:00.000Z"
-```
-
-Trailing comment blocks after a suggestion attach discussion to that suggestion:
-
-```markdown
-Add {++one concrete example++}{#s1}.
-
----
-comments:
-  c2:
-    body: Use the launch story.
-    by: user
-    at: "2026-04-28T12:08:00.000Z"
-    re: s1
-suggestions:
-  s1:
-    by: AI
-    at: "2026-04-28T12:05:00.000Z"
-```
-
-## Metadata
-
-Roughdraft's preferred metadata format is a compact inline reference backed by final YAML endmatter:
-
-```ebnf
-reference = "{#" id "}"
-id        = ALPHA *( ALPHA / DIGIT / "_" / "-" )
-```
-
-```markdown
-Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.
-
----
-comments:
-  c1:
-    by: user
-    at: "2026-04-28T12:00:00.000Z"
-```
-
-Root comment bodies and suggestion text stay inline so their anchors remain portable. Replies live entirely in endmatter because their `re` field already points at a parent id:
-
-```markdown
-Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.
-
----
-comments:
-  c1:
-    by: user
-    at: "2026-04-28T12:00:00.000Z"
-  c2:
-    body: I can add one from the intro.
-    by: AI
-    at: "2026-04-28T12:05:00.000Z"
-    re: c1
-```
-
-Suggested-change metadata lives under `suggestions:`:
-
-```markdown
-Add {++one concrete example++}{#s1}.
-
----
-suggestions:
-  s1:
-    by: AI
-    at: "2026-04-28T12:05:00.000Z"
-```
-
-For compatibility, readers also accept the older inline attribute block written immediately after a comment or suggestion:
-
-```ebnf
-metadata  = "{" 1*attribute "}"
-attribute = name "=" quoted-value
-name      = ALPHA *( ALPHA / DIGIT / "_" / "-" )
-```
-
-Attribute values are double-quoted strings. Inside a quoted value, `\"` represents a literal quote and `\\` represents a literal backslash.
-
-Known metadata attributes:
-
-| Attribute | Applies to | Required when writing | Meaning |
-| --- | --- | --- | --- |
-| `id` | Comments and suggestions | Yes | Stable document-local identifier. |
-| `by` | Comments and suggestions | Yes | Author or agent label. `AI` identifies an agent author. |
-| `at` | Comments and suggestions | Yes | ISO 8601 timestamp. |
-| `re` | Comments | No | Parent comment or suggestion id for threaded replies. |
-| `status` | Comments and suggestions | No | Review state. Roughdraft currently writes `resolved` when an item has been addressed. |
-| `resolved` | Comments and suggestions | No | Optional short resolution summary for an item whose `status` is `resolved`. |
-
-Example:
-
-```markdown
-{>>Needs a source.<<}{#c1}
-
----
-comments:
-  c1:
-    by: user
-    at: "2026-04-28T12:00:00.000Z"
-```
-
-Implementations SHOULD generate simple document-local ids. Roughdraft uses `c1`, `c2`, and so on for comments and `s1`, `s2`, and so on for suggestions. Implementations MUST preserve unknown valid attributes or YAML keys when possible, but they MUST NOT require unknown metadata for correct review rendering.
-
-For compatibility, readers MAY accept legacy comment metadata of the form `{@id:c1; by:AI; at:2026-04-28T12:00:00.000Z@}`. Writers SHOULD emit compact references plus YAML endmatter for new review data.
+A comment with `scope: document` has no anchor.
 
 ## Threads
 
-Threading is represented by `re`.
+A reply carries `re` naming its parent, and has no anchor of its own.
 
 ```markdown
-Review {==this sentence==}{>>Needs a source.<<}{#c1}.
+Ship <span id="rd-c1">guest checkout</span> in the beta.
 
 ---
+roughdraft: "1.0"
 comments:
-  c1:
+  rd-c1:
+    body: Confirm this excludes SSO-only workspaces.
     by: user
-    at: "2026-04-28T12:00:00.000Z"
-  c2:
-    body: I can add one from the intro.
+    at: "2026-08-28T12:00:00.000Z"
+  rd-c2:
+    body: Confirmed. SSO-only workspaces are out of the beta.
     by: AI
-    at: "2026-04-28T12:05:00.000Z"
-    re: c1
+    at: "2026-08-28T12:05:00.000Z"
+    re: rd-c1
 ```
 
-A reply whose `re` points to a missing id SHOULD be treated as a top-level comment. A comment MUST NOT be its own parent.
+`re` MAY name a suggestion, which attaches discussion to that suggested edit. A record MUST NOT be its own parent. A reply whose `re` names a record that is not present is treated as a top-level comment.
 
-## Parsing And Round Trips
+## Suggestions
 
-Implementations SHOULD parse Roughdraft review markers as inline review annotations without rewriting unrelated Markdown.
+A suggestion is a pending edit. Its text is inline, so a reader of the raw file sees what the edit proposes without consulting endmatter. Its record under `suggestions` carries only attribution and state.
 
-Round trips SHOULD preserve:
+```markdown
+Add <ins id="rd-s1">one concrete example</ins> here.
+
+Remove <del id="rd-s2">this vague phrasing</del>.
+
+Use <span id="rd-s3"><del>rough</del><ins>specific</ins></span> wording.
+
+---
+roughdraft: "1.0"
+suggestions:
+  rd-s1:
+    by: AI
+    at: "2026-08-28T12:05:00.000Z"
+  rd-s2:
+    by: user
+    at: "2026-08-28T12:06:00.000Z"
+  rd-s3:
+    by: AI
+    at: "2026-08-28T12:07:00.000Z"
+```
+
+| Key | Required | Meaning |
+| --- | --- | --- |
+| `by` | Yes | Author or agent label. |
+| `at` | Yes | ISO 8601 timestamp. |
+| `status` | No | `resolved` when the suggestion has been accepted or rejected. |
+| `resolved` | No | Short resolution summary. |
+
+The operation is read from the anchor, not from the record: `<ins>` inserts, `<del>` deletes, and a `<span>` wrapping both replaces. Implementations MUST NOT record the operation in endmatter, so that the markup remains the single source of truth for what the edit does.
+
+Accepting a suggestion replaces the anchor with the text the edit produces and removes its record. Rejecting one replaces the anchor with the text the document had before and removes its record. Implementations MUST NOT collapse a suggestion into prose by any other route.
+
+## Orphans
+
+A record is retained on write when any of the following holds:
+
+- An anchor with its id is present in the body.
+- It has `scope: document`.
+- Its `re` names a retained record.
+
+Retention is resolved transitively, so dropping a record drops its replies. Implementations MUST drop records that are not retained. A comment whose anchored text is deleted in a plain text editor therefore leaves nothing behind.
+
+## CriticMarkup
+
+CriticMarkup spans — `{==anchor==}`, `{>>comment<<}`, `{++insertion++}`, `{--deletion--}`, `{~~old~>new~~}` — carry no meaning in this format. Implementations MUST NOT parse them as review markup and MUST NOT write them. A document whose review layer is written as CriticMarkup has no review layer under this specification, and its spans are ordinary text.
+
+Converting such a document is a one-off migration, run deliberately against a file. It is not part of reading, so no implementation carries a second parser to do it.
+
+## Round Trips
+
+A read/write cycle that makes no review change MUST preserve:
 
 - YAML frontmatter delimiters and content.
+- Endmatter keys, including unrecognized ones, and record keys, including unrecognized ones.
+- Anchor elements, their ids, and their other attributes.
 - Local links and image paths.
 - Tables and task lists.
-- Inline code and fenced code blocks.
-- Raw review marker text inside code contexts.
-- Metadata values, including escaped quotes and backslashes.
-
-When importing a valid comment or suggestion without metadata, an implementation MAY synthesize missing `id`, `by`, and `at` values on write.
+- Inline code and fenced code blocks, including anchors appearing inside them.
+- A trailing YAML block that is not endmatter.
 
 ## Review Interchange JSON
 
-The Markdown file is the normative storage format. For APIs, tests, and integrations, implementations MAY expose a review index JSON document that follows [`roughdraft-flavored-markdown.schema.json`](./roughdraft-flavored-markdown.schema.json).
-
-The review index intentionally does not replace a Markdown AST. It indexes Roughdraft review annotations while leaving block parsing to the Markdown implementation.
-
-Example:
+The Markdown file is the normative storage format. For APIs, tests, and integrations, implementations MAY expose a review index following [`roughdraft-flavored-markdown.schema.json`](./roughdraft-flavored-markdown.schema.json). The index annotates review records with the resolved location of their anchors; it does not replace a Markdown AST.
 
 ```json
 {
   "format": "roughdraft-flavored-markdown",
-  "version": "0.1",
-  "source": {
-    "markdown": "Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.\\n\\n---\\ncomments:\\n  c1:\\n    by: user\\n    at: \"2026-04-28T12:00:00.000Z\"\\n"
-  },
+  "version": "1.0",
   "comments": [
     {
-      "id": "c1",
-      "body": "Needs a source.",
-      "by": "user",
-      "at": "2026-04-28T12:00:00.000Z",
-      "anchor": {
-        "text": "this sentence"
-      }
+      "id": "rd-c1",
+      "body": "Confirm this excludes SSO-only workspaces.",
+      "by": "AI",
+      "at": "2026-08-28T12:00:00.000Z",
+      "anchor": { "kind": "span", "text": "guest checkout" }
     }
   ],
   "suggestions": []
 }
 ```
 
-Conformance fixtures live in [`fixtures/`](./fixtures/). A parser that claims Roughdraft Flavored Markdown 0.1 support SHOULD pass those examples or document any intentional differences.
+Conformance fixtures live in [`fixtures/`](./fixtures/). A parser claiming Roughdraft Flavored Markdown 1.0 support SHOULD pass them or document its intentional differences.
