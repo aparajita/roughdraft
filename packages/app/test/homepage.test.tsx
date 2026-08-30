@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   Homepage,
   HomepageSubtitle,
@@ -207,12 +207,12 @@ describe("Homepage", () => {
     expect(container.textContent).toContain("Roughdraft flavored Markdown");
     expect(container.textContent).toContain("It's just Markdown");
     expect(container.textContent).toContain(
-      "We extended the markdown format, building on prior art like CriticMarkup",
+      "We extended the markdown format with ordinary HTML anchors and a YAML endmatter block",
     );
     expect(
-      container.querySelector('a[href="https://criticmarkup.com/"]')
+      container.querySelector('a[href="/roughdraft-flavored-markdown"]')
         ?.textContent,
-    ).toContain("CriticMarkup");
+    ).toContain("spec");
     expect(container.textContent).toContain(
       "working with other major Markdown apps to rally support",
     );
@@ -275,10 +275,10 @@ describe("Homepage", () => {
     expect(resultDocumentCard?.className).toContain("shadow-");
     expect(queryByTestId(container, "rfm-token")).toBeNull();
     expect(
-      container.querySelector(".comment-anchor[data-comment-ids]"),
+      container.querySelector('.comment-anchor[id^="rd-c"]'),
     ).not.toBeNull();
     expect(
-      container.querySelector(".critic-change[data-critic-change-id]"),
+      container.querySelector('.suggestion[data-rd-replace^="rd-s"]'),
     ).not.toBeNull();
     expect(container.innerHTML).not.toContain(
       'contenteditable="plaintext-only"',
@@ -739,7 +739,6 @@ describe("Homepage", () => {
     expect(container.textContent).toContain(
       "regular Markdown plus portable review markup",
     );
-    expect(container.textContent).toContain("CriticMarkup");
     expect(container.textContent).toContain("Notion-flavored Markdown");
     expect(container.textContent).toContain("Official RFM spec");
     expect(container.textContent).toContain("Format contract");
@@ -752,10 +751,6 @@ describe("Homepage", () => {
         ?.textContent,
     ).toContain("Official RFM spec");
     expect(
-      container.querySelector('a[href="https://criticmarkup.com/"]')
-        ?.textContent,
-    ).toContain("CriticMarkup");
-    expect(
       container.querySelector(
         'a[href="https://developers.notion.com/guides/data-apis/enhanced-markdown"]',
       )?.textContent,
@@ -764,7 +759,9 @@ describe("Homepage", () => {
     expect(container.textContent).toContain("Roughdraft extensions");
     expect(container.textContent).toContain("YAML metadata");
     expect(container.textContent).toContain("Substitution");
-    expect(container.textContent).toContain("{~~old text~>new text~~}");
+    expect(container.textContent).toContain(
+      '<span id="rd-s3"><del>old text</del><ins>new text</ins></span>',
+    );
     expect(container.querySelector('a[href="/"]')?.textContent).toContain(
       "Back to Roughdraft",
     );

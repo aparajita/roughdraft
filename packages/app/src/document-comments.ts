@@ -1,8 +1,9 @@
 import {
   buildCommentThreads,
-  type CriticComment,
+  expandCommentThreadIds,
   flattenCommentThreads,
-} from "./critic-markup";
+  type ReviewComment,
+} from "./review";
 
 interface CommentAnchorMeasurement {
   commentIds: string[];
@@ -50,14 +51,32 @@ export type AnchoredRailLayout<T extends AnchoredRailItem> = T & {
   height: number;
 };
 
+/**
+ * A comment anchor in the document is the anchor element itself: it carries the
+ * outermost comment id as its `id`, and the ids of any comments nested on the
+ * same range as a JSON array in `data-rd-nested`.
+ */
+export const COMMENT_ANCHOR_SELECTOR = 'span[id^="rd-c"]';
+
 interface CommentAnchorElementLike {
+  id: string;
   dataset: {
-    commentIds?: string;
+    rdNested?: string;
   };
   getBoundingClientRect: () => {
     top: number;
     bottom: number;
   };
+}
+
+export function readCommentAnchorIds(
+  element: Pick<CommentAnchorElementLike, "id" | "dataset">,
+): string[] {
+  if (!element.id) return [];
+
+  return [
+    ...new Set([element.id, ...parseCommentIds(element.dataset.rdNested)]),
+  ];
 }
 
 export function normalizeCommentMeasurement(
@@ -102,35 +121,34 @@ export function getPreferredCommentId(
   return commentIds[0] ?? null;
 }
 
+/**
+ * The root of the thread `commentId` belongs to, or null when no comment is
+ * filed under that id.
+ *
+ * The walk upward is bounded because the reply links cannot form a cycle: the
+ * parser breaks every cycle it reads, and the only other way a comment gets a
+ * parent is `createReviewComment`, which attaches a freshly allocated id to a
+ * parent that already exists.
+ */
 export function getRootThreadIdForCommentId(
   commentId: string | null,
-  comments: ReadonlyMap<string, CriticComment>,
+  comments: ReadonlyMap<string, ReviewComment>,
 ): string | null {
   if (!commentId) return null;
 
-  const visited = new Set<string>();
   let currentComment = comments.get(commentId);
 
   while (currentComment) {
-    if (visited.has(currentComment.id)) {
-      break;
-    }
-
-    visited.add(currentComment.id);
     const parentCommentId = currentComment.parentCommentId;
 
-    if (
-      !parentCommentId ||
-      parentCommentId === currentComment.id ||
-      !comments.has(parentCommentId)
-    ) {
+    if (!parentCommentId || !comments.has(parentCommentId)) {
       return currentComment.id;
     }
 
     currentComment = comments.get(parentCommentId);
   }
 
-  return comments.has(commentId) ? commentId : null;
+  return null;
 }
 
 export function getCommentAnchorMeasurements(
@@ -141,7 +159,7 @@ export function getCommentAnchorMeasurements(
   const measurements: CommentAnchorMeasurement[] = [];
 
   for (const element of anchorElements) {
-    const commentIds = parseCommentIds(element.dataset.commentIds);
+    const commentIds = readCommentAnchorIds(element);
     if (commentIds.length === 0) continue;
 
     const rect = element.getBoundingClientRect();
@@ -194,14 +212,17 @@ export function groupCommentAnchorMeasurements(
 
 export function buildCommentThreadRailItems(
   groups: CommentGroupAnchor[],
-  comments: ReadonlyMap<string, CriticComment>,
+  comments: ReadonlyMap<string, ReviewComment>,
 ): CommentThreadRailItem[] {
   const items: CommentThreadRailItem[] = [];
 
   for (const group of groups) {
-    const visibleComments = group.commentIds
+    // Only a thread's root carries an anchor, so the group's ids name roots
+    // alone. Pulling in each root's descendants is what puts replies in the
+    // thread; without it a reply exists in the endmatter and renders nowhere.
+    const visibleComments = expandCommentThreadIds(group.commentIds, comments)
       .map((commentId) => comments.get(commentId))
-      .filter((comment): comment is CriticComment => Boolean(comment));
+      .filter((comment): comment is ReviewComment => Boolean(comment));
 
     if (visibleComments.length === 0) continue;
 

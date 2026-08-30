@@ -1,43 +1,11 @@
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readMarkdownFixture } from "../test/fixtures";
 import {
-  splitYamlFrontmatter,
+  protectRichTextRoundTripMarkdown,
+  rawMarkdownBlockAttribute,
   toHtml,
   toMarkdown,
-  rawMarkdownBlockAttribute,
 } from "./markdown";
-
-function readMarkdownFixture(name: string): string {
-  return fs.readFileSync(
-    path.join(process.cwd(), "test", "fixtures", "markdown", name),
-    "utf8",
-  );
-}
-
-describe("splitYamlFrontmatter", () => {
-  it("preserves CRLF frontmatter byte-for-byte while splitting the body", () => {
-    const input = "---\r\ntitle: CRLF\r\n---\r\n\r\n# Body\r\n";
-
-    expect(splitYamlFrontmatter(input)).toEqual({
-      frontmatter: "---\r\ntitle: CRLF\r\n---\r\n\r\n",
-      body: "# Body\r\n",
-    });
-  });
-
-  it("preserves empty frontmatter and table-like YAML text", () => {
-    const empty = "---\n---\n\n# Body\n";
-    const tableLike = readMarkdownFixture("frontmatter-table-yaml.md");
-
-    expect(splitYamlFrontmatter(empty)).toEqual({
-      frontmatter: "---\n---\n\n",
-      body: "# Body\n",
-    });
-    expect(splitYamlFrontmatter(tableLike).frontmatter).toContain(
-      "  | column | value |",
-    );
-  });
-});
 
 describe("toHtml", () => {
   it("preserves original markdown paths while resolving rendered URLs", () => {
@@ -101,6 +69,7 @@ describe("toHtml", () => {
     expect(toMarkdown(toHtml(readMarkdownFixture("headerless-table.md")))).toBe(
       [
         "# Headerless Table",
+        "",
         "|     |     |",
         "| --- | --- |",
         "| First | Ready |",
@@ -108,6 +77,28 @@ describe("toHtml", () => {
         "",
       ].join("\n"),
     );
+  });
+});
+
+describe("protectRichTextRoundTripMarkdown", () => {
+  /**
+   * A `---` followed by a blank line is a thematic break and then a paragraph
+   * under CommonMark, whatever that paragraph happens to look like. Claiming it
+   * as a trailing YAML block turns it into an attribute-only element, so the
+   * rule and the line both vanish from the document the reviewer reads. The
+   * Markdown round trip preserves the text either way, so only the rendered
+   * HTML can tell the two outcomes apart.
+   */
+  it("renders a thematic break and the key-like line after it as visible content", () => {
+    const html = toHtml(
+      protectRichTextRoundTripMarkdown(
+        "Intro paragraph.\n\n---\n\nSee also: the other document.\n",
+      ),
+    );
+
+    expect(html).not.toContain(rawMarkdownBlockAttribute);
+    expect(html).toContain("<hr>");
+    expect(html).toContain("<p>See also: the other document.</p>");
   });
 });
 
@@ -173,5 +164,30 @@ describe("toMarkdown", () => {
     expect(
       toMarkdown(`<div ${rawMarkdownBlockAttribute}="${encoded}"></div>`),
     ).toBe(protectedMarkdown);
+  });
+
+  /**
+   * An anchor's extent is the extent of the review record bound to it, so
+   * whitespace at its edges belongs to the suggestion. Turndown's own handling
+   * lifts edge whitespace out of the element and drops it when the neighbouring
+   * text already ends in whitespace, which rewrites what the anchor proposes.
+   */
+  it("keeps a trailing space inside a deletion anchor", () => {
+    const source = 'One <del id="rd-s1">two </del>three.';
+
+    expect(toMarkdown(toHtml(source))).toBe(`${source}\n`);
+  });
+
+  it("keeps a leading space inside an anchor the preceding text runs into", () => {
+    const source = 'One <del id="rd-s1"> two</del> three.';
+
+    expect(toMarkdown(toHtml(source))).toBe(`${source}\n`);
+  });
+
+  it("keeps edge whitespace inside both halves of a replacement", () => {
+    const source =
+      'Swap <span id="rd-s3"><del>old </del><ins>new </ins></span>here.';
+
+    expect(toMarkdown(toHtml(source))).toBe(`${source}\n`);
   });
 });

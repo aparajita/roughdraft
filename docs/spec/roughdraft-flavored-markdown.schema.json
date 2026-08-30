@@ -71,8 +71,8 @@
       "description": "The resolved location of a comment's anchor element in the body.",
       "properties": {
         "kind": {
-          "enum": ["span", "div", "point"],
-          "description": "span anchors inline text, div anchors whole blocks, point anchors a location with no text of its own."
+          "enum": ["span", "point"],
+          "description": "span anchors inline text within a single block, point anchors a location with no text of its own."
         },
         "text": {
           "type": "string",

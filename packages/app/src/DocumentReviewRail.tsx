@@ -10,16 +10,11 @@ import {
   useState,
 } from "react";
 import {
-  CommentEditorList,
   type CommentActionDefinition,
   type CommentActionsRenderContext,
   type CommentContentRenderContext,
+  CommentEditorList,
 } from "./CommentEditorList";
-import type {
-  CriticChangeAttrs,
-  CriticChangeKind,
-  CriticComment,
-} from "./critic-markup";
 import {
   buildCommentThreadRailItems,
   type CommentGroupAnchor,
@@ -29,16 +24,17 @@ import {
   normalizeCommentMeasurement,
   resolveAnchoredRailLayouts,
 } from "./document-comments";
-import { SUGGESTED_PARAGRAPH_SENTINEL } from "./editor-extensions";
 import { cn } from "./lib/utils";
+import { EMPTY_ANCHOR_SENTINEL } from "./markdown";
 import type { DraftSuggestionState } from "./PageCard";
+import type { ReviewComment, SuggestionAttrs, SuggestionKind } from "./review";
 
 const SUGGESTION_QUOTE_PREVIEW_LIMIT = 140;
 
-export interface CriticChangeRailItem {
-  changeId: string;
-  change: CriticChangeAttrs;
-  kind: CriticChangeKind;
+export interface SuggestionRailItem {
+  suggestionId: string;
+  attrs: SuggestionAttrs;
+  kind: SuggestionKind;
   oldText: string;
   newText: string;
   commentIds: string[];
@@ -48,8 +44,8 @@ export interface CriticChangeRailItem {
 
 interface DocumentReviewRailProps {
   commentGroups: CommentGroupAnchor[];
-  comments: Map<string, CriticComment>;
-  suggestions: CriticChangeRailItem[];
+  comments: Map<string, ReviewComment>;
+  suggestions: SuggestionRailItem[];
   selectedCommentId: string | null;
   hoveredCommentId: string | null;
   selectedChangeId: string | null;
@@ -93,25 +89,25 @@ function railLayoutItemStyle(
   return layout === "anchored" ? { top: railTop } : undefined;
 }
 
-function getSuggestionPreview(suggestion: CriticChangeRailItem) {
+function getSuggestionPreview(suggestion: SuggestionRailItem) {
   const oldText = suggestion.oldText.trim();
   const newText = suggestion.newText.trim();
 
-  if (suggestion.kind === "addition") return newText || "Inserted text";
-  if (suggestion.kind === "deletion") return oldText || "Deleted text";
+  if (suggestion.kind === "insert") return newText || "Inserted text";
+  if (suggestion.kind === "delete") return oldText || "Deleted text";
   if (oldText && newText) return `${oldText} -> ${newText}`;
   return oldText || newText || "Changed text";
 }
 
 function getSuggestionRootComment(
-  suggestion: CriticChangeRailItem,
-): CriticComment {
+  suggestion: SuggestionRailItem,
+): ReviewComment {
   return {
-    id: suggestion.changeId,
+    id: suggestion.suggestionId,
     content: getSuggestionPreview(suggestion),
-    createdAt: suggestion.change.createdAt,
-    authorType: suggestion.change.authorType,
-    authorId: suggestion.change.authorId,
+    createdAt: suggestion.attrs.createdAt,
+    authorType: suggestion.attrs.authorType,
+    authorId: suggestion.attrs.authorId,
   };
 }
 
@@ -121,15 +117,10 @@ function truncateSuggestionQuote(text: string) {
 }
 
 function renderQuotedSuggestionText(text: string, fallback: string) {
-  const withoutParagraphSentinels = text.replaceAll(
-    SUGGESTED_PARAGRAPH_SENTINEL,
-    "",
-  );
+  const withoutParagraphSentinels = text.replaceAll(EMPTY_ANCHOR_SENTINEL, "");
   const fullDisplayText =
     withoutParagraphSentinels.trim() ||
-    (text.includes(SUGGESTED_PARAGRAPH_SENTINEL)
-      ? "Inserted paragraph"
-      : fallback);
+    (text.includes(EMPTY_ANCHOR_SENTINEL) ? "Inserted paragraph" : fallback);
   const displayText = truncateSuggestionQuote(fullDisplayText);
 
   return (
@@ -142,12 +133,12 @@ function renderQuotedSuggestionText(text: string, fallback: string) {
 function SuggestionCommentContent({
   suggestion,
 }: {
-  suggestion: CriticChangeRailItem;
+  suggestion: SuggestionRailItem;
 }) {
   const oldText = suggestion.oldText.trim();
   const newText = suggestion.newText.trim();
 
-  if (suggestion.kind === "addition") {
+  if (suggestion.kind === "insert") {
     return (
       <>
         <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -158,7 +149,7 @@ function SuggestionCommentContent({
     );
   }
 
-  if (suggestion.kind === "deletion") {
+  if (suggestion.kind === "delete") {
     return (
       <>
         <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -243,7 +234,7 @@ export function DocumentReviewRail({
         .map((item) => {
           const visibleComments = item.commentIds
             .map((commentId) => comments.get(commentId))
-            .filter((comment): comment is CriticComment => Boolean(comment));
+            .filter((comment): comment is ReviewComment => Boolean(comment));
 
           if (visibleComments.length === 0) return null;
 
@@ -256,7 +247,7 @@ export function DocumentReviewRail({
           (
             item,
           ): item is CommentThreadRailItem & {
-            visibleComments: CriticComment[];
+            visibleComments: ReviewComment[];
           } => Boolean(item),
         ),
     [commentGroups, comments, suggestionCommentIds],
@@ -278,7 +269,7 @@ export function DocumentReviewRail({
     () =>
       suggestions.map((suggestion) => ({
         type: "suggestion" as const,
-        key: suggestion.changeId,
+        key: suggestion.suggestionId,
         anchorTop: suggestion.anchorTop,
         anchorBottom: suggestion.anchorBottom,
         suggestion,
@@ -313,7 +304,7 @@ export function DocumentReviewRail({
       selectedCommentId
         ? (suggestions.find((suggestion) =>
             suggestion.commentIds.includes(selectedCommentId),
-          )?.changeId ?? null)
+          )?.suggestionId ?? null)
         : null,
     [selectedCommentId, suggestions],
   );
@@ -569,23 +560,23 @@ export function DocumentReviewRail({
           }
 
           const suggestion = layout.suggestion;
-          const isSelected = selectedChangeId === suggestion.changeId;
-          const isHovered = hoveredChangeId === suggestion.changeId;
+          const isSelected = selectedChangeId === suggestion.suggestionId;
+          const isHovered = hoveredChangeId === suggestion.suggestionId;
           const suggestionComments = suggestion.commentIds
             .map((commentId) => comments.get(commentId))
-            .filter((comment): comment is CriticComment => Boolean(comment));
+            .filter((comment): comment is ReviewComment => Boolean(comment));
           const suggestionCommentIds = new Set(
             suggestionComments.map((comment) => comment.id),
           );
           const normalizedSuggestionComments = suggestionComments.map(
             (comment) =>
-              comment.parentCommentId === suggestion.changeId ||
+              comment.parentCommentId === suggestion.suggestionId ||
               (comment.parentCommentId &&
                 suggestionCommentIds.has(comment.parentCommentId))
                 ? comment
                 : {
                     ...comment,
-                    parentCommentId: suggestion.changeId,
+                    parentCommentId: suggestion.suggestionId,
                   },
           );
           const suggestionRootComment = getSuggestionRootComment(suggestion);
@@ -597,7 +588,7 @@ export function DocumentReviewRail({
             comment,
             defaultContent,
           }: CommentContentRenderContext) =>
-            comment.id === suggestion.changeId ? (
+            comment.id === suggestion.suggestionId ? (
               <SuggestionCommentContent suggestion={suggestion} />
             ) : (
               defaultContent
@@ -606,7 +597,7 @@ export function DocumentReviewRail({
             comment,
             defaultActions,
           }: CommentActionsRenderContext): CommentActionDefinition[] =>
-            comment.id === suggestion.changeId
+            comment.id === suggestion.suggestionId
               ? [
                   {
                     key: "accept",
@@ -615,7 +606,7 @@ export function DocumentReviewRail({
                     compact: true,
                     onClick: (event) => {
                       event.stopPropagation();
-                      onAcceptSuggestion(suggestion.changeId);
+                      onAcceptSuggestion(suggestion.suggestionId);
                     },
                   },
                   {
@@ -626,7 +617,7 @@ export function DocumentReviewRail({
                     compact: true,
                     onClick: (event) => {
                       event.stopPropagation();
-                      onRejectSuggestion(suggestion.changeId);
+                      onRejectSuggestion(suggestion.suggestionId);
                     },
                   },
                   {
@@ -636,7 +627,7 @@ export function DocumentReviewRail({
                     compact: true,
                     onClick: (event) => {
                       event.stopPropagation();
-                      onReplySuggestion(suggestion.changeId);
+                      onReplySuggestion(suggestion.suggestionId);
                     },
                   },
                 ]
@@ -646,7 +637,7 @@ export function DocumentReviewRail({
             <div
               key={layout.key}
               ref={(node) => setItemRef(layout.key, node)}
-              data-testid={`suggestion-thread-${suggestion.changeId}`}
+              data-testid={`suggestion-thread-${suggestion.suggestionId}`}
               data-suggestion-thread-container="true"
               className={cn(
                 railLayoutItemClass(railLayout),
@@ -656,52 +647,54 @@ export function DocumentReviewRail({
                 isHovered && !isSelected && "cursor-pointer",
               )}
               style={railLayoutItemStyle(railLayout, layout.railTop)}
-              onMouseEnter={() => onHoverSuggestion(suggestion.changeId)}
+              onMouseEnter={() => onHoverSuggestion(suggestion.suggestionId)}
               onMouseLeave={() => onHoverSuggestion(null)}
-              onPointerDown={() => onSelectSuggestion(suggestion.changeId)}
+              onPointerDown={() => onSelectSuggestion(suggestion.suggestionId)}
               onClick={() => {
                 if (isSelected) return;
-                onFocusSuggestion(suggestion.changeId);
+                onFocusSuggestion(suggestion.suggestionId);
               }}
             >
               <CommentEditorList
                 comments={suggestionThreadComments}
                 variant="rail"
                 selectedCommentId={
-                  selectedCommentId ?? (isSelected ? suggestion.changeId : null)
+                  selectedCommentId ??
+                  (isSelected ? suggestion.suggestionId : null)
                 }
                 hoveredCommentId={
-                  hoveredCommentId ?? (isHovered ? suggestion.changeId : null)
+                  hoveredCommentId ??
+                  (isHovered ? suggestion.suggestionId : null)
                 }
                 onDeleteComment={onDeleteComment}
                 onUpdateComment={onUpdateComment}
                 onReplyComment={(commentId) => {
-                  if (commentId === suggestion.changeId) {
-                    onReplySuggestion(suggestion.changeId);
+                  if (commentId === suggestion.suggestionId) {
+                    onReplySuggestion(suggestion.suggestionId);
                     return;
                   }
 
                   onReplyComment(commentId);
                 }}
                 onSelectComment={(commentId) => {
-                  if (commentId === suggestion.changeId) {
-                    onSelectSuggestion(suggestion.changeId);
+                  if (commentId === suggestion.suggestionId) {
+                    onSelectSuggestion(suggestion.suggestionId);
                     return;
                   }
 
                   onSelectComment(commentId);
                 }}
                 onFocusComment={(commentId) => {
-                  if (commentId === suggestion.changeId) {
-                    onFocusSuggestion(suggestion.changeId);
+                  if (commentId === suggestion.suggestionId) {
+                    onFocusSuggestion(suggestion.suggestionId);
                     return;
                   }
 
                   onFocusComment(commentId);
                 }}
                 onHoverComment={(commentId) => {
-                  if (commentId === suggestion.changeId) {
-                    onHoverSuggestion(suggestion.changeId);
+                  if (commentId === suggestion.suggestionId) {
+                    onHoverSuggestion(suggestion.suggestionId);
                     return;
                   }
 

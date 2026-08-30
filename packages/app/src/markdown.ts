@@ -1,24 +1,31 @@
 import { tables, taskListItems } from "@joplin/turndown-plugin-gfm";
-import { marked } from "marked";
+import {
+  createLiteralSpanIndex,
+  findFinalYamlEndmatter,
+  isYamlMappingBlock,
+} from "@roughdraft/rfm";
+import {
+  Marked,
+  marked,
+  type Token,
+  type Tokens,
+  type TokensList,
+} from "marked";
 import TurndownService from "turndown";
-import { parse as parseYaml } from "yaml";
 
 export const rawMarkdownBlockAttribute = "data-markdown-raw-block";
+
+/**
+ * Word joiner placed inside a mark range that has no visible text of its own —
+ * a point anchor, or a suggested empty paragraph. It gives the range a
+ * character to attach to so the editor and ProseMirror keep it addressable, and
+ * it is stripped again on serialization.
+ */
+export const EMPTY_ANCHOR_SENTINEL = "⁠";
 
 export interface MarkdownOptions {
   resolveFileUrl?: (path: string) => string | null;
   resolveLinkUrl?: (path: string) => string | null;
-}
-
-export interface YamlFrontmatterSplit {
-  frontmatter: string | null;
-  body: string;
-}
-
-export interface YamlDocumentMetadataSplit {
-  frontmatter: string | null;
-  body: string;
-  endmatter: string | null;
 }
 
 function isExternalUrl(path: string): boolean {
@@ -112,9 +119,43 @@ function protectPipeSensitiveTables(markdown: string): string {
   return output.join("");
 }
 
+/**
+ * Protect a trailing YAML block that is document content.
+ *
+ * This runs on a body whose endmatter has already been split off, so a final
+ * `---`-delimited YAML mapping still present is content the round trip must
+ * preserve. Left alone, marked reads the `---` as a thematic break and the
+ * mapping as one paragraph, and a paragraph's soft line breaks do not survive
+ * the round trip — the keys come back run together on a single line.
+ *
+ * The block is one only when its first key sits on the line directly after the
+ * `---`, which is where frontmatter and endmatter both put theirs. A `---`
+ * followed by a blank line is a thematic break and then a paragraph under
+ * CommonMark, and that pair renders and round trips as itself, so protecting it
+ * would hide a horizontal rule and a line of prose the document meant to show.
+ */
+function protectTrailingYamlBlock(markdown: string): string {
+  const match = findFinalYamlEndmatter(
+    markdown,
+    createLiteralSpanIndex(markdown),
+  );
+  if (!match) return markdown;
+
+  // `yaml` is everything after the delimiter line, so a blank line between the
+  // `---` and what follows it is a leading blank line here.
+  if (/^[ \t]*\r?\n/.test(match.yaml)) return markdown;
+
+  const block = match.raw.replace(/^\r?\n/, "");
+  if (!isYamlMappingBlock(block)) return markdown;
+
+  return `${markdown.slice(0, match.offset)}\n${createRawMarkdownBlock(block)}`;
+}
+
 export function protectRichTextRoundTripMarkdown(markdown: string): string {
   return protectPipeSensitiveTables(
-    protectIndentedCodeAfterLists(protectRawHtmlBlocks(markdown)),
+    protectIndentedCodeAfterLists(
+      protectTrailingYamlBlock(protectRawHtmlBlocks(markdown)),
+    ),
   );
 }
 
@@ -172,146 +213,219 @@ function resolveRenderedUrl(
   return resolveFileUrl?.(path) ?? path;
 }
 
-function isYamlFrontmatterDelimiter(line: string): boolean {
-  return /^(?:---|\.\.\.)[ \t]*$/.test(line.replace(/\r$/, ""));
-}
+const RFM_ANCHOR_ID_PATTERN = /^rd-[cs][0-9]+$/;
+const RFM_SUGGESTION_ID_PATTERN = /^rd-s[0-9]+$/;
+const RFM_ANCHOR_TAG_NAMES = new Set(["SPAN", "INS", "DEL"]);
 
-function isReviewEndmatterMap(value: unknown): boolean {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function hasDocumentLevelComment(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-  return Object.values(value as Record<string, unknown>).some(
-    (entry) =>
-      Boolean(entry) &&
-      typeof entry === "object" &&
-      !Array.isArray(entry) &&
-      typeof (entry as Record<string, unknown>).body === "string" &&
-      typeof (entry as Record<string, unknown>).by === "string" &&
-      typeof (entry as Record<string, unknown>).at === "string" &&
-      typeof (entry as Record<string, unknown>).re !== "string",
-  );
-}
-
-function isRoughdraftReviewEndmatter(endmatter: string): boolean {
-  const yamlText = endmatter.replace(/^---[ \t]*(?:\r\n|\n)/, "");
-  let parsed: unknown;
-
-  try {
-    parsed = parseYaml(yamlText);
-  } catch {
-    return false;
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return false;
-  }
-
-  const record = parsed as Record<string, unknown>;
+function isRfmAnchorElement(node: HTMLElement): boolean {
   return (
-    isReviewEndmatterMap(record.comments) ||
-    isReviewEndmatterMap(record.suggestions)
+    RFM_ANCHOR_TAG_NAMES.has(node.nodeName) &&
+    RFM_ANCHOR_ID_PATTERN.test(node.getAttribute("id") ?? "")
   );
 }
 
-export function splitYamlFrontmatter(markdown: string): YamlFrontmatterSplit {
-  const openingDelimiter = markdown.match(/^---[ \t]*(?:\r\n|\n)/);
-  if (!openingDelimiter) return { frontmatter: null, body: markdown };
+/**
+ * A suggested replacement is `<span id="rd-sN"><del>old</del><ins>new</ins></span>`.
+ * The inner elements carry no id of their own, yet the operation is read from
+ * them, so they serialize as tags rather than as `~~` strikethrough.
+ */
+function isRfmReplacementPart(node: HTMLElement): boolean {
+  if (node.nodeName !== "DEL" && node.nodeName !== "INS") return false;
 
-  let lineStart = openingDelimiter[0].length;
+  const parent = node.parentElement;
+  return Boolean(
+    parent &&
+      parent.nodeName === "SPAN" &&
+      RFM_SUGGESTION_ID_PATTERN.test(parent.getAttribute("id") ?? ""),
+  );
+}
 
-  while (lineStart < markdown.length) {
-    const nextLineBreak = markdown.indexOf("\n", lineStart);
-    const lineEnd = nextLineBreak === -1 ? markdown.length : nextLineBreak + 1;
-    const line = markdown.slice(
-      lineStart,
-      nextLineBreak === -1 ? lineEnd : lineEnd - 1,
-    );
+/**
+ * Private-use character standing at an anchor edge whose whitespace has to
+ * survive serialization.
+ *
+ * Turndown lifts a node's edge whitespace out of the element it belongs to, and
+ * drops it outright when the neighbouring text already ends in whitespace. That
+ * is right for emphasis, where `**bold **` is not valid Markdown, and wrong for
+ * an anchor, whose extent is the extent of the review record bound to it: an
+ * anchor that gives up its trailing space now proposes deleting a different
+ * string than the one the reviewer selected. The guard sits between the edge and
+ * the whitespace so Turndown finds no edge whitespace to take.
+ *
+ * It exists only between {@link guardAnchorEdgeWhitespace} and
+ * {@link htmlToMarkdown}, which spends it, and never reaches a file.
+ */
+const ANCHOR_EDGE_GUARD = "";
 
-    if (isYamlFrontmatterDelimiter(line)) {
-      let bodyStart = lineEnd;
+/**
+ * Stand a guard at each anchor edge that opens or closes with whitespace.
+ *
+ * An empty anchor gets none: it is a point anchor, and Turndown routes a node it
+ * considers blank through `blankReplacement`, which a guard would divert.
+ */
+function guardAnchorEdgeWhitespace(root: HTMLElement): void {
+  const ownerDocument = root.ownerDocument;
 
-      while (bodyStart < markdown.length) {
-        const blankLineBreak = markdown.indexOf("\n", bodyStart);
-        const blankLineEnd =
-          blankLineBreak === -1 ? markdown.length : blankLineBreak + 1;
-        const blankLine = markdown.slice(
-          bodyStart,
-          blankLineBreak === -1 ? blankLineEnd : blankLineEnd - 1,
-        );
+  for (const element of root.querySelectorAll("span, ins, del")) {
+    const anchor = element as HTMLElement;
 
-        if (blankLine.replace(/\r$/, "").trim() !== "") break;
-        bodyStart = blankLineEnd;
-      }
+    if (!isRfmAnchorElement(anchor) && !isRfmReplacementPart(anchor)) continue;
 
-      return {
-        frontmatter: markdown.slice(0, bodyStart),
-        body: markdown.slice(bodyStart),
-      };
+    const text = anchor.textContent ?? "";
+
+    if (/^\s/.test(text)) {
+      anchor.insertBefore(
+        ownerDocument.createTextNode(ANCHOR_EDGE_GUARD),
+        anchor.firstChild,
+      );
     }
 
-    lineStart = lineEnd;
-  }
-
-  return { frontmatter: null, body: markdown };
-}
-
-export function prependYamlFrontmatter(
-  markdown: string,
-  frontmatter?: string | null,
-): string {
-  return frontmatter ? `${frontmatter}${markdown}` : markdown;
-}
-
-export function splitYamlDocumentMetadata(
-  markdown: string,
-): YamlDocumentMetadataSplit {
-  const { frontmatter, body } = splitYamlFrontmatter(markdown);
-  const matches = [...body.matchAll(/\n---[ \t]*\r?\n/g)];
-  const match = matches.at(-1);
-
-  if (!match || match.index === undefined) {
-    return { frontmatter, body, endmatter: null };
-  }
-
-  const endmatter = body.slice(match.index);
-  const candidate = endmatter.replace(/^\n/, "");
-
-  const precedingBody = body.slice(0, match.index);
-  if (!isRoughdraftReviewEndmatter(candidate)) {
-    return { frontmatter, body, endmatter: null };
-  }
-  if (!precedingBody.includes("{#")) {
-    const yamlText = candidate.replace(/^---[ \t]*(?:\r\n|\n)/, "");
-    const parsed = parseYaml(yamlText) as Record<string, unknown> | null;
-    if (!hasDocumentLevelComment(parsed?.comments)) {
-      return { frontmatter, body, endmatter: null };
+    if (/\s$/.test(text)) {
+      anchor.appendChild(ownerDocument.createTextNode(ANCHOR_EDGE_GUARD));
     }
   }
-
-  return {
-    frontmatter,
-    body: body.slice(0, match.index).replace(/\s*$/, "\n"),
-    endmatter: candidate,
-  };
 }
 
-export function appendYamlEndmatter(
+/**
+ * Parse `html` the way Turndown parses a string it is handed, so that guarding
+ * the anchors costs nothing else: the custom wrapper is what keeps the elements
+ * in one place rather than split across `<head>` and `<body>`.
+ */
+function parseGuardedRoot(html: string): HTMLElement {
+  const parsed = new DOMParser().parseFromString(
+    `<x-turndown id="turndown-root">${html}</x-turndown>`,
+    "text/html",
+  );
+  const root = parsed.getElementById("turndown-root");
+
+  if (!root) throw new Error("could not parse HTML for Markdown conversion");
+
+  guardAnchorEdgeWhitespace(root);
+
+  return root;
+}
+
+/**
+ * Convert editor HTML to the Markdown that goes to disk.
+ *
+ * Callers pass their own service because the review serializer registers rules
+ * of its own on top of {@link createTurndownService}.
+ */
+export function htmlToMarkdown(service: TurndownService, html: string): string {
+  const markdown = service.turndown(parseGuardedRoot(html)).trimEnd();
+
+  return normalizeBlockSpacing(`${markdown}\n`).replaceAll(
+    ANCHOR_EDGE_GUARD,
+    "",
+  );
+}
+
+function serializeAnchorElement(content: string, node: HTMLElement): string {
+  const tagName = node.nodeName.toLowerCase();
+  const { attributes } = node;
+  let attributeMarkup = "";
+
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes.item(index);
+    if (!attribute) continue;
+    // `class` on an anchor is presentation the editor's marks add when they
+    // render, never anything the document carried in: the marks hold ids, so a
+    // class read from a source anchor cannot reach this point. Writing it back
+    // would put `class="comment-anchor"` into the file on every save.
+    if (attribute.name === "class") continue;
+    attributeMarkup += ` ${attribute.name}="${escapeHtml(attribute.value)}"`;
+  }
+
+  const text = content.replaceAll(EMPTY_ANCHOR_SENTINEL, "");
+  return `<${tagName}${attributeMarkup}>${text}</${tagName}>`;
+}
+
+/**
+ * Attributes recording the blank lines a heading had around it in the source.
+ *
+ * Markdown distinguishes `## H\n\ntext` from `## H\ntext`; HTML does not, so
+ * without carrying the distinction here a round trip has to guess, and every
+ * document is rewritten to whichever form the guess picks. The editor's Heading
+ * node keeps both attributes, and the Turndown heading rule spends them.
+ */
+export const HEADING_BLANK_BEFORE_ATTRIBUTE = "data-md-blank-before";
+export const HEADING_BLANK_AFTER_ATTRIBUTE = "data-md-blank-after";
+
+/**
+ * Private-use characters the heading rule leaves on a side that carried no
+ * blank line, for {@link normalizeBlockSpacing} to act on and remove. They
+ * exist only between those two functions.
+ */
+const TIGHT_BEFORE_MARKER = "";
+const TIGHT_AFTER_MARKER = "";
+
+/**
+ * Record each heading's surrounding blank lines onto its token.
+ *
+ * A blank line after a heading is inside the heading token's own `raw`, which
+ * ends with two newlines. A blank line before one is a preceding `space` token.
+ * Neither fact is recoverable once the tokens become HTML.
+ */
+function annotateHeadingSpacing(tokens: Token[] | TokensList): void {
+  tokens.forEach((token, index) => {
+    if (token.type === "heading") {
+      const heading = token as Tokens.Heading & HeadingSpacing;
+      heading.blankBefore = tokens[index - 1]?.type === "space";
+      heading.blankAfter = /\n\s*\n$/.test(token.raw);
+    }
+
+    const nested = token as { tokens?: Token[]; items?: Token[] };
+    if (nested.tokens) annotateHeadingSpacing(nested.tokens);
+    if (nested.items) annotateHeadingSpacing(nested.items);
+  });
+}
+
+interface HeadingSpacing {
+  blankBefore?: boolean;
+  blankAfter?: boolean;
+}
+
+/**
+ * Render Markdown to HTML.
+ *
+ * Lexing is a separate step from parsing because the heading spacing has to be
+ * read off the tokens before they become HTML. Both render paths go through
+ * here so that neither can render without it.
+ */
+export function renderMarkdownToHtml(
   markdown: string,
-  endmatter?: string | null,
+  options?: MarkdownOptions,
 ): string {
-  return endmatter
-    ? `${markdown.replace(/\s*$/, "\n")}\n${endmatter}`
-    : markdown;
+  const parser = new Marked({
+    async: false,
+    gfm: true,
+    renderer: createMarkedRenderer(options),
+  });
+  const tokens = parser.lexer(markdown);
+
+  annotateHeadingSpacing(tokens);
+
+  return parser.parser(tokens);
 }
 
-export function createMarkedRenderer(options?: MarkdownOptions) {
+function createMarkedRenderer(options?: MarkdownOptions) {
   const renderer = new marked.Renderer();
   const baseRenderer = new marked.Renderer();
   const resolveFileUrl = options?.resolveFileUrl;
   const resolveLinkUrl = options?.resolveLinkUrl;
+
+  renderer.heading = function (token) {
+    const { blankBefore, blankAfter } = token as Tokens.Heading &
+      HeadingSpacing;
+    const before = blankBefore
+      ? ` ${HEADING_BLANK_BEFORE_ATTRIBUTE}="true"`
+      : "";
+    const after = blankAfter ? ` ${HEADING_BLANK_AFTER_ATTRIBUTE}="true"` : "";
+
+    return `<h${token.depth}${before}${after}>${this.parser.parseInline(
+      token.tokens,
+    )}</h${token.depth}>\n`;
+  };
 
   renderer.code = ({ text, lang, escaped }) => {
     const language = (lang || "").match(/\S+/)?.[0];
@@ -376,17 +490,38 @@ export function createMarkedRenderer(options?: MarkdownOptions) {
   return renderer;
 }
 
+/**
+ * Builds the HTML → Markdown serializer for the rich text surface.
+ *
+ * Contract: an element carrying an `id` of the form `rd-cN` or `rd-sN` survives
+ * serialization with its tag name, its `id` and every other attribute intact,
+ * in source order. Every save of a reviewed document rests on that promise, and
+ * no type can enforce it — Turndown silently drops an element it has no rule
+ * for, so a missing or shadowed rule destroys review anchors with no error
+ * anywhere. A rule added here must leave `rfmAnchorElement` reachable for those
+ * elements: `addRule` prepends, so the last rule registered wins.
+ */
 export function createTurndownService(): TurndownService {
   const service = new TurndownService({
     headingStyle: "atx",
     codeBlockStyle: "fenced",
     bulletListMarker: "-",
+    // `<hr>` carries no record of the markers the author wrote, so serialization
+    // has to pick one form. `---` is the form this format already spells its
+    // frontmatter and endmatter delimiters with, so it is the one a document
+    // written here is written back with; Turndown's own `* * *` would rewrite
+    // every thematic break on the first save.
+    hr: "---",
     blankReplacement(_content, node) {
       if (node.hasAttribute(rawMarkdownBlockAttribute)) {
         return `\n\n${decodeRawMarkdownBlock(
           node.getAttribute(rawMarkdownBlockAttribute) ?? "",
         ).trimEnd()}\n\n`;
       }
+
+      // Turndown short-circuits every rule for a node it considers blank, so an
+      // anchor holding no text at all is serialized here rather than dropped.
+      if (isRfmAnchorElement(node)) return serializeAnchorElement("", node);
 
       return (node as HTMLElement & { isBlock?: boolean }).isBlock
         ? "\n\n"
@@ -397,12 +532,31 @@ export function createTurndownService(): TurndownService {
   service.use(tables as Parameters<TurndownService["use"]>[0]);
   service.use(taskListItems as Parameters<TurndownService["use"]>[0]);
 
+  service.addRule("spacedHeading", {
+    filter: ["h1", "h2", "h3", "h4", "h5", "h6"],
+    replacement(content, node) {
+      const element = node as HTMLElement;
+      const depth = Number(element.nodeName.charAt(1));
+      const before = element.hasAttribute(HEADING_BLANK_BEFORE_ATTRIBUTE)
+        ? ""
+        : TIGHT_BEFORE_MARKER;
+      const after = element.hasAttribute(HEADING_BLANK_AFTER_ATTRIBUTE)
+        ? ""
+        : TIGHT_AFTER_MARKER;
+
+      return `\n\n${before}${"#".repeat(depth)} ${content}${after}\n\n`;
+    },
+  });
+
   service.addRule("compactListItem", {
     filter: "li",
     replacement(content, node, options) {
+      // Trailing newlines come off before the indent, not after: indenting one
+      // turns it into a whitespace-only line between items, which reads as a
+      // loose list and adds trailing spaces the author never wrote.
       const trimmed = content
         .replace(/^\n+/, "")
-        .replace(/\n+$/, "\n")
+        .replace(/\n+$/, "")
         .replace(/\n/gm, "\n  ");
 
       let prefix = `${options.bulletListMarker} `;
@@ -413,11 +567,7 @@ export function createTurndownService(): TurndownService {
         prefix = `${start ? Number(start) + index : index + 1}. `;
       }
 
-      return (
-        prefix +
-        trimmed +
-        (node.nextSibling && !/\n$/.test(trimmed) ? "\n" : "")
-      );
+      return prefix + trimmed + (node.nextSibling ? "\n" : "");
     },
   });
 
@@ -505,9 +655,11 @@ export function createTurndownService(): TurndownService {
 
   service.addRule("markdownStrikethrough", {
     filter: (node) =>
-      node.nodeName === "DEL" ||
-      node.nodeName === "S" ||
-      node.nodeName === "STRIKE",
+      (node.nodeName === "DEL" ||
+        node.nodeName === "S" ||
+        node.nodeName === "STRIKE") &&
+      !isRfmAnchorElement(node) &&
+      !isRfmReplacementPart(node),
     replacement(content) {
       return `~~${content}~~`;
     },
@@ -524,35 +676,46 @@ export function createTurndownService(): TurndownService {
     },
   });
 
+  // Registered last so it takes precedence over every rule above it: `addRule`
+  // prepends, and without this rule Turndown has no handling for `<ins>` at all
+  // and would rewrite an anchored `<del>` as `~~`.
+  service.addRule("rfmAnchorElement", {
+    filter: (node) => isRfmAnchorElement(node) || isRfmReplacementPart(node),
+    replacement(content, node) {
+      return serializeAnchorElement(content, node);
+    },
+  });
+
   return service;
 }
 
 const turndown = createTurndownService();
 
 /**
- * Collapse runs of 3+ newlines to 2 and remove the blank line that
- * Turndown inserts before/after ATX headings.  This keeps block
- * separation where it matters (between consecutive paragraphs) while
- * producing a more compact output that round-trips with fewer
- * gratuitous whitespace changes.
+ * Collapse runs of 3+ newlines to 2, then close the blank lines Turndown put
+ * around headings that had none in the source.
+ *
+ * Turndown decides block separation by taking the longer of the two adjacent
+ * blocks' newline runs, so a heading rule cannot ask for a single newline on
+ * its own — the neighbouring block overrides it. The rule therefore marks the
+ * sides that were tight and this pass, which sees both sides at once, spends
+ * the markers. They never reach a file: whatever survives is stripped below.
  */
-export function normalizeBlockSpacing(md: string): string {
-  let normalized = md.replace(/\n{3,}/g, "\n\n");
-  // Remove blank line immediately before a heading.
-  normalized = normalized.replace(/\n\n(#{1,6} )/g, "\n$1");
-  // Remove blank line immediately after a heading line.
-  normalized = normalized.replace(/(^#{1,6} [^\n]+)\n\n/gm, "$1\n");
-  return normalized;
+function normalizeBlockSpacing(md: string): string {
+  return md
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(new RegExp(`\n\n${TIGHT_BEFORE_MARKER}`, "g"), "\n")
+    .replace(new RegExp(`${TIGHT_AFTER_MARKER}\n\n`, "g"), "\n")
+    .replace(
+      new RegExp(`[${TIGHT_BEFORE_MARKER}${TIGHT_AFTER_MARKER}]`, "g"),
+      "",
+    );
 }
 
 export function toMarkdown(html: string): string {
-  return normalizeBlockSpacing(`${turndown.turndown(html).trimEnd()}\n`);
+  return htmlToMarkdown(turndown, html);
 }
 
 export function toHtml(markdown: string, options?: MarkdownOptions): string {
-  return marked.parse(markdown, {
-    async: false,
-    gfm: true,
-    renderer: createMarkedRenderer(options),
-  }) as string;
+  return renderMarkdownToHtml(markdown, options);
 }

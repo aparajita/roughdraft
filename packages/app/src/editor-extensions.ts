@@ -1,6 +1,7 @@
-import { Extension, Mark, Node, mergeAttributes } from "@tiptap/core";
+import { Extension, Mark, mergeAttributes, Node } from "@tiptap/core";
 import Code from "@tiptap/extension-code";
 import CodeBlock from "@tiptap/extension-code-block";
+import Heading from "@tiptap/extension-heading";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -17,42 +18,132 @@ import type {
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
-import { rawMarkdownBlockAttribute } from "./markdown";
+import {
+  EMPTY_ANCHOR_SENTINEL,
+  HEADING_BLANK_AFTER_ATTRIBUTE,
+  HEADING_BLANK_BEFORE_ATTRIBUTE,
+  rawMarkdownBlockAttribute,
+} from "./markdown";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
-    commentRef: {
-      setCommentRef: (attributes: { commentIds: string[] }) => ReturnType;
+    commentAnchor: {
+      setCommentAnchor: (attributes: { commentIds: string[] }) => ReturnType;
       removeCommentId: (commentId: string) => ReturnType;
-      unsetCommentRef: () => ReturnType;
+      unsetCommentAnchor: () => ReturnType;
     };
-    criticChange: {
-      setCriticChange: (attributes: CriticChangeAttrs) => ReturnType;
-      unsetCriticChange: () => ReturnType;
-      acceptCriticChange: (changeId: string) => ReturnType;
-      rejectCriticChange: (changeId: string) => ReturnType;
+    suggestion: {
+      setSuggestion: (attributes: SuggestionAttrs) => ReturnType;
+      unsetSuggestion: () => ReturnType;
+      acceptSuggestion: (suggestionId: string) => ReturnType;
+      rejectSuggestion: (suggestionId: string) => ReturnType;
     };
   }
 }
 
-export type CriticChangeKind =
-  | "addition"
-  | "deletion"
-  | "substitution-old"
-  | "substitution-new";
+/**
+ * The mark layer keeps four values because a ProseMirror mark cannot span both
+ * halves of a replacement as one range: the old text and the new text are two
+ * adjacent ranges paired by id. The format's three-value kind is derived at the
+ * rfm boundary.
+ */
+export type SuggestionKind =
+  | "insert"
+  | "delete"
+  | "replace-old"
+  | "replace-new";
 
-export interface CriticChangeAttrs {
-  kind: CriticChangeKind;
-  changeId: string;
+export interface SuggestionAttrs {
+  kind: SuggestionKind;
+  suggestionId: string;
   authorType?: "user" | "ai";
   authorId?: string | null;
   createdAt: string;
 }
 
-export const SUGGESTED_PARAGRAPH_SENTINEL = "\u2060";
+const COMMENT_ID_PATTERN = /^rd-c\d+$/;
+const SUGGESTION_ID_PATTERN = /^rd-s\d+$/;
 
-const CommentRef = Mark.create({
-  name: "commentRef",
+/**
+ * A replacement's two halves share one id, and an `id` must be unique in the
+ * document, so the halves carry the id here instead. The `<span>` that owns the
+ * real `id` is added around the pair when the document is serialized.
+ */
+const REPLACE_ATTRIBUTE = "data-rd-replace";
+
+/**
+ * A mark type appears at most once per text node, so several comments covering
+ * one range are one mark with several ids. The format nests `<span>` anchors
+ * instead; `renderHTML` cannot emit nested elements, so it puts the outermost id
+ * in `id` and the rest here, and the review module expands them back to nesting.
+ */
+const NESTED_COMMENT_IDS_ATTRIBUTE = "data-rd-nested";
+
+/**
+ * Attributes the mark layer owns, so they are the ones an anchor's own
+ * attributes are read around. `class` is presentation `renderHTML` adds, and
+ * `id` plus the two `data-rd-*` names carry the mark's own state.
+ */
+const MARK_OWNED_ATTRIBUTES = new Set([
+  "id",
+  "class",
+  NESTED_COMMENT_IDS_ATTRIBUTE,
+  REPLACE_ATTRIBUTE,
+]);
+
+/**
+ * An anchor's remaining attributes, kept verbatim so a read/write cycle
+ * preserves them as the format requires. Without this the mark would carry only
+ * ids and every other attribute would be dropped on the way into the editor,
+ * where no later step could recover it.
+ */
+function readOtherAttributes(element: HTMLElement): Record<string, string> {
+  const other: Record<string, string> = {};
+
+  for (const { name, value } of [...element.attributes]) {
+    if (MARK_OWNED_ATTRIBUTES.has(name)) continue;
+    other[name] = value;
+  }
+
+  return other;
+}
+
+/**
+ * Returns null when the element is not a comment anchor, so that both the parse
+ * rule and the attribute parser reject it rather than invent ids for it.
+ */
+function readCommentAnchorIds(element: HTMLElement): string[] | null {
+  const outermost = element.getAttribute("id");
+
+  if (outermost === null || !COMMENT_ID_PATTERN.test(outermost)) return null;
+
+  const nested = element.getAttribute(NESTED_COMMENT_IDS_ATTRIBUTE);
+
+  if (nested === null) return [outermost];
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(nested);
+  } catch {
+    return null;
+  }
+
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every(
+      (id): id is string =>
+        typeof id === "string" && COMMENT_ID_PATTERN.test(id),
+    )
+  ) {
+    return null;
+  }
+
+  return [outermost, ...parsed];
+}
+
+const CommentAnchor = Mark.create({
+  name: "commentAnchor",
   priority: 1100,
   inclusive: false,
   spanning: true,
@@ -61,27 +152,41 @@ const CommentRef = Mark.create({
     return {
       commentIds: {
         default: [],
-        parseHTML: (element) => {
-          const ids = element.getAttribute("data-comment-ids");
+        parseHTML: (element) => readCommentAnchorIds(element as HTMLElement),
+        renderHTML: (attributes) => {
+          const commentIds = attributes.commentIds;
 
-          if (!ids) return [];
+          if (!Array.isArray(commentIds) || commentIds.length === 0) return {};
 
-          try {
-            return JSON.parse(ids);
-          } catch {
-            return [];
-          }
+          const [outermost, ...nested] = commentIds as string[];
+
+          return nested.length === 0
+            ? { id: outermost }
+            : {
+                id: outermost,
+                [NESTED_COMMENT_IDS_ATTRIBUTE]: JSON.stringify(nested),
+              };
         },
-        renderHTML: (attributes) =>
-          attributes.commentIds?.length
-            ? { "data-comment-ids": JSON.stringify(attributes.commentIds) }
-            : {},
+      },
+      otherAttributes: {
+        default: {},
+        parseHTML: (element) => readOtherAttributes(element as HTMLElement),
+        renderHTML: (attributes) => {
+          const other = attributes.otherAttributes;
+          return other && typeof other === "object" ? other : {};
+        },
       },
     };
   },
 
   parseHTML() {
-    return [{ tag: "span[data-comment-ids]" }];
+    return [
+      {
+        tag: "span[id]",
+        getAttrs: (element) =>
+          readCommentAnchorIds(element as HTMLElement) === null ? false : null,
+      },
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
@@ -96,14 +201,14 @@ const CommentRef = Mark.create({
 
   addCommands() {
     return {
-      setCommentRef:
+      setCommentAnchor:
         (attributes) =>
         ({ commands }) =>
           commands.setMark(this.name, attributes),
       removeCommentId:
         (commentId) =>
         ({ tr, state, dispatch }) => {
-          const markType = state.schema.marks.commentRef;
+          const markType = state.schema.marks.commentAnchor;
 
           if (!markType) return false;
 
@@ -132,7 +237,14 @@ const CommentRef = Mark.create({
             tr.removeMark(from, to, markType);
 
             if (nextIds.length > 0) {
-              tr.addMark(from, to, markType.create({ commentIds: nextIds }));
+              // The anchor's own attributes ride on the mark, so the rebuilt
+              // mark has to carry them: rebuilding from `commentIds` alone
+              // drops every attribute the anchor was written with.
+              tr.addMark(
+                from,
+                to,
+                markType.create({ ...mark.attrs, commentIds: nextIds }),
+              );
             }
           });
 
@@ -142,7 +254,7 @@ const CommentRef = Mark.create({
 
           return found;
         },
-      unsetCommentRef:
+      unsetCommentAnchor:
         () =>
         ({ commands }) =>
           commands.unsetMark(this.name),
@@ -150,60 +262,101 @@ const CommentRef = Mark.create({
   },
 });
 
-function isCriticChangeKind(value: unknown): value is CriticChangeKind {
+function isSuggestionKind(value: unknown): value is SuggestionKind {
   return (
-    value === "addition" ||
-    value === "deletion" ||
-    value === "substitution-old" ||
-    value === "substitution-new"
+    value === "insert" ||
+    value === "delete" ||
+    value === "replace-old" ||
+    value === "replace-new"
   );
 }
 
-function readCriticChangeAttrs(element: HTMLElement): CriticChangeAttrs | null {
-  const kind = element.getAttribute("data-critic-change-kind");
-  const changeId = element.getAttribute("data-critic-change-id");
-  const createdAt = element.getAttribute("data-critic-change-at");
+/**
+ * The identity a suggestion anchor carries in the document body. Author and
+ * timestamp live in the endmatter, not on the element, so they are not part of
+ * what the DOM can be asked for.
+ */
+interface SuggestionAnchor {
+  kind: SuggestionKind;
+  suggestionId: string;
+}
 
-  if (!isCriticChangeKind(kind) || !changeId || !createdAt) {
-    return null;
+/**
+ * Returns null when the element is not a suggestion anchor, so that both the
+ * parse rule and the attribute parsers reject it rather than substitute a
+ * plausible kind or id for one the element does not carry.
+ */
+function readSuggestionAttrs(element: HTMLElement): SuggestionAnchor | null {
+  const tag = element.nodeName.toUpperCase();
+
+  if (tag !== "INS" && tag !== "DEL") return null;
+
+  const replaceId = element.getAttribute(REPLACE_ATTRIBUTE);
+
+  if (replaceId !== null) {
+    if (!SUGGESTION_ID_PATTERN.test(replaceId)) return null;
+
+    return {
+      kind: tag === "DEL" ? "replace-old" : "replace-new",
+      suggestionId: replaceId,
+    };
   }
 
-  const rawBy = element.getAttribute("data-critic-change-by") || "user";
-  const authorType = rawBy.toUpperCase() === "AI" ? "ai" : "user";
+  const id = element.getAttribute("id");
+
+  if (id === null || !SUGGESTION_ID_PATTERN.test(id)) return null;
 
   return {
-    kind,
-    changeId,
-    authorType,
-    authorId: authorType === "ai" ? null : rawBy,
-    createdAt,
+    kind: tag === "DEL" ? "delete" : "insert",
+    suggestionId: id,
   };
 }
 
-function collectCriticChangeRanges(doc: ProseMirrorNode, changeId: string) {
-  const markType = doc.type.schema.marks.criticChange;
+/**
+ * The text an inline leaf node stands for. A hard break is the only inline leaf
+ * this schema has, and what it stands for is the line break it renders. It is
+ * one character wide, matching the single document position a leaf occupies, so
+ * a reader walking inline content keeps text offsets and positions in step.
+ */
+export const INLINE_LEAF_TEXT = "\n";
+
+/** The text an inline node contributes to the document. */
+export function inlineNodeText(node: ProseMirrorNode): string {
+  return node.isText ? (node.text ?? "") : INLINE_LEAF_TEXT;
+}
+
+/**
+ * Every run of inline content one suggestion covers, in document order. Inline
+ * leaf nodes carry the mark as text does — a hard break the reviewer proposed
+ * deleting is part of the suggestion — so they are collected with it.
+ */
+export function collectSuggestionRanges(
+  doc: ProseMirrorNode,
+  suggestionId: string,
+) {
+  const markType = doc.type.schema.marks.suggestion;
   const ranges: Array<{
     from: number;
     to: number;
-    kind: CriticChangeKind;
+    kind: SuggestionKind;
     mark: ProseMirrorMark;
   }> = [];
 
   if (!markType) return ranges;
 
   doc.descendants((node, pos) => {
-    if (!node.isText) return;
+    if (!node.isInline) return;
 
     const mark = node.marks.find(
       (candidate) =>
         candidate.type === markType &&
-        candidate.attrs.changeId === changeId &&
-        isCriticChangeKind(candidate.attrs.kind),
+        candidate.attrs.suggestionId === suggestionId &&
+        isSuggestionKind(candidate.attrs.kind),
     );
 
     if (!mark) return;
 
-    const kind = mark.attrs.kind as CriticChangeKind;
+    const kind = mark.attrs.kind as SuggestionKind;
     const previous = ranges[ranges.length - 1];
 
     if (
@@ -227,7 +380,7 @@ function collectCriticChangeRanges(doc: ProseMirrorNode, changeId: string) {
   return ranges;
 }
 
-function findSuggestedParagraphSentinels(
+function findEmptyAnchorSentinels(
   doc: ProseMirrorNode,
   from: number,
   to: number,
@@ -237,10 +390,10 @@ function findSuggestedParagraphSentinels(
   doc.nodesBetween(from, to, (node, pos) => {
     if (!node.isText || !node.text) return;
 
-    let index = node.text.indexOf(SUGGESTED_PARAGRAPH_SENTINEL);
+    let index = node.text.indexOf(EMPTY_ANCHOR_SENTINEL);
     while (index >= 0) {
       positions.push(pos + index);
-      index = node.text.indexOf(SUGGESTED_PARAGRAPH_SENTINEL, index + 1);
+      index = node.text.indexOf(EMPTY_ANCHOR_SENTINEL, index + 1);
     }
   });
 
@@ -263,113 +416,129 @@ function isOnlyTextblockContent(
   );
 }
 
-const CriticChange = Mark.create({
-  name: "criticChange",
+/**
+ * A mark whose kind or id is missing cannot be written as an anchor, and an
+ * anchor that loses its id is review data lost on the next save. The mark
+ * reaches the DOM only through `setSuggestion`, whose argument is typed, or
+ * through a parse rule that already rejected everything invalid, so a failure
+ * here is a programming error and says so rather than emitting a wrong anchor.
+ */
+function requireSuggestionAnchor(attrs: Record<string, unknown>) {
+  const { kind, suggestionId } = attrs;
+
+  if (!isSuggestionKind(kind) || typeof suggestionId !== "string") {
+    throw new Error(
+      `suggestion mark cannot be rendered: kind=${JSON.stringify(
+        kind,
+      )} suggestionId=${JSON.stringify(suggestionId)}`,
+    );
+  }
+
+  return { kind, suggestionId };
+}
+
+const parseSuggestionAnchor = (element: HTMLElement | string) =>
+  readSuggestionAttrs(element as HTMLElement) === null ? false : null;
+
+const Suggestion = Mark.create({
+  name: "suggestion",
   priority: 1090,
   inclusive: false,
   spanning: true,
 
   addAttributes() {
     return {
+      // The element's tag and id carry `kind` and `suggestionId`, and only the
+      // mark's own `renderHTML` can choose a tag, so neither renders here.
       kind: {
-        default: "addition",
-        parseHTML: (element) =>
-          readCriticChangeAttrs(element as HTMLElement)?.kind ?? "addition",
-        renderHTML: (attributes) => ({
-          "data-critic-change-kind": attributes.kind,
-        }),
-      },
-      changeId: {
         default: null,
         parseHTML: (element) =>
-          readCriticChangeAttrs(element as HTMLElement)?.changeId ?? null,
-        renderHTML: (attributes) =>
-          attributes.changeId
-            ? { "data-critic-change-id": attributes.changeId }
-            : {},
+          readSuggestionAttrs(element as HTMLElement)?.kind ?? null,
+        renderHTML: () => ({}),
       },
+      suggestionId: {
+        default: null,
+        parseHTML: (element) =>
+          readSuggestionAttrs(element as HTMLElement)?.suggestionId ?? null,
+        renderHTML: () => ({}),
+      },
+      // Author and timestamp belong to the endmatter record, not to the anchor,
+      // so they are neither written to nor read from the element.
       authorType: {
         default: "user",
-        parseHTML: (element) =>
-          readCriticChangeAttrs(element as HTMLElement)?.authorType ?? "user",
         renderHTML: () => ({}),
       },
       authorId: {
         default: "user",
-        parseHTML: (element) =>
-          readCriticChangeAttrs(element as HTMLElement)?.authorId ?? "user",
-        renderHTML: (attributes) => ({
-          "data-critic-change-by":
-            attributes.authorType === "ai"
-              ? "AI"
-              : attributes.authorId || "user",
-        }),
+        renderHTML: () => ({}),
       },
       createdAt: {
         default: null,
-        parseHTML: (element) =>
-          readCriticChangeAttrs(element as HTMLElement)?.createdAt ?? null,
-        renderHTML: (attributes) =>
-          attributes.createdAt
-            ? { "data-critic-change-at": attributes.createdAt }
-            : {},
+        renderHTML: () => ({}),
       },
     };
   },
 
   parseHTML() {
-    return [{ tag: "span[data-critic-change-kind]" }];
+    return [
+      { tag: "ins[id]", getAttrs: parseSuggestionAnchor },
+      { tag: "del[id]", getAttrs: parseSuggestionAnchor },
+      { tag: `ins[${REPLACE_ATTRIBUTE}]`, getAttrs: parseSuggestionAnchor },
+      { tag: `del[${REPLACE_ATTRIBUTE}]`, getAttrs: parseSuggestionAnchor },
+    ];
   },
 
-  renderHTML({ HTMLAttributes }) {
+  renderHTML({ mark, HTMLAttributes }) {
+    const { kind, suggestionId } = requireSuggestionAnchor(mark.attrs);
+    const isReplacement = kind === "replace-old" || kind === "replace-new";
+    const tag = kind === "insert" || kind === "replace-new" ? "ins" : "del";
+
     return [
-      "span",
-      mergeAttributes(HTMLAttributes, {
-        class: `critic-change critic-change-${HTMLAttributes["data-critic-change-kind"]}`,
-      }),
+      tag,
+      mergeAttributes(
+        HTMLAttributes,
+        isReplacement
+          ? { [REPLACE_ATTRIBUTE]: suggestionId }
+          : { id: suggestionId },
+        { class: `suggestion suggestion-${kind}` },
+      ),
       0,
     ];
   },
 
   addCommands() {
     return {
-      setCriticChange:
+      setSuggestion:
         (attributes) =>
         ({ commands }) =>
           commands.setMark(this.name, attributes),
-      unsetCriticChange:
+      unsetSuggestion:
         () =>
         ({ commands }) =>
           commands.unsetMark(this.name),
-      acceptCriticChange:
-        (changeId) =>
+      acceptSuggestion:
+        (suggestionId) =>
         ({ state, dispatch }) => {
-          const markType = state.schema.marks.criticChange;
+          const markType = state.schema.marks.suggestion;
           if (!markType) return false;
 
-          const ranges = collectCriticChangeRanges(state.doc, changeId);
+          const ranges = collectSuggestionRanges(state.doc, suggestionId);
           if (ranges.length === 0) return false;
 
           const tr = state.tr;
 
           for (const range of [...ranges].reverse()) {
-            if (
-              range.kind === "deletion" ||
-              range.kind === "substitution-old"
-            ) {
+            if (range.kind === "delete" || range.kind === "replace-old") {
               tr.delete(range.from, range.to);
             } else {
-              const sentinelPositions = findSuggestedParagraphSentinels(
+              const sentinelPositions = findEmptyAnchorSentinels(
                 state.doc,
                 range.from,
                 range.to,
               );
 
               for (const position of [...sentinelPositions].reverse()) {
-                tr.delete(
-                  position,
-                  position + SUGGESTED_PARAGRAPH_SENTINEL.length,
-                );
+                tr.delete(position, position + EMPTY_ANCHOR_SENTINEL.length);
               }
 
               const from = tr.mapping.map(range.from, -1);
@@ -381,23 +550,20 @@ const CriticChange = Mark.create({
           if (dispatch) dispatch(tr);
           return true;
         },
-      rejectCriticChange:
-        (changeId) =>
+      rejectSuggestion:
+        (suggestionId) =>
         ({ state, dispatch }) => {
-          const markType = state.schema.marks.criticChange;
+          const markType = state.schema.marks.suggestion;
           if (!markType) return false;
 
-          const ranges = collectCriticChangeRanges(state.doc, changeId);
+          const ranges = collectSuggestionRanges(state.doc, suggestionId);
           if (ranges.length === 0) return false;
 
           const tr = state.tr;
 
           for (const range of [...ranges].reverse()) {
-            if (
-              range.kind === "addition" ||
-              range.kind === "substitution-new"
-            ) {
-              const sentinelPositions = findSuggestedParagraphSentinels(
+            if (range.kind === "insert" || range.kind === "replace-new") {
+              const sentinelPositions = findEmptyAnchorSentinels(
                 state.doc,
                 range.from,
                 range.to,
@@ -432,27 +598,27 @@ interface CommentHighlightPluginState extends CommentHighlightMeta {
   decorations: DecorationSet;
 }
 
-interface CriticChangeHighlightMeta {
+interface SuggestionHighlightMeta {
   selectedChangeId: string | null;
   hoveredChangeId: string | null;
 }
 
-interface CriticChangeHighlightPluginState extends CriticChangeHighlightMeta {
+interface SuggestionHighlightPluginState extends SuggestionHighlightMeta {
   decorations: DecorationSet;
 }
 
 export const commentHighlightPluginKey =
   new PluginKey<CommentHighlightPluginState>("commentHighlight");
-export const criticChangeHighlightPluginKey =
-  new PluginKey<CriticChangeHighlightPluginState>("criticChangeHighlight");
+export const suggestionHighlightPluginKey =
+  new PluginKey<SuggestionHighlightPluginState>("suggestionHighlight");
 
 function createCommentHighlightDecorations(
   doc: ProseMirrorNode,
   selectedCommentId: string | null,
   hoveredCommentId: string | null,
 ) {
-  const commentMarkType = doc.type.schema.marks.commentRef;
-  const changeMarkType = doc.type.schema.marks.criticChange;
+  const commentMarkType = doc.type.schema.marks.commentAnchor;
+  const suggestionMarkType = doc.type.schema.marks.suggestion;
   const decorations: Decoration[] = [];
 
   if (!commentMarkType) {
@@ -487,19 +653,17 @@ function createCommentHighlightDecorations(
     }
 
     if (
-      changeMarkType &&
-      node.marks.some((mark) => mark.type === changeMarkType)
+      suggestionMarkType &&
+      node.marks.some((mark) => mark.type === suggestionMarkType)
     ) {
-      classNames.push("comment-decoration-on-critic-change");
+      classNames.push("comment-decoration-on-suggestion");
     }
 
     decorations.push(
       Decoration.inline(pos, pos + node.nodeSize, {
         class: classNames.join(" "),
-        "data-testid": classNames.includes(
-          "comment-decoration-on-critic-change",
-        )
-          ? "comment-decoration-on-critic-change"
+        "data-testid": classNames.includes("comment-decoration-on-suggestion")
+          ? "comment-decoration-on-suggestion"
           : "comment-decoration",
       }),
     );
@@ -563,57 +727,58 @@ const CommentHighlight = Extension.create({
   },
 });
 
-function createCriticChangeHighlightDecorations(
+function createSuggestionHighlightDecorations(
   doc: ProseMirrorNode,
   selectedChangeId: string | null,
   hoveredChangeId: string | null,
 ) {
-  const changeMarkType = doc.type.schema.marks.criticChange;
+  const suggestionMarkType = doc.type.schema.marks.suggestion;
   const decorations: Decoration[] = [];
 
-  if (!changeMarkType) {
+  if (!suggestionMarkType) {
     return DecorationSet.create(doc, decorations);
   }
 
   doc.descendants((node: ProseMirrorNode, pos: number) => {
     if (!node.isText) return;
 
-    const changeIds = [
+    const suggestionIds = [
       ...new Set(
         node.marks.flatMap((mark: ProseMirrorMark) =>
-          mark.type === changeMarkType &&
-          typeof mark.attrs.changeId === "string"
-            ? [mark.attrs.changeId]
+          mark.type === suggestionMarkType &&
+          typeof mark.attrs.suggestionId === "string"
+            ? [mark.attrs.suggestionId]
             : [],
         ),
       ),
     ];
 
-    if (changeIds.length === 0) return;
+    if (suggestionIds.length === 0) return;
 
     const isSelected =
-      !!selectedChangeId && changeIds.includes(selectedChangeId);
-    const isHovered = !!hoveredChangeId && changeIds.includes(hoveredChangeId);
+      !!selectedChangeId && suggestionIds.includes(selectedChangeId);
+    const isHovered =
+      !!hoveredChangeId && suggestionIds.includes(hoveredChangeId);
 
     if (!isSelected && !isHovered) return;
 
-    const changeKind = node.marks.find(
+    const suggestionKind = node.marks.find(
       (mark) =>
-        mark.type === changeMarkType &&
-        typeof mark.attrs.changeId === "string" &&
-        changeIds.includes(mark.attrs.changeId) &&
-        isCriticChangeKind(mark.attrs.kind),
-    )?.attrs.kind as CriticChangeKind | undefined;
+        mark.type === suggestionMarkType &&
+        typeof mark.attrs.suggestionId === "string" &&
+        suggestionIds.includes(mark.attrs.suggestionId) &&
+        isSuggestionKind(mark.attrs.kind),
+    )?.attrs.kind as SuggestionKind | undefined;
     decorations.push(
       Decoration.inline(pos, pos + node.nodeSize, {
         "data-testid": isSelected
-          ? "critic-change-decoration-active"
-          : "critic-change-decoration-hovered",
+          ? "suggestion-decoration-active"
+          : "suggestion-decoration-hovered",
         class: [
           isSelected
-            ? "critic-change-decoration-active"
-            : "critic-change-decoration-hovered",
-          changeKind ? `critic-change-decoration-${changeKind}` : null,
+            ? "suggestion-decoration-active"
+            : "suggestion-decoration-hovered",
+          suggestionKind ? `suggestion-decoration-${suggestionKind}` : null,
         ]
           .filter(Boolean)
           .join(" "),
@@ -624,26 +789,26 @@ function createCriticChangeHighlightDecorations(
   return DecorationSet.create(doc, decorations);
 }
 
-const CriticChangeHighlight = Extension.create({
-  name: "criticChangeHighlight",
+const SuggestionHighlight = Extension.create({
+  name: "suggestionHighlight",
 
   addProseMirrorPlugins() {
     return [
-      new Plugin<CriticChangeHighlightPluginState>({
-        key: criticChangeHighlightPluginKey,
+      new Plugin<SuggestionHighlightPluginState>({
+        key: suggestionHighlightPluginKey,
         state: {
           init: (_, state) => ({
             selectedChangeId: null,
             hoveredChangeId: null,
-            decorations: createCriticChangeHighlightDecorations(
+            decorations: createSuggestionHighlightDecorations(
               state.doc,
               null,
               null,
             ),
           }),
           apply: (tr, pluginState) => {
-            const meta = tr.getMeta(criticChangeHighlightPluginKey) as
-              | CriticChangeHighlightMeta
+            const meta = tr.getMeta(suggestionHighlightPluginKey) as
+              | SuggestionHighlightMeta
               | undefined;
 
             if (!meta && !tr.docChanged) {
@@ -662,7 +827,7 @@ const CriticChangeHighlight = Extension.create({
             return {
               selectedChangeId,
               hoveredChangeId,
-              decorations: createCriticChangeHighlightDecorations(
+              decorations: createSuggestionHighlightDecorations(
                 tr.doc,
                 selectedChangeId,
                 hoveredChangeId,
@@ -672,7 +837,7 @@ const CriticChangeHighlight = Extension.create({
         },
         props: {
           decorations: (state) =>
-            criticChangeHighlightPluginKey.getState(state)?.decorations ?? null,
+            suggestionHighlightPluginKey.getState(state)?.decorations ?? null,
         },
       }),
     ];
@@ -709,12 +874,43 @@ const MarkdownLink = Link.extend({
   },
 });
 
+/**
+ * Keeps a heading's source blank lines on the node, so a save writes the
+ * spacing the document was read with rather than one canonical form. The
+ * markdown layer sets the attributes and spends them; nothing here reads them.
+ */
+const MarkdownHeading = Heading.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      blankBefore: {
+        default: false,
+        parseHTML: (element) =>
+          element.hasAttribute(HEADING_BLANK_BEFORE_ATTRIBUTE),
+        renderHTML: (attributes) =>
+          attributes.blankBefore
+            ? { [HEADING_BLANK_BEFORE_ATTRIBUTE]: "true" }
+            : {},
+      },
+      blankAfter: {
+        default: false,
+        parseHTML: (element) =>
+          element.hasAttribute(HEADING_BLANK_AFTER_ATTRIBUTE),
+        renderHTML: (attributes) =>
+          attributes.blankAfter
+            ? { [HEADING_BLANK_AFTER_ATTRIBUTE]: "true" }
+            : {},
+      },
+    };
+  },
+});
+
 const MarkdownCode = Code.extend({
   excludes: "bold italic strike link",
 });
 
 const MarkdownCodeBlock = CodeBlock.extend({
-  marks: "commentRef criticChange",
+  marks: "commentAnchor suggestion",
 });
 
 const MarkdownImage = Image.extend({
@@ -770,12 +966,13 @@ const RawMarkdownBlock = Node.create({
 export function createEditorExtensions(placeholder: string) {
   return [
     StarterKit.configure({
-      heading: {
-        levels: [1, 2, 3],
-      },
+      heading: false,
       code: false,
       codeBlock: false,
       link: false,
+    }),
+    MarkdownHeading.configure({
+      levels: [1, 2, 3],
     }),
     Placeholder.configure({
       placeholder,
@@ -796,12 +993,12 @@ export function createEditorExtensions(placeholder: string) {
     TaskItem.configure({
       nested: true,
     }),
-    CommentRef,
-    CriticChange,
+    CommentAnchor,
+    Suggestion,
     RawMarkdownBlock,
     MarkdownCodeBlock,
     CommentHighlight,
-    CriticChangeHighlight,
+    SuggestionHighlight,
     MarkdownImage.configure({
       allowBase64: true,
       inline: false,

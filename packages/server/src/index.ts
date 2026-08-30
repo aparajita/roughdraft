@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   appendRoughdraftDocumentComment,
   extractRoughdraftReviewIndex,
+  summarizeReviewIndex,
 } from "@roughdraft/rfm";
 import express, { type Express, type Request, type Response } from "express";
 import {
@@ -668,7 +669,7 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
       projectPath: target.projectDir,
       relativePath: target.relativePath,
       version: fileVersionFromFile(target.absolutePath),
-      summary: index.summary,
+      summary: summarizeReviewIndex(index),
       overallComment,
     });
 

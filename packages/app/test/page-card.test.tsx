@@ -10,6 +10,55 @@ import {
 } from "../src/PageCard";
 import type { Page, StorageBackend } from "../src/storage";
 
+const REVIEW_TIMESTAMP = "2026-04-25T23:55:00.000Z";
+
+/** A one-comment document whose anchored text is `alpha`. */
+function alphaCommentDocument(trailingBlock: string): string {
+  return reviewDocument(
+    `<span id="rd-c1">alpha</span>\n\n${trailingBlock}`,
+    commentRecords({ id: "rd-c1", body: "Comment body" }),
+  );
+}
+
+/** A document whose body is `body` and whose endmatter holds `records`. */
+function reviewDocument(body: string, records: string[]): string {
+  return [body, "", "---", 'roughdraft: "1.0"', ...records, ""].join("\n");
+}
+
+function commentRecords(
+  ...comments: Array<{
+    id: string;
+    body: string;
+    by?: string;
+    at?: string;
+    re?: string;
+  }>
+): string[] {
+  return [
+    "comments:",
+    ...comments.flatMap(({ id, body, by, at, re }) => [
+      `  ${id}:`,
+      `    body: ${body}`,
+      `    by: ${by ?? "user"}`,
+      `    at: ${at ?? REVIEW_TIMESTAMP}`,
+      ...(re ? [`    re: ${re}`] : []),
+    ]),
+  ];
+}
+
+function suggestionRecords(
+  ...suggestions: Array<{ id: string; by?: string; at?: string }>
+): string[] {
+  return [
+    "suggestions:",
+    ...suggestions.flatMap(({ id, by, at }) => [
+      `  ${id}:`,
+      `    by: ${by ?? "user"}`,
+      `    at: ${at ?? REVIEW_TIMESTAMP}`,
+    ]),
+  ];
+}
+
 function createDomRect({
   left = 0,
   top = 0,
@@ -381,10 +430,13 @@ describe("PageCard comment thread dismissal", () => {
     expect(shouldDismissCommentThread(child)).toBe(false);
   });
 
-  it("keeps the thread open for clicks on comment anchors", () => {
-    const anchor = document.createElement("span");
-    anchor.className = "comment-anchor";
-    anchor.dataset.commentIds = JSON.stringify(["c1"]);
+  it.each([
+    { name: "a comment anchor", tag: "span", id: "rd-c1" },
+    { name: "an insertion anchor", tag: "ins", id: "rd-s1" },
+    { name: "a deletion anchor", tag: "del", id: "rd-s2" },
+  ])("keeps the thread open for clicks on $name", ({ tag, id }) => {
+    const anchor = document.createElement(tag);
+    anchor.id = id;
 
     expect(shouldDismissCommentThread(anchor)).toBe(false);
   });
@@ -630,22 +682,15 @@ describe("PageCard editor integration", () => {
   });
 
   it("rich-text edits preserve YAML endmatter-backed review metadata on autosave", async () => {
-    const content = [
-      "# Review",
-      "Please revisit {==this claim==}{>>Needs a source.<<}{#c1}.",
-      "",
-      "---",
-      "comments:",
-      "  c1:",
-      "    by: Nora",
-      '    at: "2026-05-24T10:45:00.000Z"',
-      "  c2:",
-      "    body: I can soften this.",
-      "    by: AI",
-      '    at: "2026-05-24T10:46:00.000Z"',
-      "    re: c1",
-      "",
-    ].join("\n");
+    const content = reviewDocument(
+      ["# Review", 'Please revisit <span id="rd-c1">this claim</span>.'].join(
+        "\n",
+      ),
+      commentRecords(
+        { id: "rd-c1", body: "Needs a source.", by: "Nora" },
+        { id: "rd-c2", body: "I can soften this.", by: "AI", re: "rd-c1" },
+      ),
+    );
     const rendered = await renderPageCard({
       page: {
         id: "doc-endmatter-autosave-1",
@@ -665,11 +710,11 @@ describe("PageCard editor integration", () => {
     });
 
     const saved = rendered.onSave.mock.calls[0]?.[1];
-    expect(saved).toContain("{==this claim==}{>>Needs a source.<<}{#c1}");
-    expect(saved).toContain("---\ncomments:");
+    expect(saved).toContain('<span id="rd-c1">this claim</span>');
+    expect(saved).toContain('roughdraft: "1.0"');
+    expect(saved).toContain("body: Needs a source.");
     expect(saved).toContain("body: I can soften this.");
-    expect(saved).toContain("re: c1");
-    expect(saved).not.toContain('id="c1"');
+    expect(saved).toContain("re: rd-c1");
   });
 
   it("rich-text edits preserve normal markdown table headers on autosave", async () => {
@@ -947,7 +992,7 @@ describe("PageCard editor integration", () => {
     expect(rendered.onSave).toHaveBeenCalledWith(
       "doc-suggesting-1",
       expect.stringMatching(
-        /^Start \{\+\+now\+\+\}\{id="s1" by="user" at="[^"]+"\}\n$/,
+        /^Start<ins id="rd-s1"> now<\/ins>\n\n---\nroughdraft: "1\.0"\nsuggestions:\n {2}rd-s1:\n {4}by: user\n {4}at: [^\n]+\n$/,
       ),
     );
   });
@@ -982,7 +1027,7 @@ describe("PageCard editor integration", () => {
     expect(rendered.onSave).toHaveBeenCalledWith(
       "doc-suggesting-grouped-insertion-1",
       expect.stringMatching(
-        /^Start-\{\+\+now\+\+\}\{id="s1" by="user" at="[^"]+"\}\n$/,
+        /^Start-<ins id="rd-s1">now<\/ins>\n\n---\nroughdraft: "1\.0"\nsuggestions:\n {2}rd-s1:\n {4}by: user\n {4}at: [^\n]+\n$/,
       ),
     );
   });
@@ -1017,7 +1062,7 @@ describe("PageCard editor integration", () => {
     expect(rendered.onSave).toHaveBeenCalledWith(
       "doc-suggesting-2",
       expect.stringMatching(
-        /^Use \{~~old~>new~~\}\{id="s1" by="user" at="[^"]+"\} text\n$/,
+        /^Use <span id="rd-s1"><del>old<\/del><ins>new<\/ins><\/span> text\n\n---\nroughdraft: "1\.0"\nsuggestions:\n {2}rd-s1:\n {4}by: user\n {4}at: [^\n]+\n$/,
       ),
     );
   });
@@ -1046,7 +1091,7 @@ describe("PageCard editor integration", () => {
     expect(rendered.onSave).toHaveBeenCalledWith(
       "doc-suggesting-grouped-replacement-1",
       expect.stringMatching(
-        /^Use \{~~old~>new~~\}\{id="s1" by="user" at="[^"]+"\} text\n$/,
+        /^Use <span id="rd-s1"><del>old<\/del><ins>new<\/ins><\/span> text\n\n---\nroughdraft: "1\.0"\nsuggestions:\n {2}rd-s1:\n {4}by: user\n {4}at: [^\n]+\n$/,
       ),
     );
   });
@@ -1084,7 +1129,7 @@ describe("PageCard editor integration", () => {
     expect(rendered.onSave).toHaveBeenCalledWith(
       "doc-suggesting-repeated-delete-1",
       expect.stringMatching(
-        /^S\{--tar--\}\{id="s1" by="user" at="[^"]+"\}t\n$/,
+        /^S<del id="rd-s1">tar<\/del>t\n\n---\nroughdraft: "1\.0"\nsuggestions:\n {2}rd-s1:\n {4}by: user\n {4}at: [^\n]+\n$/,
       ),
     );
   });
@@ -1122,7 +1167,7 @@ describe("PageCard editor integration", () => {
     expect(rendered.onSave).toHaveBeenCalledWith(
       "doc-suggesting-enter-paragraph-1",
       expect.stringMatching(
-        /^Start\n\n\{\+\+\u2060\+\+\}\{id="s1" by="user" at="[^"]+"\}\n$/,
+        /^Start\n\n<ins id="rd-s1"><\/ins>\n\n---\nroughdraft: "1\.0"\nsuggestions:\n {2}rd-s1:\n {4}by: user\n {4}at: [^\n]+\n$/,
       ),
     );
   });
@@ -1144,7 +1189,7 @@ describe("PageCard editor integration", () => {
     });
     await pressEditorKey(acceptEditor, "Enter");
     await act(async () => {
-      acceptEditor.commands.acceptCriticChange("s1");
+      acceptEditor.commands.acceptSuggestion("rd-s1");
     });
 
     expect(acceptEditor.state.doc.childCount).toBe(2);
@@ -1166,7 +1211,7 @@ describe("PageCard editor integration", () => {
     });
     await pressEditorKey(rejectEditor, "Enter");
     await act(async () => {
-      rejectEditor.commands.rejectCriticChange("s1");
+      rejectEditor.commands.rejectSuggestion("rd-s1");
     });
 
     expect(rejectEditor.state.doc.childCount).toBe(1);
@@ -1226,14 +1271,16 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-code-1",
         title: "Doc Code 1",
-        content: "{==alpha==}{>>Comment body<<}\n\n# Heading\n\n`inline`",
+        content: alphaCommentDocument("# Heading\n\n`inline`"),
       },
       editorViewMode: "code",
       selected: true,
     });
 
-    expect(rendered.container.textContent).toContain("{==alpha==}");
-    expect(rendered.container.textContent).toContain("{>>Comment body<<}");
+    expect(rendered.container.textContent).toContain(
+      '<span id="rd-c1">alpha</span>',
+    );
+    expect(rendered.container.textContent).toContain("body: Comment body");
     expect(
       queryByTestId(rendered.container, "selection-menu-block-type"),
     ).toBeNull();
@@ -1245,17 +1292,12 @@ describe("PageCard editor integration", () => {
   });
 
   it("switching a YAML endmatter-backed document to code mode shows the endmatter block", async () => {
-    const content = [
-      "# Review",
-      "Please revisit {==this claim==}{>>Needs a source.<<}{#c1}.",
-      "",
-      "---",
-      "comments:",
-      "  c1:",
-      "    by: Nora",
-      '    at: "2026-05-24T10:45:00.000Z"',
-      "",
-    ].join("\n");
+    const content = reviewDocument(
+      ["# Review", 'Please revisit <span id="rd-c1">this claim</span>.'].join(
+        "\n",
+      ),
+      commentRecords({ id: "rd-c1", body: "Needs a source.", by: "Nora" }),
+    );
     const rendered = await renderPageCard({
       page: {
         id: "doc-code-endmatter-1",
@@ -1270,7 +1312,7 @@ describe("PageCard editor integration", () => {
 
     expect(rendered.container.textContent).toContain("---");
     expect(rendered.container.textContent).toContain("comments:");
-    expect(rendered.container.textContent).toContain("c1:");
+    expect(rendered.container.textContent).toContain("rd-c1:");
     expect(rendered.container.textContent).toContain("Needs a source.");
   });
 
@@ -1279,7 +1321,7 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-code-2",
         title: "Doc Code 2",
-        content: "{==alpha==}{>>Comment body<<}\n\nParagraph",
+        content: alphaCommentDocument("Paragraph"),
       },
       editorViewMode: "code",
       selected: true,
@@ -1295,17 +1337,17 @@ describe("PageCard editor integration", () => {
     ).not.toBeNull();
   });
 
-  it("document code mode does not keep rail space for fenced CriticMarkup examples", async () => {
+  it("document code mode does not keep rail space for fenced anchor examples", async () => {
     const rendered = await renderPageCard({
       page: {
         id: "doc-code-examples",
         title: "Doc Code Examples",
         content: [
           "```md",
-          "This is {--deleted--} text.",
-          "This is {++inserted++} text.",
-          "This is {~~old~>new~~} substituted text.",
-          "This is {>>a comment<<} in the margin.",
+          'This is <del id="rd-s1">deleted</del> text.',
+          'This is <ins id="rd-s2">inserted</ins> text.',
+          'This is <span id="rd-s3"><del>old</del><ins>new</ins></span> replaced text.',
+          'This is <span id="rd-c1">commented</span> text.',
           "```",
         ].join("\n"),
       },
@@ -1402,17 +1444,13 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-switch-from-endmatter-1",
         title: "Doc Switch From Endmatter 1",
-        content: [
-          "# Review",
-          "Please revisit {==this claim==}{>>Needs a source.<<}{#c1}.",
-          "",
-          "---",
-          "comments:",
-          "  c1:",
-          "    by: Nora",
-          '    at: "2026-05-24T10:45:00.000Z"',
-          "",
-        ].join("\n"),
+        content: reviewDocument(
+          [
+            "# Review",
+            'Please revisit <span id="rd-c1">this claim</span>.',
+          ].join("\n"),
+          commentRecords({ id: "rd-c1", body: "Needs a source.", by: "Nora" }),
+        ),
       },
       selected: true,
     });
@@ -1439,9 +1477,9 @@ describe("PageCard editor integration", () => {
 
     const savedMarkdown = rendered.onSave.mock.calls[0]?.[1];
     expect(savedMarkdown).toMatch(
-      /^Plain \{\+\+now\+\+\}\{id="s1" by="user" at="[^"]+"\}\n$/,
+      /^Plain<ins id="rd-s1"> now<\/ins>\n\n---\nroughdraft: "1\.0"\nsuggestions:\n {2}rd-s1:\n {4}by: user\n {4}at: [^\n]+\n$/,
     );
-    expect(savedMarkdown).not.toContain("---\ncomments:");
+    expect(savedMarkdown).not.toContain("comments:");
     expect(savedMarkdown).not.toContain("Needs a source.");
   });
 
@@ -1450,7 +1488,7 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-4",
         title: "Doc 4",
-        content: "{==alpha==}{>>Comment body<<}\n\nTail",
+        content: alphaCommentDocument("Tail"),
       },
       selected: true,
     });
@@ -1543,7 +1581,7 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-5",
         title: "Doc 5",
-        content: "{==alpha==}{>>Comment body<<}\n\nParagraph",
+        content: alphaCommentDocument("Paragraph"),
       },
       selected: true,
     });
@@ -1574,7 +1612,7 @@ describe("PageCard editor integration", () => {
 
     const commentEditor = queryByTestId<HTMLTextAreaElement>(
       rendered.container,
-      "comment-banner-c1-editor",
+      "comment-banner-rd-c1-editor",
     );
     expect(commentEditor).not.toBeNull();
 
@@ -1597,7 +1635,7 @@ describe("PageCard editor integration", () => {
 
     const saveButton = queryByTestId<HTMLButtonElement>(
       rendered.container,
-      "comment-banner-c1-action-save",
+      "comment-banner-rd-c1-action-save",
     );
     expect(saveButton).not.toBeNull();
 
@@ -1613,7 +1651,7 @@ describe("PageCard editor integration", () => {
     expect(rendered.onSave).toHaveBeenCalledWith(
       "doc-comment-empty-draft-1",
       expect.stringMatching(
-        /\{==target==\}\{>>Draft comment<<\}\{id="c1" by="user" at="[^"]+"\}/,
+        /<span id="rd-c1">target<\/span>[\s\S]*\n {2}rd-c1:\n {4}body: Draft comment\n/,
       ),
     );
   });
@@ -1623,8 +1661,13 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-comment-reply-shortcut-1",
         title: "Doc Comment Reply Shortcut 1",
-        content:
-          '{==alpha==}{>>Root comment<<}{id="root" by="user" at="2026-04-25T23:56:00.000Z"}{>>Nested reply<<}{id="child" by="user" at="2026-04-25T23:57:00.000Z" re="root"}\n\nParagraph',
+        content: reviewDocument(
+          '<span id="rd-c1">alpha</span>\n\nParagraph',
+          commentRecords(
+            { id: "rd-c1", body: "Root comment" },
+            { id: "rd-c2", body: "Nested reply", re: "rd-c1" },
+          ),
+        ),
       },
       selected: true,
     });
@@ -1633,7 +1676,7 @@ describe("PageCard editor integration", () => {
 
     const nestedEditButton = getByTestId<HTMLButtonElement>(
       rendered.container,
-      "comment-banner-child-action-edit",
+      "comment-banner-rd-c2-action-edit",
     );
 
     vi.useFakeTimers();
@@ -1652,7 +1695,7 @@ describe("PageCard editor integration", () => {
 
     const replyEditor = queryByTestId<HTMLTextAreaElement>(
       rendered.container,
-      "comment-banner-c1-editor",
+      "comment-banner-rd-c3-editor",
     );
     expect(replyEditor).not.toBeNull();
 
@@ -1669,8 +1712,13 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-delete-comment-thread-1",
         title: "Doc Delete Comment Thread 1",
-        content:
-          '{==alpha==}{>>Root comment<<}{id="root" by="user" at="2026-04-25T23:56:00.000Z"}{>>Nested reply<<}{id="child" by="user" at="2026-04-25T23:57:00.000Z" re="root"}\n\nParagraph',
+        content: reviewDocument(
+          '<span id="rd-c1">alpha</span>\n\nParagraph',
+          commentRecords(
+            { id: "rd-c1", body: "Root comment" },
+            { id: "rd-c2", body: "Nested reply", re: "rd-c1" },
+          ),
+        ),
       },
       selected: true,
     });
@@ -1679,7 +1727,7 @@ describe("PageCard editor integration", () => {
 
     const deleteThreadButton = queryByTestId<HTMLButtonElement>(
       rendered.container,
-      "comment-banner-root-action-delete-thread",
+      "comment-banner-rd-c1-action-delete-thread",
     );
     expect(deleteThreadButton).not.toBeNull();
 
@@ -1700,8 +1748,8 @@ describe("PageCard editor integration", () => {
     expect(savedMarkdown).toContain("alpha");
     expect(savedMarkdown).not.toContain("Root comment");
     expect(savedMarkdown).not.toContain("Nested reply");
-    expect(savedMarkdown).not.toContain('id="root"');
-    expect(savedMarkdown).not.toContain('id="child"');
+    expect(savedMarkdown).not.toContain("rd-c1");
+    expect(savedMarkdown).not.toContain("rd-c2");
   });
 
   it("renders suggestion replies only inside the suggestion card", async () => {
@@ -1710,7 +1758,13 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-suggestion-reply-1",
         title: "Doc Suggestion Reply 1",
-        content: `This sentence includes an insertion: {++clearer wording++}{id="s1" by="user" at="2026-04-25T23:55:00.000Z"}{>>${commentText}<<}{id="c1" by="user" at="2026-04-25T23:56:00.000Z" re="s1"}`,
+        content: reviewDocument(
+          'This sentence includes an insertion: <ins id="rd-s1">clearer wording</ins>',
+          [
+            ...commentRecords({ id: "rd-c1", body: commentText, re: "rd-s1" }),
+            ...suggestionRecords({ id: "rd-s1" }),
+          ],
+        ),
       },
       selected: true,
     });
@@ -1729,8 +1783,10 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-suggestion-bubble-1",
         title: "Doc Suggestion Bubble 1",
-        content:
-          'This sentence removes {--conversation--}{id="s1" by="AI" at="2026-04-25T23:55:00.000Z"}',
+        content: reviewDocument(
+          'This sentence removes <del id="rd-s1">conversation</del>',
+          suggestionRecords({ id: "rd-s1", by: "AI" }),
+        ),
       },
       selected: true,
     });
@@ -1752,8 +1808,17 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-suggestion-tree-1",
         title: "Doc Suggestion Tree 1",
-        content:
-          'This sentence includes {++clearer wording++}{id="s1" by="user" at="2026-04-25T23:55:00.000Z"}{>>Looks good.<<}{id="c1" by="user" at="2026-04-25T23:56:00.000Z" re="s1"}',
+        content: reviewDocument(
+          'This sentence includes <ins id="rd-s1">clearer wording</ins>',
+          [
+            ...commentRecords({
+              id: "rd-c1",
+              body: "Looks good.",
+              re: "rd-s1",
+            }),
+            ...suggestionRecords({ id: "rd-s1" }),
+          ],
+        ),
       },
       selected: true,
     });
@@ -1782,7 +1847,10 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-long-suggestion-summary-1",
         title: "Doc Long Suggestion Summary 1",
-        content: `This sentence includes {++${longInsertedText}++}{id="s1" by="AI" at="2026-04-25T23:55:00.000Z"}`,
+        content: reviewDocument(
+          `This sentence includes <ins id="rd-s1">${longInsertedText}</ins>`,
+          suggestionRecords({ id: "rd-s1", by: "AI" }),
+        ),
       },
       selected: true,
     });
@@ -1803,16 +1871,10 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-yaml-suggestion-reply-1",
         title: "Doc YAML Suggestion Reply 1",
-        content: [
-          "This sentence includes {++clearer wording++}{#s1}.",
-          "",
-          "---",
-          "suggestions:",
-          "  s1:",
-          "    by: user",
-          '    at: "2026-05-24T17:00:00.000Z"',
-          "",
-        ].join("\n"),
+        content: reviewDocument(
+          'This sentence includes <ins id="rd-s1">clearer wording</ins>.',
+          suggestionRecords({ id: "rd-s1" }),
+        ),
       },
       selected: true,
     });
@@ -1821,7 +1883,7 @@ describe("PageCard editor integration", () => {
     rendered.getEditor();
     const replyButton = queryByTestId<HTMLButtonElement>(
       rendered.container,
-      "comment-rail-s1-action-reply",
+      "comment-rail-rd-s1-action-reply",
     );
     expect(replyButton).not.toBeNull();
 
@@ -1834,7 +1896,7 @@ describe("PageCard editor integration", () => {
 
     const replyEditor = queryByTestId<HTMLTextAreaElement>(
       rendered.container,
-      "comment-rail-c1-editor",
+      "comment-rail-rd-c1-editor",
     );
     expect(replyEditor).not.toBeNull();
 
@@ -1850,7 +1912,7 @@ describe("PageCard editor integration", () => {
 
     const saveButton = queryByTestId<HTMLButtonElement>(
       rendered.container,
-      "comment-rail-c1-action-save",
+      "comment-rail-rd-c1-action-save",
     );
     expect(saveButton).not.toBeNull();
 
@@ -1865,14 +1927,13 @@ describe("PageCard editor integration", () => {
     });
 
     const savedMarkdown = rendered.onSave.mock.calls[0]?.[1];
-    expect(savedMarkdown).toContain("{++clearer wording++}{#s1}");
+    expect(savedMarkdown).toContain('<ins id="rd-s1">clearer wording</ins>');
     expect(savedMarkdown).toContain("comments:");
-    expect(savedMarkdown).toContain("c1:");
+    expect(savedMarkdown).toContain("rd-c1:");
     expect(savedMarkdown).toContain("body: Looks good.");
-    expect(savedMarkdown).toContain("re: s1");
+    expect(savedMarkdown).toContain("re: rd-s1");
     expect(savedMarkdown).toContain("suggestions:");
-    expect(savedMarkdown).toContain("s1:");
-    expect(savedMarkdown).not.toContain('id="s1"');
+    expect(savedMarkdown).toContain("rd-s1:");
   });
 
   it("preserves suggestion color when comments are attached to suggestion text", async () => {
@@ -1880,20 +1941,23 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-suggestion-reply-color-1",
         title: "Doc Suggestion Reply Color 1",
-        content:
-          'This sentence includes {++clearer wording++}{id="s1" by="user" at="2026-04-25T23:55:00.000Z"}{>>Looks good.<<}{id="c1" by="user" at="2026-04-25T23:56:00.000Z" re="s1"}',
+        content: reviewDocument(
+          'This sentence includes <span id="rd-c1"><ins id="rd-s1">clearer wording</ins></span>',
+          [
+            ...commentRecords({ id: "rd-c1", body: "Looks good." }),
+            ...suggestionRecords({ id: "rd-s1" }),
+          ],
+        ),
       },
       selected: true,
     });
 
     await flushAnimationFrame();
 
-    const suggestion = rendered.container.querySelector(
-      '[data-critic-change-id="s1"]',
-    );
+    const suggestion = rendered.container.querySelector('[id="rd-s1"]');
     expect(suggestion?.textContent).toContain("clearer wording");
     expect(
-      queryByTestId(rendered.container, "comment-decoration-on-critic-change"),
+      queryByTestId(rendered.container, "comment-decoration-on-suggestion"),
     ).not.toBeNull();
   });
 
@@ -1902,8 +1966,17 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-suggestion-cursor-active-1",
         title: "Doc Suggestion Cursor Active 1",
-        content:
-          'This sentence includes {++clearer wording++}{id="s1" by="user" at="2026-04-25T23:55:00.000Z"}{>>Looks good.<<}{id="c1" by="user" at="2026-04-25T23:56:00.000Z" re="s1"}',
+        content: reviewDocument(
+          'This sentence includes <ins id="rd-s1">clearer wording</ins>',
+          [
+            ...commentRecords({
+              id: "rd-c1",
+              body: "Looks good.",
+              re: "rd-s1",
+            }),
+            ...suggestionRecords({ id: "rd-s1" }),
+          ],
+        ),
       },
       selected: true,
     });
@@ -1925,7 +1998,7 @@ describe("PageCard editor integration", () => {
     );
     expect(suggestionThread?.classList.contains("-translate-x-2")).toBe(true);
     expect(
-      rendered.container.querySelector(".critic-change-decoration-active"),
+      rendered.container.querySelector(".suggestion-decoration-active"),
     ).not.toBeNull();
   });
 
@@ -1949,7 +2022,7 @@ describe("PageCard editor integration", () => {
       page: {
         id: "doc-6",
         title: "Doc 6",
-        content: "{==alpha==}{>>Comment body<<}\n\nJust text",
+        content: alphaCommentDocument("Just text"),
       },
     });
 

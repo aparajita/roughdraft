@@ -1,619 +1,615 @@
 import { describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
+import { fixtureMarkdown, readFixtures } from "../test/spec-fixtures.js";
 import {
-  appendRoughdraftReply,
+  collectOrphanedRecords,
+  parseDocument,
+  type RfmDocument,
+  serializeDocument,
+} from "./document.js";
+import {
+  type CommentId,
+  parseCommentId,
+  parseSuggestionId,
+  type RecordId,
+  RecordIdAllocator,
+  type SuggestionId,
+} from "./ids.js";
+import {
+  anchorCrossesBlockCode,
   appendRoughdraftDocumentComment,
+  appendRoughdraftReply,
+  endmatterReplyCycleCode,
   extractRoughdraftReviewIndex,
   markRoughdraftResolved,
   validateRoughdraftMarkdown,
-} from "./index";
+} from "./index.js";
 
-function codes(markdown: string): string[] {
-  return validateRoughdraftMarkdown(markdown).diagnostics.map(
-    (diagnostic) => diagnostic.code,
-  );
+const at = "2026-04-28T12:00:00.000Z";
+
+function commentId(value: string): CommentId {
+  const id = parseCommentId(value);
+  if (!id) throw new Error(`Not a comment id: ${value}`);
+  return id;
 }
 
-describe("validateRoughdraftMarkdown", () => {
-  it("accepts valid comments, anchored comments, and suggestions", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        'Please revisit {==this sentence==}{>>Needs a source.<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}.',
-        'Add {++one concrete example++}{id="s1" by="AI" at="2026-04-28T12:05:00.000Z"}.',
-        'Use {~~rough~>specific~~}{id="s2" by="user" at="2026-04-28T12:07:00.000Z"} wording.',
-      ].join("\n"),
-    );
+function suggestionId(value: string): SuggestionId {
+  const id = parseSuggestionId(value);
+  if (!id) throw new Error(`Not a suggestion id: ${value}`);
+  return id;
+}
 
-    expect(result.ok).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.summary).toMatchObject({
-      comments: 1,
-      suggestions: 2,
-      legacyMetadata: 0,
-    });
-  });
+function roundTrip(markdown: string): string {
+  return serializeDocument(parseDocument(markdown));
+}
 
-  it("accepts root comments and suggestions backed by YAML endmatter", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        "Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.",
-        "Add {++one concrete example++}{#s1}.",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "suggestions:",
-        "  s1:",
-        "    by: AI",
-        '    at: "2026-04-28T12:05:00.000Z"',
-        "",
-      ].join("\n"),
-    );
+function anchorIds(document: RfmDocument): string[] {
+  return document.anchors.map((anchor) => anchor.id);
+}
 
-    expect(result.ok).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.summary).toMatchObject({
-      comments: 1,
-      suggestions: 1,
-    });
-  });
+function diagnosticCodes(diagnostics: readonly { code: string }[]): string[] {
+  return diagnostics.map((diagnostic) => diagnostic.code);
+}
 
-  it("does not validate CriticMarkup-looking text inside YAML endmatter bodies", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        "Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "  c2:",
-        "    body: Contains {++not a live suggestion++} in the reply.",
-        "    by: AI",
-        '    at: "2026-04-28T12:05:00.000Z"',
-        "    re: c1",
-        "",
-      ].join("\n"),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(result.diagnostics).toEqual([]);
-    expect(result.summary).toMatchObject({
-      comments: 2,
-      suggestions: 0,
-    });
-  });
-
-  it("reports the RFM 0.2 format version", () => {
-    expect(validateRoughdraftMarkdown("").version).toBe("0.2");
-  });
-
-  it("reports a missing YAML endmatter entry for compact references", () => {
-    expect(codes("{>>Needs metadata<<}{#c1}\n")).toContain(
-      "missing-endmatter-entry",
-    );
-  });
-
-  it("accepts body-only endmatter comments as document-level feedback", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        "{>>Root<<}{#c1}",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "  c2:",
-        "    body: Reply without parent",
-        "    by: AI",
-        '    at: "2026-04-28T12:01:00.000Z"',
-        "",
-      ].join("\n"),
-    );
-
-    expect(result.errors).toEqual([]);
-    expect(result.ok).toBe(true);
-    expect(result.summary).toMatchObject({ comments: 2 });
-  });
-
-  it("ignores review markers inside fenced code blocks and inline code spans", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        "```md",
-        "This is {>>not a comment<<}.",
-        "This is {++not a suggestion++}.",
-        "```",
-        "Literal `{>>not a comment<<}` text.",
-      ].join("\n"),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(result.diagnostics).toEqual([]);
-    expect(result.summary).toMatchObject({
-      comments: 0,
-      suggestions: 0,
-    });
-  });
-
-  it("does not treat fenced YAML examples as invalid review endmatter", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        "Doc",
-        "",
-        "```yaml",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "```",
-        "",
-      ].join("\n"),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(result.diagnostics).toEqual([]);
-    expect(result.summary).toMatchObject({
-      comments: 0,
-      suggestions: 0,
-    });
-  });
-
-  it("does not treat ordinary final comments sections as review endmatter without compact references", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        "Release notes",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: docs",
-        '    at: "not review metadata"',
-        "",
-      ].join("\n"),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(result.diagnostics).toEqual([]);
-    expect(result.summary).toMatchObject({
-      comments: 0,
-      suggestions: 0,
-    });
-  });
-
-  it("accepts document-level comments backed only by YAML endmatter", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        "# Draft",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    body: Please address the risk section.",
-        "    by: user",
-        '    at: "2026-05-24T12:00:00.000Z"',
-        "",
-      ].join("\n"),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.summary).toMatchObject({
-      comments: 1,
-      suggestions: 0,
-    });
-  });
-
-  it("reports missing canonical metadata attributes", () => {
-    expect(codes("{>>Needs metadata<<}\n")).toEqual([
-      "missing-metadata-id",
-      "missing-metadata-by",
-      "missing-metadata-at",
-    ]);
-  });
-
-  it("reports invalid timestamps", () => {
-    expect(
-      codes('{>>Bad time<<}{id="c1" by="user" at="yesterday"}\n'),
-    ).toContain("invalid-metadata-at");
-  });
-
-  it("reports unclosed review markers", () => {
-    expect(codes("{++unfinished\n")).toEqual(["unclosed-addition"]);
-    expect(codes("{--unfinished\n")).toEqual(["unclosed-deletion"]);
-    expect(codes("{~~old text\n")).toEqual(["unclosed-substitution"]);
-  });
-
-  it("reports duplicate ids across comments and suggestions", () => {
-    expect(
-      codes(
-        [
-          '{>>First<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}',
-          '{++Second++}{id="c1" by="user" at="2026-04-28T12:01:00.000Z"}',
-        ].join("\n"),
-      ),
-    ).toContain("duplicate-id");
-  });
-
-  it("reports self replies as errors and missing reply targets as warnings", () => {
-    const result = validateRoughdraftMarkdown(
-      [
-        '{>>Self<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z" re="c1"}',
-        '{>>Missing parent<<}{id="c2" by="user" at="2026-04-28T12:01:00.000Z" re="missing"}',
-      ].join("\n"),
-    );
-
-    expect(result.errors.map((diagnostic) => diagnostic.code)).toContain(
-      "self-reply",
-    );
-    expect(result.warnings.map((diagnostic) => diagnostic.code)).toContain(
-      "missing-reply-target",
-    );
-    expect(result.ok).toBe(false);
-  });
-
-  it("accepts legacy metadata with a warning", () => {
-    const result = validateRoughdraftMarkdown(
-      "{>>Legacy<<}{@id:c1; by:AI; at:2026-04-28T12:00:00.000Z@}\n",
-    );
-
-    expect(result.ok).toBe(true);
-    expect(result.warnings.map((diagnostic) => diagnostic.code)).toEqual([
-      "legacy-metadata",
-    ]);
-    expect(result.summary.legacyMetadata).toBe(1);
-  });
-
-  it("reports CRLF source locations with one-based line and column", () => {
-    const result = validateRoughdraftMarkdown(
-      "First line\r\n{>>Needs metadata<<}\r\n",
-    );
-
-    expect(result.errors[0]).toMatchObject({
-      line: 2,
-      column: 1,
-    });
-  });
-});
+/**
+ * A body carrying an anchored comment, a two-deep reply chain beneath it, a
+ * document-scope comment, and a suggestion — the four ways a record can earn
+ * its place, in one document, so the retention rule and the write contract are
+ * asked about the same records.
+ */
+function withRecords(body: string): string {
+  return [
+    body,
+    "",
+    "---",
+    'roughdraft: "1.0"',
+    "comments:",
+    "  rd-c1:",
+    "    body: Anchored comment.",
+    "    by: user",
+    `    at: "${at}"`,
+    "  rd-c2:",
+    "    body: Reply to the anchored comment.",
+    "    by: AI",
+    `    at: "${at}"`,
+    "    re: rd-c1",
+    "  rd-c3:",
+    "    body: Reply to the reply.",
+    "    by: user",
+    `    at: "${at}"`,
+    "    re: rd-c2",
+    "  rd-c4:",
+    "    body: Comment on the whole document.",
+    "    by: user",
+    `    at: "${at}"`,
+    "    scope: document",
+    "suggestions:",
+    "  rd-s1:",
+    "    by: AI",
+    `    at: "${at}"`,
+    "",
+  ].join("\n");
+}
 
 describe("extractRoughdraftReviewIndex", () => {
-  it("extracts comments, anchored comments, replies, and suggestions", () => {
-    const index = extractRoughdraftReviewIndex(
-      [
-        'Please revisit {==this sentence==}{>>Needs a source.<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}.',
-        '{>>I added one.<<}{id="c2" by="AI" at="2026-04-28T12:02:00.000Z" re="c1"}',
-        'Add {++one concrete example++}{id="s1" by="AI" at="2026-04-28T12:05:00.000Z"}.',
-        'Use {~~rough~>specific~~}{id="s2" by="user" at="2026-04-28T12:07:00.000Z"} wording.',
-      ].join("\n"),
-    );
+  const fixtures = readFixtures();
 
-    expect(index.summary).toMatchObject({
-      comments: 1,
-      replies: 1,
-      suggestions: 2,
-      unresolved: 4,
-    });
-    expect(index.items.map((item) => [item.id, item.kind])).toEqual([
-      ["c1", "comment"],
-      ["c2", "reply"],
-      ["s1", "suggestion"],
-      ["s2", "suggestion"],
-    ]);
-    expect(index.items[0]).toMatchObject({
-      anchorText: "this sentence",
-      author: "user",
-      line: 1,
-      column: 35,
-      text: "Needs a source.",
-    });
-    expect(index.items[3]).toMatchObject({
-      suggestionKind: "substitution",
-      originalText: "rough",
-      replacementText: "specific",
-    });
+  it("finds the specification fixtures", () => {
+    expect(fixtures.length).toBeGreaterThan(0);
   });
 
-  it("extracts equivalent review items from YAML endmatter metadata", () => {
-    const index = extractRoughdraftReviewIndex(
-      [
-        "Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.",
-        "Add {++one concrete example++}{#s1}.",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "  c2:",
-        "    body: I added one.",
-        "    by: AI",
-        '    at: "2026-04-28T12:02:00.000Z"',
-        "    re: c1",
-        "suggestions:",
-        "  s1:",
-        "    by: AI",
-        '    at: "2026-04-28T12:05:00.000Z"',
-        "    status: resolved",
-        "",
-      ].join("\n"),
-    );
+  // A fixture states the values an entry carries; the schema also defines
+  // optional properties a fixture may leave out, so entries are matched on
+  // what the fixture states. The array forms still require the same number of
+  // entries in the same order.
+  it.each(fixtures)("reproduces the review index of $name", ({ fixture }) => {
+    const index = extractRoughdraftReviewIndex(fixture.source.markdown);
 
-    expect(index.summary).toMatchObject({
-      comments: 1,
-      replies: 1,
-      suggestions: 1,
-      unresolved: 2,
-    });
-    expect(index.items.map((item) => [item.id, item.kind])).toEqual([
-      ["c1", "comment"],
-      ["s1", "suggestion"],
-      ["c2", "reply"],
-    ]);
-    expect(index.items[0]).toMatchObject({
-      anchorText: "this sentence",
-      author: "user",
-      text: "Needs a source.",
-    });
-    expect(index.items[2]).toMatchObject({
-      parentId: "c1",
-      author: "AI",
-      text: "I added one.",
-    });
-  });
-
-  it("extracts document-level comments backed only by YAML endmatter", () => {
-    const index = extractRoughdraftReviewIndex(
-      [
-        "# Draft",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    body: Please address the risk section.",
-        "    by: user",
-        '    at: "2026-05-24T12:00:00.000Z"',
-        "",
-      ].join("\n"),
-    );
-
-    expect(index.summary).toMatchObject({
-      comments: 1,
-      replies: 0,
-      suggestions: 0,
-      unresolved: 1,
-    });
-    expect(index.items[0]).toMatchObject({
-      id: "c1",
-      kind: "comment",
-      parentId: null,
-      author: "user",
-      createdAt: "2026-05-24T12:00:00.000Z",
-      text: "Please address the risk section.",
-    });
-  });
-
-  it("does not extract CriticMarkup-looking text inside YAML endmatter bodies", () => {
-    const index = extractRoughdraftReviewIndex(
-      [
-        "Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "  c2:",
-        "    body: Contains {++not a live suggestion++} in the reply.",
-        "    by: AI",
-        '    at: "2026-04-28T12:05:00.000Z"',
-        "    re: c1",
-        "",
-      ].join("\n"),
-    );
-
-    expect(index.version).toBe("0.2");
-    expect(index.summary).toMatchObject({
-      comments: 1,
-      replies: 1,
-      suggestions: 0,
-    });
-    expect(index.items.map((item) => [item.id, item.kind])).toEqual([
-      ["c1", "comment"],
-      ["c2", "reply"],
-    ]);
-    expect(index.items[1]).toMatchObject({
-      text: "Contains {++not a live suggestion++} in the reply.",
-    });
-  });
-
-  it("preserves literal CriticMarkup inside inline code and fenced code blocks", () => {
-    const index = extractRoughdraftReviewIndex(
-      [
-        "```md",
-        '{>>not a comment<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}',
-        "```",
-        'Literal `{++not a suggestion++}{id="s1" by="AI" at="2026-04-28T12:01:00.000Z"}` text.',
-      ].join("\n"),
-    );
-
-    expect(index.items).toEqual([]);
-    expect(index.summary).toMatchObject({
-      comments: 0,
-      replies: 0,
-      suggestions: 0,
-      unresolved: 0,
-    });
-  });
-
-  it("uses only the final YAML block as Roughdraft endmatter", () => {
-    const index = extractRoughdraftReviewIndex(
-      [
-        "Intro",
-        "",
-        "---",
-        "",
-        "Please revisit {==this sentence==}{>>Needs a source.<<}{#c1}.",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "",
-      ].join("\n"),
-    );
-
-    expect(index.items).toHaveLength(1);
-    expect(index.items[0]).toMatchObject({
-      id: "c1",
-      author: "user",
-    });
+    expect(index.comments).toMatchObject(fixture.comments);
+    expect(index.suggestions).toMatchObject(fixture.suggestions);
   });
 });
 
-describe("RFM mutation helpers", () => {
-  it("appends a reply without rewriting unrelated Markdown", () => {
-    const markdown =
-      '# Plan\n\nKeep {==this claim==}{>>Needs proof<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"} as written.\n';
+describe("id allocation", () => {
+  const anchoredOnly = [
+    'Ship <span id="rd-c3">guest checkout</span> and',
+    '<ins id="rd-s2">one example</ins>.',
+    "",
+    "---",
+    'roughdraft: "1.0"',
+    "comments:",
+    "  rd-c3:",
+    "    body: Confirm this.",
+    "    by: user",
+    `    at: "${at}"`,
+    "suggestions:",
+    "  rd-s2:",
+    "    by: AI",
+    `    at: "${at}"`,
+    "",
+  ].join("\n");
 
-    const updated = appendRoughdraftReply(markdown, {
-      parentId: "c1",
-      id: "c2",
-      author: "AI",
-      at: "2026-04-28T12:10:00.000Z",
-      message: "Added a citation in the next paragraph.",
-    });
+  const endmatterAhead = [
+    'Ship <span id="rd-c1">guest checkout</span>.',
+    "",
+    "---",
+    'roughdraft: "1.0"',
+    "comments:",
+    "  rd-c1:",
+    "    body: Confirm this.",
+    "    by: user",
+    `    at: "${at}"`,
+    "  rd-c7:",
+    "    body: Agreed.",
+    "    by: AI",
+    `    at: "${at}"`,
+    "    re: rd-c1",
+    "",
+  ].join("\n");
 
-    expect(updated).toBe(
-      '# Plan\n\nKeep {==this claim==}{>>Needs proof<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}{>>Added a citation in the next paragraph.<<}{id="c2" by="AI" at="2026-04-28T12:10:00.000Z" re="c1"} as written.\n',
-    );
+  const documentScopeOnly = [
+    "Ship guest checkout.",
+    "",
+    "---",
+    'roughdraft: "1.0"',
+    "comments:",
+    "  rd-c5:",
+    "    body: Read the whole thing.",
+    "    by: user",
+    `    at: "${at}"`,
+    "    scope: document",
+    "",
+  ].join("\n");
+
+  it.each([
+    {
+      name: "anchors and records agree",
+      markdown: anchoredOnly,
+      comment: "rd-c4",
+      suggestion: "rd-s3",
+    },
+    {
+      name: "a reply in the endmatter is above every anchor",
+      markdown: endmatterAhead,
+      comment: "rd-c8",
+      suggestion: "rd-s1",
+    },
+    {
+      name: "a document-scope comment has no anchor at all",
+      markdown: documentScopeOnly,
+      comment: "rd-c6",
+      suggestion: "rd-s1",
+    },
+  ])("takes the highest number when $name", ({
+    markdown,
+    comment,
+    suggestion,
+  }) => {
+    const ids = new RecordIdAllocator(parseDocument(markdown));
+
+    expect(ids.allocateCommentId()).toBe(comment);
+    expect(ids.allocateSuggestionId()).toBe(suggestion);
   });
 
-  it("appends a reply to YAML endmatter without adding inline reply markup", () => {
+  it("advances without the document changing", () => {
+    const ids = new RecordIdAllocator(parseDocument(anchoredOnly));
+
+    expect([
+      ids.allocateCommentId(),
+      ids.allocateCommentId(),
+      ids.allocateCommentId(),
+    ]).toEqual(["rd-c4", "rd-c5", "rd-c6"]);
+    expect([ids.allocateSuggestionId(), ids.allocateSuggestionId()]).toEqual([
+      "rd-s3",
+      "rd-s4",
+    ]);
+  });
+
+  it("does not reissue an id after the record carrying it is gone", () => {
+    const ids = new RecordIdAllocator(parseDocument(anchoredOnly));
+    const allocated = ids.allocateCommentId();
+
+    // The document the editor would write next holds neither the id just
+    // allocated nor the one it was allocated above.
+    ids.reserve(parseDocument("Ship guest checkout.\n"));
+
+    expect(ids.allocateCommentId()).not.toBe(allocated);
+    expect(ids.allocateCommentId()).toBe("rd-c6");
+  });
+
+  it("reserves ids a document introduces above the mark", () => {
+    const ids = new RecordIdAllocator(parseDocument(documentScopeOnly));
+
+    ids.reserve(parseDocument(endmatterAhead));
+
+    expect(ids.allocateCommentId()).toBe("rd-c8");
+  });
+});
+
+describe("collectOrphanedRecords", () => {
+  it.each([
+    {
+      name: "the anchors are present",
+      body: 'Ship <span id="rd-c1">guest checkout</span> with <ins id="rd-s1">care</ins>.',
+      comments: ["rd-c1", "rd-c2", "rd-c3", "rd-c4"],
+      suggestions: ["rd-s1"],
+      dropped: [],
+    },
+    {
+      name: "the anchors are gone",
+      body: "Ship guest checkout.",
+      comments: ["rd-c4"],
+      suggestions: [],
+      dropped: ["rd-c1", "rd-c2", "rd-c3", "rd-s1"],
+    },
+  ])("keeps the document comment and the anchored reply chain when $name", ({
+    body,
+    comments,
+    suggestions,
+    dropped,
+  }) => {
+    const collected = collectOrphanedRecords(parseDocument(withRecords(body)));
+
+    expect([...collected.document.comments.keys()]).toEqual(comments);
+    expect([...collected.document.suggestions.keys()]).toEqual(suggestions);
+    expect(collected.dropped).toEqual(dropped);
+  });
+});
+
+describe("parse and serialize", () => {
+  it("leaves a trailing YAML block without a roughdraft key in the body", () => {
     const markdown = [
-      "# Plan",
-      "",
-      "Keep {==this claim==}{>>Needs proof<<}{#c1} as written.",
+      "Ship guest checkout in the beta.",
       "",
       "---",
-      "workflow:",
-      "  owner: editorial",
-      "comments:",
-      "  c1:",
-      "    by: user",
-      '    at: "2026-04-28T12:00:00.000Z"',
+      "title: Release notes",
+      "tags:",
+      "  - beta",
       "",
     ].join("\n");
 
-    const updated = appendRoughdraftReply(markdown, {
-      parentId: "c1",
-      id: "c2",
-      author: "AI",
-      at: "2026-04-28T12:10:00.000Z",
-      message: "Added a citation in the next paragraph.",
-    });
+    const document = parseDocument(markdown);
 
-    expect(updated).not.toContain("{>>Added a citation");
-    expect(updated).toContain("workflow:\n  owner: editorial");
-    expect(updated).toContain("body: Added a citation in the next paragraph.");
-    expect(extractRoughdraftReviewIndex(updated).items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "c2",
-          kind: "reply",
-          parentId: "c1",
-        }),
-      ]),
+    expect(document.comments.size).toBe(0);
+    expect(document.suggestions.size).toBe(0);
+    expect(document.body).toContain("title: Release notes");
+    expect(serializeDocument(document)).toBe(markdown);
+  });
+
+  it("preserves unrecognized endmatter keys at both levels", () => {
+    const markdown = [
+      'Ship <span id="rd-c1">guest checkout</span>.',
+      "",
+      "---",
+      'roughdraft: "1.0"',
+      "reviewRound: 2",
+      "comments:",
+      "  rd-c1:",
+      "    body: Confirm this.",
+      "    by: user",
+      `    at: "${at}"`,
+      "    thread: onboarding",
+      "",
+    ].join("\n");
+
+    const written = parseDocument(roundTrip(markdown));
+    const comment = written.comments.get(commentId("rd-c1"));
+
+    expect(written.extraEndmatterKeys).toEqual({ reviewRound: 2 });
+    expect(comment?.metadata).toEqual({ thread: "onboarding" });
+  });
+
+  it("preserves an anchor's non-id attributes", () => {
+    const markdown = [
+      'Ship <span id="rd-c1" class="note" data-origin="import">guest checkout</span>.',
+      "",
+      "---",
+      'roughdraft: "1.0"',
+      "comments:",
+      "  rd-c1:",
+      "    body: Confirm this.",
+      "    by: user",
+      `    at: "${at}"`,
+      "",
+    ].join("\n");
+
+    const serialized = roundTrip(markdown);
+
+    expect(serialized).toContain(
+      '<span id="rd-c1" class="note" data-origin="import">guest checkout</span>',
+    );
+    expect(parseDocument(serialized).anchors).toHaveLength(1);
+  });
+
+  it("writes back every record it was given, anchored or not", () => {
+    // rd-c1 is anchored, rd-s1 is not, and nothing asked for orphans to be
+    // collected — so a write that drops rd-s1 loses a reviewer's suggestion.
+    const markdown = withRecords(
+      'Ship <span id="rd-c1">guest checkout</span>.',
+    );
+    const written = parseDocument(roundTrip(markdown));
+
+    expect([...written.comments.keys()]).toEqual([
+      "rd-c1",
+      "rd-c2",
+      "rd-c3",
+      "rd-c4",
+    ]);
+    expect([...written.suggestions.keys()]).toEqual(["rd-s1"]);
+  });
+
+  it("reads, writes and re-reads a record whose body is empty", () => {
+    const markdown = [
+      'Ship <span id="rd-c1">guest checkout</span>.',
+      "",
+      "---",
+      'roughdraft: "1.0"',
+      "comments:",
+      "  rd-c1:",
+      '    body: ""',
+      "    by: user",
+      `    at: "${at}"`,
+      "",
+    ].join("\n");
+
+    const written = roundTrip(markdown);
+
+    expect(validateRoughdraftMarkdown(markdown).diagnostics).toEqual([]);
+    expect(validateRoughdraftMarkdown(written).diagnostics).toEqual([]);
+    expect(parseDocument(written).comments.get(commentId("rd-c1"))?.body).toBe(
+      "",
     );
   });
 
-  it("appends a document-level comment to YAML endmatter with the next comment id", () => {
-    const output = appendRoughdraftDocumentComment(
-      [
-        "# Draft",
-        "",
-        "Needs {==support==}{>>Add a source<<}{#c1}.",
-        "",
-        "---",
-        "comments:",
-        "  c1:",
-        "    by: user",
-        '    at: "2026-04-28T12:00:00.000Z"',
-        "workflow:",
-        "  owner: editorial",
-        "",
-      ].join("\n"),
-      {
-        message: "Please address the risk section.",
-        author: "user",
-        at: "2026-05-24T12:00:00.000Z",
-      },
+  it("writes `at` and `resolved` as strings a YAML 1.1 reader keeps as strings", () => {
+    const resolvedAt = "2026-05-01T09:00:00.000Z";
+    const markdown = markRoughdraftResolved(
+      withRecords('Ship <span id="rd-c1">guest checkout</span>.'),
+      { targetId: "rd-c1", summary: resolvedAt },
     );
+    const block = parseDocument(markdown).endmatterBlock;
+    if (block === null)
+      throw new Error("The written document has no endmatter");
 
-    expect(output).toContain("workflow:\n  owner: editorial");
-    expect(output).toContain("  c2:");
-    expect(output).toContain("    body: Please address the risk section.");
-    expect(output).toContain("    by: user");
-    expect(output).toContain("    at: 2026-05-24T12:00:00.000Z");
+    const endmatter = parseYaml(block.replace(/^\n---[ \t]*\r?\n/, ""), {
+      version: "1.1",
+    }) as { comments: Record<string, { at: unknown; resolved: unknown }> };
+    const record = endmatter.comments["rd-c1"];
+
+    expect([typeof record?.at, typeof record?.resolved]).toEqual([
+      "string",
+      "string",
+    ]);
+    expect(record).toMatchObject({ at, resolved: resolvedAt });
   });
 
-  it("rejects reply text that would close CriticMarkup early", () => {
+  it("reads an anchor containing a self-closing tag of the same name", () => {
     const markdown =
-      '{>>Needs proof<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}\n';
+      'Ship <span id="rd-c1">guest <span class="badge"/>checkout</span>.\n';
+
+    const document = parseDocument(markdown);
+
+    expect(document.anchors).toMatchObject([{ id: "rd-c1", kind: "span" }]);
+    expect(document.diagnostics).toEqual([]);
+  });
+
+  it("reports an anchor whose ends lie in different blocks", () => {
+    const markdown = fixtureMarkdown("cross-block-anchor.json");
+
+    expect(
+      diagnosticCodes(validateRoughdraftMarkdown(markdown).errors),
+    ).toEqual([anchorCrossesBlockCode]);
+    // The anchor is still read, so the record it binds keeps its anchor rather
+    // than being orphaned by a defect the file arrived with.
+    expect(anchorIds(parseDocument(markdown))).toEqual(["rd-c1"]);
+  });
+});
+
+describe("reply cycles", () => {
+  /**
+   * The ids from `start` up to the record that replies to nothing, refusing to
+   * walk further than the document has records. A chain still holding a cycle
+   * never reaches a root, so the walk would not terminate at all.
+   */
+  function ancestryOf(document: RfmDocument, start: CommentId): CommentId[] {
+    const chain: CommentId[] = [];
+    let current: CommentId | undefined = start;
+
+    while (current !== undefined) {
+      if (chain.length > document.comments.size) {
+        throw new Error(`Reply chain from ${start} does not terminate.`);
+      }
+
+      chain.push(current);
+      const re: RecordId | undefined = document.comments.get(current)?.re;
+      current =
+        re === undefined ? undefined : (parseCommentId(re) ?? undefined);
+    }
+
+    return chain;
+  }
+
+  it("drops the reply link that closes a mutual cycle and reports it", () => {
+    const markdown = [
+      'Ship <span id="rd-c1">guest checkout</span>.',
+      "",
+      "---",
+      'roughdraft: "1.0"',
+      "comments:",
+      "  rd-c1:",
+      "    body: Confirm this.",
+      "    by: user",
+      `    at: "${at}"`,
+      "    re: rd-c2",
+      "  rd-c2:",
+      "    body: Confirmed.",
+      "    by: AI",
+      `    at: "${at}"`,
+      "    re: rd-c1",
+      "",
+    ].join("\n");
+
+    const document = parseDocument(markdown);
+
+    expect(diagnosticCodes(document.diagnostics)).toEqual([
+      endmatterReplyCycleCode,
+    ]);
+    expect(
+      [...document.comments.keys()].map((id) => ancestryOf(document, id)),
+    ).toEqual([["rd-c1", "rd-c2"], ["rd-c2"]]);
+  });
+});
+
+describe("writing to a record nothing anchors", () => {
+  const unanchored = [
+    "Ship guest checkout.",
+    "",
+    "---",
+    'roughdraft: "1.0"',
+    "comments:",
+    "  rd-c1:",
+    "    body: Confirm this.",
+    "    by: user",
+    `    at: "${at}"`,
+    "",
+  ].join("\n");
+
+  it.each([
+    {
+      name: "appendRoughdraftReply",
+      write: () =>
+        appendRoughdraftReply(unanchored, {
+          parentId: "rd-c1",
+          message: "Agreed.",
+        }),
+    },
+    {
+      name: "markRoughdraftResolved",
+      write: () => markRoughdraftResolved(unanchored, { targetId: "rd-c1" }),
+    },
+  ])("$name throws and produces no document", ({ write }) => {
+    expect(write).toThrow(/no anchor/);
+
+    // Nothing was written, so the record is exactly as it was: no reply beside
+    // it, and no resolution on it.
+    const document = parseDocument(unanchored);
+    expect([...document.comments.keys()]).toEqual(["rd-c1"]);
+    expect(document.comments.get(commentId("rd-c1"))?.status).toBeUndefined();
+  });
+
+  it("refuses a requested comment id a body anchor already carries", () => {
+    // The endmatter holds no rd-c1, but the anchor does: binding a new record
+    // to that id would bind it to an unrelated span.
+    const markdown = 'Ship <span id="rd-c1">guest checkout</span>.\n';
 
     expect(() =>
-      appendRoughdraftReply(markdown, {
-        parentId: "c1",
-        id: "c2",
-        author: "AI",
-        at: "2026-04-28T12:10:00.000Z",
-        message: "This closes early <<} and corrupts the thread.",
+      appendRoughdraftDocumentComment(markdown, {
+        message: "Read the whole thing.",
+        id: "rd-c1",
       }),
-    ).toThrow(/CriticMarkup close delimiter/);
+    ).toThrow(/already in use/);
+  });
+});
+
+describe("code regions", () => {
+  const markdown = [
+    'Use `<span id="rd-c1">guest checkout</span>` inline, and:',
+    "",
+    "```html",
+    '<ins id="rd-s1">one concrete example</ins>',
+    "```",
+    "",
+  ].join("\n");
+
+  it("reads no anchor inside a fenced block or an inline code span", () => {
+    expect(parseDocument(markdown).anchors).toEqual([]);
   });
 
-  it("marks a target resolved without changing unrelated markup", () => {
-    const markdown =
-      'Add {++one example++}{id="s1" by="AI" at="2026-04-28T12:05:00.000Z"} and keep {>>open question<<}{id="c1" by="user" at="2026-04-28T12:06:00.000Z"}.\n';
+  it("leaves the code regions as literal text", () => {
+    const serialized = roundTrip(markdown);
 
-    const updated = markRoughdraftResolved(markdown, {
-      targetId: "s1",
-      summary: "Accepted in draft.",
-    });
-
-    expect(updated).toBe(
-      'Add {++one example++}{id="s1" by="AI" at="2026-04-28T12:05:00.000Z" status="resolved" resolved="Accepted in draft."} and keep {>>open question<<}{id="c1" by="user" at="2026-04-28T12:06:00.000Z"}.\n',
-    );
+    expect(serialized).toContain('`<span id="rd-c1">guest checkout</span>`');
+    expect(serialized).toContain('<ins id="rd-s1">one concrete example</ins>');
+    expect(
+      parseDocument(serialized).suggestions.get(suggestionId("rd-s1")),
+    ).toBeUndefined();
   });
 
-  it("marks an endmatter-backed target resolved in YAML", () => {
-    const markdown = [
-      "Add {++one example++}{#s1}.",
+  it("does not read an inline code span across a blank line", () => {
+    // Were the two stray backticks read as one span, the anchor between them
+    // would be literal text and the comment would lose its anchor.
+    const strayBackticks = [
+      "The ` character opens a code span.",
       "",
-      "---",
-      "workflow:",
-      "  owner: editorial",
-      "suggestions:",
-      "  s1:",
-      "    by: AI",
-      '    at: "2026-04-28T12:05:00.000Z"',
+      'It closes on the <span id="rd-c1">same</span> line, never ` later.',
       "",
     ].join("\n");
 
-    const updated = markRoughdraftResolved(markdown, {
-      targetId: "s1",
-      summary: "Accepted in draft.",
-    });
+    expect(anchorIds(parseDocument(strayBackticks))).toEqual(["rd-c1"]);
+  });
 
-    expect(updated).toContain("status: resolved");
-    expect(updated).toContain("resolved: Accepted in draft.");
-    expect(updated).toContain("workflow:\n  owner: editorial");
-    expect(extractRoughdraftReviewIndex(updated).items[0]).toMatchObject({
-      id: "s1",
-      status: "resolved",
-    });
+  it("keeps the records of a body whose anchors sit between prose backticks", () => {
+    const written = parseDocument(
+      roundTrip(fixtureMarkdown("stray-backticks.json")),
+    );
+
+    expect(anchorIds(written)).toEqual(["rd-c1"]);
+    expect([...written.comments.keys()]).toEqual(["rd-c1"]);
+    expect(written.diagnostics).toEqual([]);
+  });
+
+  const documentShowingEndmatter = [
+    "# Guide",
+    "",
+    "Endmatter looks like this:",
+    "",
+    "````markdown",
+    "---",
+    'roughdraft: "1.0"',
+    "comments:",
+    "  rd-c1:",
+    "    body: Example",
+    "    by: AI",
+    `    at: "${at}"`,
+    "````",
+    "",
+    "That block is an example, not this document's own endmatter.",
+    "",
+  ].join("\n");
+
+  it("reads no endmatter from a delimiter inside a fenced block", () => {
+    const document = parseDocument(documentShowingEndmatter);
+
+    expect(document.endmatterVersion).toBeNull();
+    expect(document.comments.size).toBe(0);
+  });
+
+  it("keeps everything after a fenced endmatter example in the body", () => {
+    expect(roundTrip(documentShowingEndmatter)).toBe(documentShowingEndmatter);
+  });
+
+  it("reads no endmatter from a document that ends inside an unclosed fence", () => {
+    const unclosed = [
+      "# Guide",
+      "",
+      "Endmatter looks like this:",
+      "",
+      "```markdown",
+      "---",
+      'roughdraft: "1.0"',
+      "comments:",
+      "  rd-c1:",
+      "    body: Example",
+      "    by: AI",
+      `    at: "${at}"`,
+      "",
+    ].join("\n");
+
+    const document = parseDocument(unclosed);
+
+    expect(document.endmatterVersion).toBeNull();
+    expect(document.comments.size).toBe(0);
+    expect(document.body).toBe(unclosed);
+    expect(serializeDocument(document)).toBe(unclosed);
   });
 });

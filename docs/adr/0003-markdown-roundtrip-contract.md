@@ -8,7 +8,7 @@ Roughdraft renders Markdown through rich text and code editing surfaces. Acciden
 
 Roughdraft should preserve user-authored Markdown unless an edit requires a minimal, understandable serialization change. Frontmatter, local links, image paths, tables, task lists, code fences, inline code, and raw supported HTML blocks need explicit tests.
 
-The review layer is part of the same contract. A read/write cycle that makes no review change preserves anchor elements, their ids, and their other attributes; endmatter keys and record keys, including ones the implementation does not recognize; anchors appearing inside code spans and fenced code blocks, as literal text; and a trailing YAML block that is not endmatter, as document content.
+The review layer is part of the same contract. A read/write cycle preserves every record the document carries, whether or not its anchor is still present in the body. Dropping a record whose anchor is gone is an operation a caller performs deliberately; it is never an effect of writing. The same cycle preserves anchor elements, their ids, and their other attributes; endmatter keys and record keys, including ones the implementation does not recognize; anchors appearing inside code spans and fenced code blocks, as literal text; and a trailing YAML block that is not endmatter, as document content.
 
 ## Consequences
 

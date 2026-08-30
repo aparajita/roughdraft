@@ -33,9 +33,11 @@ const allowedSelectorPatterns = [
   /^img\[alt=/,
   /^\.cm-(content|editor|gutters)$/,
   /^\.ProseMirror$/,
-  /^\.comment-anchor\[data-comment-ids\]$/,
-  /^\.critic-change(?:-[a-z-]+)?(?:\[data-critic-change-id\])?$/,
-  /^\[data-critic-change-id=/,
+  // Review anchors are addressed by the `rd-` id the format puts on them and by
+  // the classes the marks and decorations render, neither of which is a testid.
+  /^\.comment-anchor(?:\[id\^="rd-c"\])?$/,
+  /^\.suggestion(?:-[a-z-]+)*(?:\[data-rd-replace\^?="rd-s\d*"\])?$/,
+  /^\[id\^?="rd-[cs]\d*"\]$/,
   /^\[data-comment-thread-root-id\]/,
   /^\[data-suggestion-thread-container="true"\]$/,
   /^\[data-comment-thread-container="true"\]$/,

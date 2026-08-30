@@ -1,7 +1,7 @@
-import type { StorageBackend } from "./storage";
 import { ApiBackend } from "./api-backend";
 import { LocalStorageBackend } from "./local-storage-backend";
 import { RemoteBackend } from "./remote-backend";
+import type { StorageBackend } from "./storage";
 
 interface StatusPayload {
   backend?: string;

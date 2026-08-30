@@ -1,12 +1,16 @@
-import { defineConfig } from "vitest/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { defineConfig } from "vitest/config";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   resolve: {
     alias: {
+      // The subpath comes first: an alias key is matched as a prefix, so the
+      // bare specifier below would otherwise capture it and resolve to
+      // `index.ts/migrate`.
+      "@roughdraft/rfm/migrate": path.resolve(dirname, "../rfm/src/migrate.ts"),
       "@roughdraft/rfm": path.resolve(dirname, "../rfm/src/index.ts"),
     },
   },

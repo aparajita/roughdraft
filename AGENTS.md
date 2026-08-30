@@ -154,7 +154,7 @@ Plan file guidelines:
 - Use a concrete, task-specific filename such as `.context/markdown-smoke-tests-plan.md`.
 - Include goals, non-goals, proposed file changes, test strategy, risks, and suggested implementation order.
 - Keep product-boundary decisions aligned with the ADRs; if the plan needs to change a recorded decision, call that out explicitly.
-- Use CriticMarkup for inline review notes when helpful.
+- Use review anchors and endmatter for inline review notes when helpful.
 
 After writing the plan, open it in Roughdraft for review:
 
@@ -166,7 +166,7 @@ roughdraft_cmd="roughdraft-dev-$worktree_name"
 "$roughdraft_cmd" open "$worktree_root/.context/<plan-file>.md"
 ```
 
-After the user finishes reviewing in Roughdraft, read the plan file from disk and address any CriticMarkup feedback before implementing.
+After the user finishes reviewing in Roughdraft, read the plan file from disk and address any review feedback before implementing.
 
 ## Implementation Notes Workflow
 
@@ -212,36 +212,41 @@ Useful commands:
 "$roughdraft_cmd" help
 ```
 
-## CriticMarkup
+## Review Anchors And Endmatter
 
-Use CriticMarkup when reading or writing inline review feedback in markdown:
+Use Roughdraft Flavored Markdown's anchors and endmatter when reading or writing inline review feedback in markdown. An anchor is an HTML element carrying an `id` in the body; the record it binds to lives in a final YAML endmatter block.
 
-- Comment: `{>>comment<<}`
-- Insertion: `{++new text++}`
-- Deletion: `{--old text--}`
-- Substitution: `{~~old~>new~~}`
-- Highlight: `{==text==}`
+- Comment on a span: `<span id="rd-c1">anchored text</span>`
+- Comment on a point, with no text of its own: `<span id="rd-c1"></span>`
+- Suggested insertion: `<ins id="rd-s1">new text</ins>`
+- Suggested deletion: `<del id="rd-s2">old text</del>`
+- Suggested replacement: `<span id="rd-s3"><del>old</del><ins>new</ins></span>`
 
-When adding new review feedback, prefer compact inline references plus final YAML endmatter:
+A comment anchor is inline content within a single block; a range crossing a block boundary is not expressible in this format.
+
+To allocate an id, take the highest number carried by any id of the same kind — counting both body anchors and endmatter keys — and add one.
+
+When adding new review feedback, place the anchors inline and record attribution in a final YAML endmatter block whose first key is `roughdraft: "1.0"`:
 
 ```markdown
-{==selected text==}{>>Comment text<<}{#c1}
-{++new text++}{#s1}
+<span id="rd-c1">selected text</span>
+
+Add <ins id="rd-s1">new text</ins> here.
 
 ---
+roughdraft: "1.0"
 comments:
-  c1:
+  rd-c1:
+    body: Comment text
     by: AI
     at: "2026-04-28T12:00:00.000Z"
-  c2:
+  rd-c2:
     body: I can make that edit.
     by: AI
     at: "2026-04-28T12:05:00.000Z"
-    re: c1
+    re: rd-c1
 suggestions:
-  s1:
+  rd-s1:
     by: AI
     at: "2026-04-28T12:10:00.000Z"
 ```
-
-Older inline attribute blocks such as `{id="c1" by="AI" at="2026-04-28T12:00:00.000Z"}` may appear in existing documents. Preserve them unless you are intentionally rewriting that review item.

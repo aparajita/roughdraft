@@ -24,21 +24,21 @@ test.describe("markdown round-trips", () => {
     removeMarkdownProject(projectDir);
   });
 
-  test("toggles rich text and code mode without rewriting literal CriticMarkup @smoke", async ({
+  test("toggles rich text and code mode without rewriting literal anchors @smoke", async ({
     page,
   }) => {
     const original = [
       "---",
-      "title: Literal CriticMarkup",
+      "title: Literal anchors",
       "---",
       "",
       "# Round Trip",
       "",
-      "Inline code stays literal: `{==not a comment==}`.",
+      'Inline code stays literal: `<span id="rd-c1">not a comment</span>`.',
       "",
       "```md",
-      "{>>not review feedback<<}",
-      "{++not a suggestion++}",
+      '<span id="rd-c2">not review feedback</span>',
+      '<ins id="rd-s1">not a suggestion</ins>',
       "```",
       "",
     ].join("\n");
@@ -50,7 +50,9 @@ test.describe("markdown round-trips", () => {
     );
 
     await page.getByTestId("document-editor-view-toggle").click();
-    await expect(codeEditor(page)).toContainText("{>>not review feedback<<}");
+    await expect(codeEditor(page)).toContainText(
+      '<span id="rd-c2">not review feedback</span>',
+    );
 
     await page.getByTestId("document-editor-view-toggle").click();
     await expect(page.getByTestId("rich-text-editor")).toContainText(
@@ -63,14 +65,14 @@ test.describe("markdown round-trips", () => {
     });
   });
 
-  test("saves code-mode edits to disk while preserving fenced CriticMarkup examples @smoke", async ({
+  test("saves code-mode edits to disk while preserving fenced anchor examples @smoke", async ({
     page,
   }) => {
     const initial = [
       "# Code Save",
       "",
       "```md",
-      "{==literal==}{>>example<<}",
+      '<span id="rd-c1">literal</span>',
       "```",
       "",
     ].join("\n");
@@ -83,7 +85,7 @@ test.describe("markdown round-trips", () => {
       .poll(() => readProjectFile(projectDir, "code-save.md"))
       .toContain("Saved from Playwright.");
     expect(readProjectFile(projectDir, "code-save.md")).toContain(
-      "{==literal==}{>>example<<}",
+      '<span id="rd-c1">literal</span>',
     );
 
     logE2eEvent("markdown-roundtrip.code-save", {

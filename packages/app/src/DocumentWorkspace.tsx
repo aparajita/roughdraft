@@ -34,11 +34,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tooltip";
-import {
-  criticMarkdownHasReviewRail,
-  criticMarkdownToRenderedHtml,
-} from "./critic-markup";
 import { cn } from "./lib/utils";
+import {
+  HEADING_BLANK_AFTER_ATTRIBUTE,
+  HEADING_BLANK_BEFORE_ATTRIBUTE,
+} from "./markdown";
 import {
   type DocumentInteractionMode,
   type DocumentSaveController,
@@ -46,6 +46,10 @@ import {
   PageCard,
 } from "./PageCard";
 import { RobotsHighFiveToy } from "./RobotsHighFiveToy";
+import {
+  reviewMarkdownHasReviewRail,
+  reviewMarkdownToRenderedHtml,
+} from "./review";
 import type { CompleteReviewOptions, Page, StorageBackend } from "./storage";
 import { useReviewLayoutShiftAnimation } from "./useReviewLayoutShiftAnimation";
 
@@ -168,40 +172,66 @@ function markdownToPlainText(markdown: string) {
   return (template.content.textContent ?? "").trimEnd();
 }
 
+const COMMENT_ANCHOR_SELECTOR = 'span[id^="rd-c"]';
+const INSERTION_ANCHOR_SELECTOR = 'ins[id^="rd-s"]';
+const DELETION_ANCHOR_SELECTOR = 'del[id^="rd-s"]';
+const REPLACEMENT_ANCHOR_SELECTOR = 'span[id^="rd-s"]';
+
 function unwrapElement(element: HTMLElement) {
   element.replaceWith(...element.childNodes);
 }
 
+function removeAll(root: ParentNode, selector: string) {
+  for (const element of Array.from(
+    root.querySelectorAll<HTMLElement>(selector),
+  )) {
+    element.remove();
+  }
+}
+
+function unwrapAll(root: ParentNode, selector: string) {
+  for (const element of Array.from(
+    root.querySelectorAll<HTMLElement>(selector),
+  )) {
+    unwrapElement(element);
+  }
+}
+
+/**
+ * Copying a document copies the text as it stands today: suggested insertions
+ * are dropped, suggested deletions are kept, and review anchors leave no markup
+ * behind. Only anchors carrying an `rd-` id are touched, so plain `<ins>`,
+ * `<del>` and `<span>` markup in the document survives.
+ */
 function markdownToCleanRichHtml(markdown: string) {
   const template = document.createElement("template");
-  template.innerHTML = criticMarkdownToRenderedHtml(markdown).html;
+  template.innerHTML = reviewMarkdownToRenderedHtml(markdown).html;
 
-  for (const element of Array.from(
-    template.content.querySelectorAll<HTMLElement>(
-      "[data-comment-anchorless='true']",
-    ),
+  removeAll(template.content, "[data-comment-anchorless='true']");
+  unwrapAll(template.content, COMMENT_ANCHOR_SELECTOR);
+
+  for (const replacement of Array.from(
+    template.content.querySelectorAll<HTMLElement>(REPLACEMENT_ANCHOR_SELECTOR),
   )) {
-    element.remove();
+    removeAll(replacement, "ins");
+    unwrapAll(replacement, "del");
+    unwrapElement(replacement);
   }
 
-  for (const element of Array.from(
-    template.content.querySelectorAll<HTMLElement>("[data-comment-ids]"),
-  )) {
-    unwrapElement(element);
-  }
+  removeAll(template.content, INSERTION_ANCHOR_SELECTOR);
+  unwrapAll(template.content, DELETION_ANCHOR_SELECTOR);
 
-  for (const element of Array.from(
-    template.content.querySelectorAll<HTMLElement>(
-      "[data-critic-change-kind='addition'], [data-critic-change-kind='substitution-new']",
-    ),
-  )) {
-    element.remove();
-  }
-
-  for (const element of Array.from(
-    template.content.querySelectorAll<HTMLElement>("[data-critic-change-kind]"),
-  )) {
-    unwrapElement(element);
+  // Heading spacing is bookkeeping the Markdown round trip needs and a reader
+  // pasting into another application does not.
+  for (const attribute of [
+    HEADING_BLANK_BEFORE_ATTRIBUTE,
+    HEADING_BLANK_AFTER_ATTRIBUTE,
+  ]) {
+    for (const heading of Array.from(
+      template.content.querySelectorAll<HTMLElement>(`[${attribute}]`),
+    )) {
+      heading.removeAttribute(attribute);
+    }
   }
 
   return template.innerHTML;
@@ -451,7 +481,7 @@ export function DocumentWorkspace({
   const [documentHasComments, setDocumentHasComments] = useState(
     () =>
       !!documentPage?.content &&
-      criticMarkdownHasReviewRail(documentPage.content),
+      reviewMarkdownHasReviewRail(documentPage.content),
   );
   const documentHeaderRef =
     useReviewLayoutShiftAnimation<HTMLDivElement>(documentHasComments);
@@ -459,7 +489,7 @@ export function DocumentWorkspace({
   useEffect(() => {
     setDocumentHasComments(
       !!documentPage?.content &&
-        criticMarkdownHasReviewRail(documentPage.content),
+        reviewMarkdownHasReviewRail(documentPage.content),
     );
   }, [documentPage?.content]);
 
@@ -1111,6 +1141,7 @@ export function DocumentWorkspace({
                             key={value}
                             value={value}
                             label={label}
+                            data-testid={`document-mode-option-${value}`}
                             className="text-[0.8rem]"
                           >
                             <Icon className="size-3 text-stone-500 dark:text-slate-400" />

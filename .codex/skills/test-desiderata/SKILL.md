@@ -36,7 +36,7 @@ Use the desiderata as design lenses, not a rigid checklist. The goal is to optim
 
 - For bug fixes, create the smallest failing behavioral test before implementation, following the repo's `AGENTS.md` bug-fix workflow.
 - Use `slog` before or during test work when runtime behavior is uncertain and static reading is not enough.
-- For Markdown and CriticMarkup behavior, prefer fixture or round-trip coverage that protects the file-format contract.
+- For Markdown and review anchor/endmatter behavior, prefer fixture or round-trip coverage that protects the file-format contract.
 - For UI behavior, prefer component tests for local interaction logic and Playwright only when browser, file, server, or cross-view behavior is the product risk.
 - Avoid snapshot-heavy or DOM-structure-heavy assertions unless the rendered structure itself is the public contract.
 

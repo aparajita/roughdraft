@@ -1,0 +1,19 @@
+{
+  "format": "roughdraft-flavored-markdown",
+  "version": "1.0",
+  "source": {
+    "markdown": "Ship guest checkout in the beta.<span id=\"rd-c1\"></span>\n\n---\nroughdraft: \"1.0\"\ncomments:\n  rd-c1:\n    body: The rollout date belongs here.\n    by: user\n    at: \"2026-04-28T12:00:00.000Z\"\n"
+  },
+  "comments": [
+    {
+      "id": "rd-c1",
+      "body": "The rollout date belongs here.",
+      "by": "user",
+      "at": "2026-04-28T12:00:00.000Z",
+      "anchor": {
+        "kind": "point"
+      }
+    }
+  ],
+  "suggestions": []
+}

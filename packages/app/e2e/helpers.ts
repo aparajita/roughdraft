@@ -64,6 +64,14 @@ export async function appendInCodeEditor(page: Page, text: string) {
   await page.keyboard.type(text);
 }
 
+/**
+ * Select `text` in the rich-text editor.
+ *
+ * The target is searched across the editor's text nodes rather than within each
+ * one, because an anchor splits its paragraph into a node per element: a
+ * selection that crosses an anchor boundary — the case a reviewer hits when they
+ * drag over the edge of an existing comment — exists in no single node.
+ */
 export async function selectRichText(page: Page, text: string) {
   await richTextEditor(page).focus();
   await page.evaluate((targetText) => {
@@ -73,28 +81,57 @@ export async function selectRichText(page: Page, text: string) {
     }
 
     const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
-    let node = walker.nextNode();
+    const textNodes: Text[] = [];
+    let documentText = "";
 
-    while (node) {
-      const index = node.textContent?.indexOf(targetText) ?? -1;
-
-      if (index >= 0) {
-        const range = document.createRange();
-        range.setStart(node, index);
-        range.setEnd(node, index + targetText.length);
-
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-
-        document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
-        return;
-      }
-
-      node = walker.nextNode();
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      textNodes.push(node as Text);
+      documentText += node.textContent ?? "";
     }
 
-    throw new Error(`Could not find text "${targetText}"`);
+    const start = documentText.indexOf(targetText);
+
+    if (start < 0) {
+      throw new Error(`Could not find text "${targetText}"`);
+    }
+
+    /**
+     * The node and offset a document-wide offset falls in. An offset sitting on
+     * the boundary between two nodes resolves to the start of the later one, so
+     * a range end at the very end of the document resolves to the last node.
+     */
+    const locate = (offset: number): { node: Text; offset: number } => {
+      let consumed = 0;
+
+      for (const node of textNodes) {
+        const length = node.length;
+
+        if (offset < consumed + length) {
+          return { node, offset: offset - consumed };
+        }
+
+        consumed += length;
+      }
+
+      const last = textNodes[textNodes.length - 1];
+
+      if (!last) throw new Error("The editor holds no text");
+
+      return { node: last, offset: last.length };
+    };
+
+    const from = locate(start);
+    const to = locate(start + targetText.length);
+    const range = document.createRange();
+
+    range.setStart(from.node, from.offset);
+    range.setEnd(to.node, to.offset);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
   }, text);
 }
 
@@ -113,4 +150,24 @@ export function logE2eEvent(event: string, data: Record<string, unknown> = {}) {
       data,
     })}\n`,
   );
+}
+
+/**
+ * Open the editor context menu without disturbing the selection. A right-click
+ * inside a selection keeps it; one outside collapses it to the caret, which
+ * changes which menu actions are available and why.
+ */
+export async function openContextMenuOnSelection(page: Page) {
+  const box = await page.evaluate(() => {
+    const range = window.getSelection()?.getRangeAt(0);
+    if (!range) throw new Error("The editor holds no selection");
+
+    const { x, y, width, height } = range.getBoundingClientRect();
+
+    return { x, y, width, height };
+  });
+
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, {
+    button: "right",
+  });
 }

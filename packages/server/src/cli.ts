@@ -1,15 +1,17 @@
+import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import {
+  parseDocument,
   type RfmDiagnostic,
   validateRoughdraftMarkdown,
 } from "@roughdraft/rfm";
+import { migrateCriticMarkup } from "@roughdraft/rfm/migrate";
 import {
   ROUGHDRAFT_BIND_HOST,
   ROUGHDRAFT_DEFAULT_PORT,
@@ -48,7 +50,8 @@ const KNOWN_COMMANDS = [
   "doctor",
   "help",
   "agent-setup",
-  "criticmarkup",
+  "format",
+  "migrate",
 ] as const;
 
 export interface RoughdraftServerState {
@@ -123,6 +126,12 @@ export interface CliDependencies {
   stopProcess: (pid: number) => Promise<void>;
   openUrl: (url: string) => OpenMode;
   resolveUpdateStatus: () => Promise<UpdateStatus>;
+  /**
+   * Put `text` on standard output exactly as given. This is the sink for output
+   * whose bytes are the result — a document a caller pipes into a diff — where
+   * the line `log` ends would be a byte the real file does not carry.
+   */
+  write: (text: string) => void;
   log: (message: string) => void;
   error: (message: string) => void;
 }
@@ -177,6 +186,7 @@ interface ParsedCli {
 interface ParsedCommandOptions {
   all: boolean;
   batchWindowSeconds: number;
+  dryRun: boolean;
   help: boolean;
   json: boolean;
   noOpen: boolean;
@@ -297,6 +307,7 @@ function parseCommandOptions(
   args: string[],
   options: {
     allowAll?: boolean;
+    allowDryRun?: boolean;
     allowOpen?: boolean;
     allowPort?: boolean;
     allowWatch?: boolean;
@@ -305,6 +316,7 @@ function parseCommandOptions(
   const parsed: ParsedCommandOptions = {
     all: false,
     batchWindowSeconds: 0.25,
+    dryRun: false,
     help: false,
     json: false,
     noOpen: false,
@@ -336,6 +348,12 @@ function parseCommandOptions(
     if (arg === "--all") {
       if (!options.allowAll) throw new Error(`Unknown flag: ${arg}`);
       parsed.all = true;
+      continue;
+    }
+
+    if (arg === "--dry-run") {
+      if (!options.allowDryRun) throw new Error(`Unknown flag: ${arg}`);
+      parsed.dryRun = true;
       continue;
     }
 
@@ -911,6 +929,11 @@ export function createCliDependencies(
     resolveUpdateStatus:
       overrides.resolveUpdateStatus ??
       (() => resolveUpdateStatus({ fetchImpl })),
+    write:
+      overrides.write ??
+      ((text) => {
+        process.stdout.write(text);
+      }),
     log: overrides.log ?? ((message) => console.log(message)),
     error: overrides.error ?? ((message) => console.error(message)),
   };
@@ -942,10 +965,13 @@ function printHelp(log: (message: string) => void) {
   log("  watch <path>       Wait for a Done Reviewing event");
   log("  mcp                Start the experimental stdio MCP server");
   log("  doctor [path]      Diagnose setup or validate Markdown");
+  log(
+    "  migrate <path>     Convert a CriticMarkup document to Roughdraft Flavored Markdown",
+  );
   log("  help agent         Print the agent setup prompt");
-  log("  help criticmarkup  Show CriticMarkup examples");
+  log("  help format        Show Roughdraft Flavored Markdown examples");
   log("  agent-setup        Print the agent setup prompt");
-  log("  criticmarkup       Show CriticMarkup examples");
+  log("  format             Show Roughdraft Flavored Markdown examples");
   log("");
   log("Flags:");
   log("  -h, --help         Show help");
@@ -1106,6 +1132,24 @@ function printCommandHelp(
     return;
   }
 
+  if (command === "migrate") {
+    log("Usage:");
+    log("  roughdraft migrate <path> [--dry-run] [--json]");
+    log("");
+    log(
+      "Converts CriticMarkup markers and their metadata into Roughdraft Flavored Markdown anchors and endmatter records, rewriting the file in place.",
+    );
+    log("");
+    log(
+      "Refuses a file holding no CriticMarkup comment or suggestion, and one already carrying a `roughdraft` endmatter key, leaving it untouched.",
+    );
+    log("");
+    log("Flags:");
+    log("  --dry-run            Print the converted document without writing");
+    log("  --json               Print machine-readable output");
+    return;
+  }
+
   if (command === "help") {
     printHelp(log);
     return;
@@ -1116,7 +1160,7 @@ function printCommandHelp(
     return;
   }
 
-  printCriticMarkupHelp(log);
+  printFormatHelp(log);
 }
 
 function printAgentHelp(log: (message: string) => void) {
@@ -1131,63 +1175,61 @@ function printAgentHelp(log: (message: string) => void) {
   );
 }
 
-function printCriticMarkupHelp(log: (message: string) => void) {
-  log("CriticMarkup reference:");
-  log("  {>>comment<<}       Comment");
-  log("  {++new text++}      Insertion");
-  log("  {--old text--}      Deletion");
-  log("  {~~old~>new~~}      Substitution");
-  log("  {==text==}          Highlight");
-  log("");
-  log("Examples:");
-  log("  The intro {~~is vague~>needs a tighter claim~~}.");
-  log("  Add {>>one concrete example here<<} before the conclusion.");
-  log("");
-  log("When adding new review feedback:");
+function printFormatHelp(log: (message: string) => void) {
+  log("Roughdraft Flavored Markdown reference:");
+  log('  <span id="rd-c1">text</span>      Comment anchored to inline text');
+  log('  <span id="rd-c2"></span>          Comment anchored to a point');
+  log('  <ins id="rd-s1">new text</ins>    Suggested insertion');
+  log('  <del id="rd-s2">old text</del>    Suggested deletion');
   log(
-    "  Prefer compact references like {>>Comment<<}{#c1} with metadata in final YAML endmatter.",
-  );
-  log(
-    "  Use `c1`, `c2`, etc. for comment ids and `s1`, `s2`, etc. for suggested-change ids.",
-  );
-  log(
-    "  Set `by` to your agent or author label and `at` to the current ISO timestamp.",
+    '  <span id="rd-s3"><del>old</del><ins>new</ins></span>   Suggested replacement',
   );
   log("");
-  log("Anchored comment with id:");
-  log("  Review {==this sentence==}{>>Needs a source<<}{#c1}.");
+  log("Example document:");
+  log('  Ship <span id="rd-c1">guest checkout</span> in the beta.');
+  log("");
+  log('  Add <ins id="rd-s1">one concrete example</ins> before the close.');
+  log("");
   log("  ---");
+  log('  roughdraft: "1.0"');
   log("  comments:");
-  log("    c1:");
+  log("    rd-c1:");
+  log("      body: Confirm this excludes SSO-only workspaces.");
   log("      by: AI");
-  log('      at: "2026-04-28T12:00:00.000Z"');
-  log("");
-  log("Suggested changes with ids:");
-  log("  Add {++one concrete example++}{#s1}.");
-  log("  Replace {~~vague phrasing~>specific wording~~}{#s2}.");
-  log("  ---");
+  log('      at: "2026-08-28T12:00:00.000Z"');
+  log("    rd-c2:");
+  log("      body: Confirmed. SSO-only workspaces are out of the beta.");
+  log("      by: user");
+  log('      at: "2026-08-28T12:05:00.000Z"');
+  log("      re: rd-c1");
   log("  suggestions:");
-  log("    s1:");
+  log("    rd-s1:");
   log("      by: AI");
-  log('      at: "2026-04-28T12:10:00.000Z"');
-  log("    s2:");
-  log("      by: AI");
-  log('      at: "2026-04-28T12:11:00.000Z"');
+  log('      at: "2026-08-28T12:07:00.000Z"');
   log("");
-  log("Reply to an existing comment:");
-  log("  Store replies in `comments.<id>.body` with `re: <parent-id>`.");
-  log("");
-  log("Reply guidance:");
+  log("Records:");
   log(
-    "  Existing inline attribute metadata is still accepted for compatibility.",
+    "  Every comment, reply and suggestion lives in the final YAML block whose first key is `roughdraft`.",
   );
   log(
-    "  Comment ids are document-local and usually look like `c1`, `c2`, `c3`.",
+    "  A comment needs `body`, `by` and `at`; a reply adds `re: <parent-id>`.",
+  );
+  log("  A suggestion needs `by` and `at`.");
+  log(
+    "  A suggestion record never records the operation — the anchor element does.",
   );
   log("");
-  log("Code blocks:");
+  log("Allocating an id:");
   log(
-    "  Treat CriticMarkup inside fenced code blocks as literal example text.",
+    "  Take the highest number of that kind across both the body anchors and the endmatter keys, and add one.",
+  );
+  log(
+    "  Comments and suggestions are numbered separately: `rd-c1`, `rd-c2`; `rd-s1`, `rd-s2`.",
+  );
+  log("");
+  log("Code:");
+  log(
+    "  An anchor inside an inline code span or fenced code block is literal text under ordinary CommonMark rules.",
   );
   log("");
   log("Full spec:");
@@ -1270,13 +1312,38 @@ function parseSseEvents(buffer: string): ParsedSseChunk {
   return { events, remainder: normalized.slice(cursor) };
 }
 
-async function atomicWriteFile(
+type RemoteSaveResult = { saved: true } | { saved: false; codes: string[] };
+
+/**
+ * Replace `targetPath` with Markdown a remote host sent, or refuse it.
+ *
+ * These bytes are another machine's, so they are read before they are written:
+ * Markdown the parser rejects is not what this application serializes, and
+ * putting it on the file would destroy the review layer the local file does
+ * have. The write itself lands whole through a rename, so a file is never left
+ * half replaced.
+ *
+ * A refusal comes back with the codes of the errors that caused it. Writing
+ * remote bytes without this reading is not reachable: this is the only writer
+ * of the relayed document.
+ */
+async function saveRemoteMarkdown(
   targetPath: string,
-  content: string,
-): Promise<void> {
+  markdown: string,
+): Promise<RemoteSaveResult> {
+  const codes = [
+    ...new Set(
+      parseDocument(markdown)
+        .diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+        .map((diagnostic) => diagnostic.code),
+    ),
+  ];
+  if (codes.length > 0) return { saved: false, codes };
+
   const tmpPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.promises.writeFile(tmpPath, content);
+  await fs.promises.writeFile(tmpPath, markdown);
   await fs.promises.rename(tmpPath, targetPath);
+  return { saved: true };
 }
 
 function appendTokenToViewerUrl(viewerUrl: string, token: string): string {
@@ -1456,8 +1523,15 @@ async function runRemoteOpen(
           }
           if (typeof payload.content === "string") {
             try {
-              await atomicWriteFile(options.openPath, payload.content);
-              if (!options.json) {
+              const result = await saveRemoteMarkdown(
+                options.openPath,
+                payload.content,
+              );
+              if (!result.saved) {
+                deps.error(
+                  `Refused a remote save of ${options.openPath}: the document does not parse (${result.codes.join(", ")}).`,
+                );
+              } else if (!options.json) {
                 deps.log(`Saved ${options.openPath} from remote.`);
               }
             } catch (error) {
@@ -2111,6 +2185,142 @@ async function runDoctor(
   return 0;
 }
 
+// Reads one Markdown file for a command that works on file contents rather than
+// on the running server. Reports the failure itself and yields null so the
+// caller returns USAGE_ERROR without restating the message.
+function readMarkdownFileForCommand(
+  deps: CliDependencies,
+  absolutePath: string,
+): string | null {
+  try {
+    const stat = fs.statSync(absolutePath);
+    if (!stat.isFile()) {
+      deps.error(`Path is not a file: ${absolutePath}`);
+      return null;
+    }
+    return fs.readFileSync(absolutePath, "utf8");
+  } catch (error) {
+    const code =
+      error instanceof Error && "code" in error
+        ? String((error as NodeJS.ErrnoException).code)
+        : "";
+    deps.error(
+      code === "ENOENT"
+        ? `Path not found: ${absolutePath}`
+        : `Could not read path: ${absolutePath}`,
+    );
+    return null;
+  }
+}
+
+// Converts one CriticMarkup document to Roughdraft Flavored Markdown. This is
+// the only command that rewrites a user's file, so it refuses anything it is
+// not certain about instead of guessing: a non-.md path, an unreadable file, a
+// document that already carries a `roughdraft` endmatter key, or a document
+// holding no record to convert. A refusal writes nothing and exits
+// USAGE_ERROR; a conversion writes the whole file once, or, with --dry-run,
+// prints the result and leaves the file untouched.
+function runMigrate(
+  deps: CliDependencies,
+  targetPath: string,
+  options: { dryRun: boolean; json: boolean },
+): number {
+  if (!isMarkdownPath(targetPath)) {
+    deps.error(`Roughdraft migrate can only convert .md files: ${targetPath}`);
+    return USAGE_ERROR;
+  }
+
+  const absolutePath = path.resolve(deps.cwd, targetPath);
+  const markdown = readMarkdownFileForCommand(deps, absolutePath);
+  if (markdown === null) return USAGE_ERROR;
+
+  // The `roughdraft` endmatter key is the only thing that identifies a document
+  // as Roughdraft Flavored Markdown, so the presence test comes from the parser
+  // rather than from a heuristic applied here.
+  if (parseDocument(markdown).endmatterVersion !== null) {
+    deps.error(
+      `Already Roughdraft Flavored Markdown, nothing was written: ${absolutePath}`,
+    );
+    return USAGE_ERROR;
+  }
+
+  const migrated = migrateCriticMarkup(markdown);
+
+  // Rewriting a file that holds no record to convert changes no byte of the
+  // review layer and still bumps the file's mtime, which wakes every watcher on
+  // it. A run with nothing to convert is a refusal, in a dry run too: what the
+  // real run would do is refuse, so that is what a preview of it reports. The
+  // count is of records, so a stray `{==highlight==}` that no comment follows
+  // carries nothing to convert and the document keeps it.
+  if (migrated.converted === 0) {
+    deps.error(
+      `No CriticMarkup comments or suggestions to convert, nothing was written: ${absolutePath}`,
+    );
+    return USAGE_ERROR;
+  }
+
+  if (options.dryRun) {
+    if (options.json) {
+      emitJson(deps.log, {
+        kind: "migrate" as const,
+        path: absolutePath,
+        dryRun: true,
+        converted: migrated.converted,
+        diagnostics: migrated.diagnostics,
+        markdown: migrated.markdown,
+      });
+    } else {
+      // Standard output carries the converted document and nothing else, so a
+      // dry run piped into a diff reports exactly the change the real write
+      // makes. Diagnostics go to standard error for the same reason.
+      deps.write(migrated.markdown);
+      reportMigrateDiagnostics(deps, migrated.diagnostics);
+    }
+    return 0;
+  }
+
+  try {
+    fs.writeFileSync(absolutePath, migrated.markdown, "utf8");
+  } catch {
+    deps.error(`Could not write path: ${absolutePath}`);
+    return 1;
+  }
+
+  if (options.json) {
+    emitJson(deps.log, {
+      kind: "migrate" as const,
+      path: absolutePath,
+      dryRun: false,
+      converted: migrated.converted,
+      diagnostics: migrated.diagnostics,
+    });
+  } else {
+    deps.log(
+      `Converted ${migrated.converted} record(s): ${relativeDisplayPath(deps.cwd, absolutePath)}`,
+    );
+    reportMigrateDiagnostics(deps, migrated.diagnostics);
+  }
+
+  return 0;
+}
+
+/**
+ * Report what the conversion could not express as written, such as a comment
+ * whose highlighted range ran across a block boundary and is now anchored to
+ * the part of it within one block. A reviewer who is not told reads a comment
+ * that has quietly lost part of what it was attached to.
+ */
+function reportMigrateDiagnostics(
+  deps: CliDependencies,
+  diagnostics: readonly RfmDiagnostic[],
+): void {
+  for (const diagnostic of diagnostics) {
+    deps.error(
+      `${diagnostic.severity}: ${formatMarkdownDiagnostic(diagnostic)}`,
+    );
+  }
+}
+
 async function runMarkdownDoctor(
   deps: CliDependencies,
   targetPath: string,
@@ -2122,27 +2332,8 @@ async function runMarkdownDoctor(
   }
 
   const absolutePath = path.resolve(deps.cwd, targetPath);
-  let markdown: string;
-
-  try {
-    const stat = fs.statSync(absolutePath);
-    if (!stat.isFile()) {
-      deps.error(`Path is not a file: ${absolutePath}`);
-      return USAGE_ERROR;
-    }
-    markdown = fs.readFileSync(absolutePath, "utf8");
-  } catch (error) {
-    const code =
-      error instanceof Error && "code" in error
-        ? String((error as NodeJS.ErrnoException).code)
-        : "";
-    deps.error(
-      code === "ENOENT"
-        ? `Path not found: ${absolutePath}`
-        : `Could not read path: ${absolutePath}`,
-    );
-    return USAGE_ERROR;
-  }
+  const markdown = readMarkdownFileForCommand(deps, absolutePath);
+  if (markdown === null) return USAGE_ERROR;
 
   const validation = validateRoughdraftMarkdown(markdown);
   const payload = {
@@ -2169,7 +2360,7 @@ async function runMarkdownDoctor(
     deps.log("");
     deps.log("Errors:");
     for (const diagnostic of validation.errors) {
-      deps.log(formatMarkdownDiagnostic(diagnostic));
+      deps.log(`  ${formatMarkdownDiagnostic(diagnostic)}`);
     }
   }
 
@@ -2177,7 +2368,7 @@ async function runMarkdownDoctor(
     deps.log("");
     deps.log("Warnings:");
     for (const diagnostic of validation.warnings) {
-      deps.log(formatMarkdownDiagnostic(diagnostic));
+      deps.log(`  ${formatMarkdownDiagnostic(diagnostic)}`);
     }
   }
 
@@ -2283,7 +2474,7 @@ function relativeDisplayPath(cwd: string, absolutePath: string): string {
 }
 
 function formatMarkdownDiagnostic(diagnostic: RfmDiagnostic): string {
-  return `  ${diagnostic.line}:${diagnostic.column}  ${diagnostic.message}`;
+  return `${diagnostic.line}:${diagnostic.column}  ${diagnostic.message}`;
 }
 
 function getConfidentStopCandidate(
@@ -2331,7 +2522,7 @@ export async function runCli(
     if (parsed.command === "help") {
       const [topic, ...extra] = parsed.rest;
       if (extra.length > 0) {
-        deps.error("Usage: roughdraft help [agent|criticmarkup|command]");
+        deps.error("Usage: roughdraft help [agent|format|command]");
         return USAGE_ERROR;
       }
 
@@ -2345,8 +2536,8 @@ export async function runCli(
         return 0;
       }
 
-      if (topic === "criticmarkup") {
-        printCriticMarkupHelp(deps.log);
+      if (topic === "format") {
+        printFormatHelp(deps.log);
         return 0;
       }
 
@@ -2380,9 +2571,9 @@ export async function runCli(
       return 0;
     }
 
-    if (command === "criticmarkup") {
+    if (command === "format") {
       shouldPrintUpdateNotice = true;
-      printCriticMarkupHelp(deps.log);
+      printFormatHelp(deps.log);
       return 0;
     }
 
@@ -2755,6 +2946,32 @@ export async function runCli(
 
       shouldPrintUpdateNotice = !json;
       return runDoctor(deps, json);
+    }
+
+    if (command === "migrate") {
+      let options: ParsedCommandOptions;
+      try {
+        options = parseCommandOptions(rest, { allowDryRun: true });
+      } catch (error) {
+        deps.error(error instanceof Error ? error.message : "Invalid usage.");
+        return USAGE_ERROR;
+      }
+
+      if (options.help) {
+        printCommandHelp("migrate", deps.log);
+        return 0;
+      }
+
+      if (options.positionals.length !== 1) {
+        deps.error("Usage: roughdraft migrate <path> [--dry-run] [--json]");
+        return USAGE_ERROR;
+      }
+
+      const json = parsed.global.json || options.json;
+      return runMigrate(deps, options.positionals[0] ?? "", {
+        dryRun: options.dryRun,
+        json,
+      });
     }
 
     if (command === "open") {

@@ -16,19 +16,19 @@ const FORMAT_EXAMPLES: FormatExample[] = [
     id: "plan-review",
     label: "Review a plan",
     markdown:
-      '# Homepage Conversion Plan\nGoal: make the homepage workflow story and Markdown proof feel like one continuous example.\n\nMove the workflow story above {=="It\'s just Markdown."==}{>>This should go above "It\'s just Markdown."<<}{#c1}\n\n{~~Review an agent\'s plan~>Review a homepage plan~~}{#s1} before it starts coding.\n\nKeep the format section as proof that the review data is portable Markdown.\n\n---\ncomments:\n  c1:\n    by: Nora\n    at: "2026-04-28T12:10:00.000Z"\n  c2:\n    body: Sounds good. I\'ll move it above that section.\n    by: AI\n    at: "2026-04-28T12:11:00.000Z"\n    re: c1\nsuggestions:\n  s1:\n    by: Nora\n    at: "2026-04-28T12:12:00.000Z"\n',
+      '# Homepage Conversion Plan\nGoal: make the homepage workflow story and Markdown proof feel like one continuous example.\n\nMove the workflow story above <span id="rd-c1">"It\'s just Markdown."</span>\n\n<span id="rd-s1"><del>Review an agent\'s plan</del><ins>Review a homepage plan</ins></span> before it starts coding.\n\nKeep the format section as proof that the review data is portable Markdown.\n\n---\nroughdraft: "1.0"\ncomments:\n  rd-c1:\n    body: This should go above "It\'s just Markdown."\n    by: Nora\n    at: "2026-04-28T12:10:00.000Z"\n  rd-c2:\n    body: Sounds good. I\'ll move it above that section.\n    by: AI\n    at: "2026-04-28T12:11:00.000Z"\n    re: rd-c1\nsuggestions:\n  rd-s1:\n    by: Nora\n    at: "2026-04-28T12:12:00.000Z"\n',
   },
   {
     id: "spec-review",
     label: "Review a spec",
     markdown:
-      '# Checkout Spec Review\nGoal: reduce trial checkout abandonment by 8%. Scope: ship {==guest checkout for returning teams==}{>>PM: confirm whether this excludes SSO-only workspaces.<<}{#c1} in the first beta.\n\nMetric: replace {~~activation~>first successful team purchase~~}{#s1} before engineering sizing.\n\n---\ncomments:\n  c1:\n    by: user\n    at: "2026-04-28T12:00:00.000Z"\nsuggestions:\n  s1:\n    by: user\n    at: "2026-04-28T12:03:00.000Z"\n',
+      '# Checkout Spec Review\nGoal: reduce trial checkout abandonment by 8%. Scope: ship <span id="rd-c1">guest checkout for returning teams</span> in the first beta.\n\nMetric: replace <span id="rd-s1"><del>activation</del><ins>first successful team purchase</ins></span> before engineering sizing.\n\n---\nroughdraft: "1.0"\ncomments:\n  rd-c1:\n    body: "PM: confirm whether this excludes SSO-only workspaces."\n    by: user\n    at: "2026-04-28T12:00:00.000Z"\nsuggestions:\n  rd-s1:\n    by: user\n    at: "2026-04-28T12:03:00.000Z"\n',
   },
   {
     id: "writing-edit",
     label: "Edit writing",
     markdown:
-      '## Draft Intro\nRoughdraft lets me stay in flow while an agent marks up {==my argument==}{>>AI: this is the claim readers need to understand first.<<}{#c1}.\n\nIt turns feedback from {~~a confusing pile of notes~>specific comments and suggested edits inside the Markdown file~~}{#s1}.\n\n---\ncomments:\n  c1:\n    by: AI\n    at: "2026-04-28T12:20:00.000Z"\n  c2:\n    body: "User: keep the plain-English phrasing, but avoid making it sound like a docs product."\n    by: user\n    at: "2026-04-28T12:22:00.000Z"\n    re: s1\nsuggestions:\n  s1:\n    by: AI\n    at: "2026-04-28T12:21:00.000Z"\n',
+      '## Draft Intro\nRoughdraft lets me stay in flow while an agent marks up <span id="rd-c1">my argument</span>.\n\nIt turns feedback from <span id="rd-s1"><del>a confusing pile of notes</del><ins>specific comments and suggested edits inside the Markdown file</ins></span>.\n\n---\nroughdraft: "1.0"\ncomments:\n  rd-c1:\n    body: "AI: this is the claim readers need to understand first."\n    by: AI\n    at: "2026-04-28T12:20:00.000Z"\n  rd-c2:\n    body: "User: keep the plain-English phrasing, but avoid making it sound like a docs product."\n    by: user\n    at: "2026-04-28T12:22:00.000Z"\n    re: rd-s1\nsuggestions:\n  rd-s1:\n    by: AI\n    at: "2026-04-28T12:21:00.000Z"\n',
   },
 ];
 
@@ -116,16 +116,9 @@ export function RoughdraftFormatDemo() {
             It's just Markdown
           </h2>
           <p className="mt-4 text-base leading-7 text-stone-600 dark:text-stone-400">
-            We extended the markdown format, building on prior art like{" "}
-            <a
-              className="font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-950 dark:text-slate-50 dark:decoration-slate-600 dark:hover:decoration-slate-50"
-              href="https://criticmarkup.com/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              CriticMarkup
-            </a>
-            , to support full comment threads, and suggesting changes. Read the{" "}
+            We extended the markdown format with ordinary HTML anchors and a
+            YAML endmatter block, to support full comment threads, and
+            suggesting changes. Read the{" "}
             <a
               className="font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-950 dark:text-slate-50 dark:decoration-slate-600 dark:hover:decoration-slate-50"
               href="/roughdraft-flavored-markdown"

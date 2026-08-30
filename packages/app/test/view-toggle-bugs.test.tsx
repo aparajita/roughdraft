@@ -540,8 +540,33 @@ describe("saving/saved status indicator (issue 2 fix)", () => {
     });
 
     await renderWorkspace({
-      documentContent:
-        'Keep {==the launch date==}{>>Verify this.<<}{#c1}, omit {++new claim++}{#s1}, keep {--old claim--}{#s2}, and use {~~rough~>polished~~}{#s3} wording.\n\n{>>Standalone note<<}{#c2}\n\n---\ncomments:\n  c1:\n    by: user\n    at: "2026-04-28T12:00:00.000Z"\n  c2:\n    by: user\n    at: "2026-04-28T12:01:00.000Z"\nsuggestions:\n  s1:\n    by: AI\n    at: "2026-04-28T12:02:00.000Z"\n  s2:\n    by: AI\n    at: "2026-04-28T12:03:00.000Z"\n  s3:\n    by: AI\n    at: "2026-04-28T12:04:00.000Z"\n',
+      documentContent: [
+        'Keep <span id="rd-c1">the launch date</span>, omit <ins id="rd-s1">new claim</ins>, keep <del id="rd-s2">old claim</del>, and use <span id="rd-s3"><del>rough</del><ins>polished</ins></span> wording.',
+        "",
+        "---",
+        'roughdraft: "1.0"',
+        "comments:",
+        "  rd-c1:",
+        "    body: Verify this.",
+        "    by: user",
+        '    at: "2026-04-28T12:00:00.000Z"',
+        "  rd-c2:",
+        "    body: Standalone note",
+        "    by: user",
+        '    at: "2026-04-28T12:01:00.000Z"',
+        "    scope: document",
+        "suggestions:",
+        "  rd-s1:",
+        "    by: AI",
+        '    at: "2026-04-28T12:02:00.000Z"',
+        "  rd-s2:",
+        "    by: AI",
+        '    at: "2026-04-28T12:03:00.000Z"',
+        "  rd-s3:",
+        "    by: AI",
+        '    at: "2026-04-28T12:04:00.000Z"',
+        "",
+      ].join("\n"),
     });
     await openFileMenu();
     await click(getByTestId(document.body, "document-file-menu-rich-text"));
@@ -556,8 +581,9 @@ describe("saving/saved status indicator (issue 2 fix)", () => {
     expect(html).not.toContain("Standalone note");
     expect(html).not.toContain("new claim");
     expect(html).not.toContain("polished");
-    expect(html).not.toContain("data-comment-ids");
-    expect(html).not.toContain("data-critic-change-kind");
+    expect(html).not.toContain('id="rd-c');
+    expect(html).not.toContain('id="rd-s');
+    expect(html).not.toContain("data-rd-replace");
     expect(plain).toBe(
       "Keep the launch date, omit , keep old claim, and use rough wording.",
     );

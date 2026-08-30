@@ -16,15 +16,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tooltip";
+import { cn } from "./lib/utils";
 import {
   buildCommentThreads,
-  type CriticComment,
-  type CriticCommentThread,
-} from "./critic-markup";
-import { cn } from "./lib/utils";
+  type ReviewComment,
+  type ReviewCommentThread,
+} from "./review";
 
 interface CommentEditorListProps {
-  comments: CriticComment[];
+  comments: ReviewComment[];
   variant?: "banner" | "rail";
   selectedCommentId?: string | null;
   hoveredCommentId?: string | null;
@@ -57,14 +57,14 @@ export interface CommentActionDefinition {
 }
 
 export interface CommentContentRenderContext {
-  comment: CriticComment;
+  comment: ReviewComment;
   depth: number;
   isEditing: boolean;
   defaultContent: ReactNode;
 }
 
 export interface CommentActionsRenderContext {
-  comment: CriticComment;
+  comment: ReviewComment;
   depth: number;
   isEditing: boolean;
   defaultActions: CommentActionDefinition[];
@@ -314,7 +314,7 @@ export function CommentEditorList({
 }
 
 interface CommentThreadNodeProps {
-  thread: CriticCommentThread;
+  thread: ReviewCommentThread;
   depth: number;
   index: number;
   isLast: boolean;

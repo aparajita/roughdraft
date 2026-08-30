@@ -103,6 +103,19 @@ describe("cli", () => {
     return url.toString();
   }
 
+  /**
+   * `markdown` with every endmatter `at:` stamp replaced by one fixed value, so
+   * two runs of the same conversion can be compared byte for byte. Nothing else
+   * is touched: the substitution is the same length in both operands, so a
+   * difference anywhere else in the document still shows.
+   */
+  function withFixedRecordTimes(markdown: string): string {
+    return markdown.replace(
+      /^(\s*at:\s*)"[^"]*"$/gm,
+      '$1"2026-01-01T00:00:00.000Z"',
+    );
+  }
+
   function parseOnlyJsonLog<T>(logs: string[]): T {
     expect(logs).toHaveLength(1);
     return JSON.parse(logs[0] ?? "{}") as T;
@@ -120,7 +133,6 @@ describe("cli", () => {
 
     return `${logs
       .slice(startIndex + 1, stopIndex)
-      .filter((line) => line.length > 0)
       .map((line) => line.replace(/^ {2}/, ""))
       .join("\n")}\n`;
   }
@@ -145,6 +157,7 @@ describe("cli", () => {
   function createTestDependencies() {
     const logs: string[] = [];
     const errors: string[] = [];
+    const writes: string[] = [];
     let lastOpenedUrl: string | null = null;
     let spawnCount = 0;
 
@@ -174,6 +187,7 @@ describe("cli", () => {
 
         return fetch(input, init);
       },
+      write: (text) => writes.push(text),
       log: (message) => logs.push(message),
       error: (message) => errors.push(message),
       openUrl: (url) => {
@@ -213,6 +227,7 @@ describe("cli", () => {
       deps,
       logs,
       errors,
+      writes,
       getLastOpenedUrl: () => lastOpenedUrl,
       getSpawnCount: () => spawnCount,
     };
@@ -1381,56 +1396,51 @@ describe("cli", () => {
     );
   });
 
-  it("documents extended review syntax in criticmarkup help", async () => {
+  it("documents Roughdraft Flavored Markdown syntax in format help", async () => {
     const test = createTestDependencies();
 
-    const exitCode = await runCli(["help", "criticmarkup"], test.deps);
+    const exitCode = await runCli(["help", "format"], test.deps);
 
     expect(exitCode).toBe(0);
-    expect(test.logs).toContain("When adding new review feedback:");
+    expect(test.logs).toContain("Roughdraft Flavored Markdown reference:");
     expect(test.logs).toContain(
-      "  Prefer compact references like {>>Comment<<}{#c1} with metadata in final YAML endmatter.",
+      '  <span id="rd-c1">text</span>      Comment anchored to inline text',
     );
     expect(test.logs).toContain(
-      "  Use `c1`, `c2`, etc. for comment ids and `s1`, `s2`, etc. for suggested-change ids.",
+      '  <ins id="rd-s1">new text</ins>    Suggested insertion',
     );
-    expect(test.logs).toContain("Suggested changes with ids:");
-    expect(test.logs).toContain("  Add {++one concrete example++}{#s1}.");
+    expect(test.logs).toContain("Records:");
     expect(test.logs).toContain(
-      "  Replace {~~vague phrasing~>specific wording~~}{#s2}.",
+      "  A suggestion record never records the operation — the anchor element does.",
     );
-    expect(test.logs).toContain("Reply to an existing comment:");
+    expect(test.logs).toContain("Allocating an id:");
     expect(test.logs).toContain(
-      "  Existing inline attribute metadata is still accepted for compatibility.",
-    );
-    expect(test.logs).toContain(
-      "  Comment ids are document-local and usually look like `c1`, `c2`, `c3`.",
-    );
-    expect(test.logs).toContain(
-      "  Treat CriticMarkup inside fenced code blocks as literal example text.",
+      "  An anchor inside an inline code span or fenced code block is literal text under ordinary CommonMark rules.",
     );
     expect(test.logs).toContain(
       "  https://roughdraft.md/spec/roughdraft-flavored-markdown.md",
     );
   });
 
-  it("prints copyable criticmarkup suggestion examples with required YAML metadata", async () => {
+  it("prints a copyable format example document that validates cleanly", async () => {
     const test = createTestDependencies();
 
-    const exitCode = await runCli(["help", "criticmarkup"], test.deps);
+    const exitCode = await runCli(["help", "format"], test.deps);
     const example = extractHelpExample(
       test.logs,
-      "Suggested changes with ids:",
-      "Reply to an existing comment:",
+      "Example document:",
+      "Records:",
     );
     const validation = validateRoughdraftMarkdown(example);
 
     expect(exitCode).toBe(0);
+    expect(example).toContain("comments:");
+    expect(example).toContain("  rd-c1:");
+    expect(example).toContain("  rd-c2:");
     expect(example).toContain("suggestions:");
-    expect(example).toContain("  s1:");
-    expect(example).toContain("  s2:");
+    expect(example).toContain("  rd-s1:");
     expect(validation.diagnostics).toEqual([]);
-    expect(validation.summary.suggestions).toBe(2);
+    expect(validation.summary).toEqual({ comments: 2, suggestions: 1 });
   });
 
   it("points general help to agent setup", async () => {
@@ -1594,7 +1604,18 @@ describe("cli", () => {
     const documentPath = path.join(projectDir, "draft.md");
     fs.writeFileSync(
       documentPath,
-      'Please revisit {==this sentence==}{>>Needs a source.<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}.\n',
+      [
+        'Please revisit <span id="rd-c1">this sentence</span>.',
+        "",
+        "---",
+        'roughdraft: "1.0"',
+        "comments:",
+        "  rd-c1:",
+        "    body: Needs a source.",
+        "    by: user",
+        '    at: "2026-04-28T12:00:00.000Z"',
+        "",
+      ].join("\n"),
     );
 
     const exitCode = await runCli(["doctor", documentPath], test.deps);
@@ -1608,7 +1629,7 @@ describe("cli", () => {
   it("returns validation errors from doctor path", async () => {
     const test = createTestDependencies();
     const documentPath = path.join(projectDir, "draft.md");
-    fs.writeFileSync(documentPath, "{>>Needs metadata<<}\n");
+    fs.writeFileSync(documentPath, 'Needs <span id="rd-c1">review</span>.\n');
 
     const exitCode = await runCli(["doctor", documentPath], test.deps);
 
@@ -1616,7 +1637,7 @@ describe("cli", () => {
     expect(test.logs).toContain("Status: failed");
     expect(test.logs).toContain("Errors:");
     expect(test.logs).toContain(
-      "  1:1  Missing required metadata attribute `id`.",
+      "  1:7  Anchor `rd-c1` has no endmatter record.",
     );
   });
 
@@ -1626,8 +1647,18 @@ describe("cli", () => {
     fs.writeFileSync(
       documentPath,
       [
-        '{>>First<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}',
-        '{++Second++}{id="c1" by="user" at="2026-04-28T12:01:00.000Z"}',
+        '<span id="rd-c1">First</span>',
+        "",
+        '<span id="rd-c1">Second</span>',
+        "",
+        "---",
+        'roughdraft: "1.0"',
+        "comments:",
+        "  rd-c1:",
+        "    body: Note",
+        "    by: user",
+        '    at: "2026-04-28T12:00:00.000Z"',
+        "",
       ].join("\n"),
     );
 
@@ -1650,10 +1681,12 @@ describe("cli", () => {
       ok: false,
       summary: {
         comments: 1,
-        suggestions: 1,
+        suggestions: 0,
       },
     });
-    expect(payload.errors.map((error) => error.code)).toContain("duplicate-id");
+    expect(payload.errors.map((error) => error.code)).toContain(
+      "rfm-anchor-duplicate-id",
+    );
   });
 
   it("rejects missing markdown files from doctor path before validation", async () => {
@@ -1677,6 +1710,128 @@ describe("cli", () => {
     expect(test.errors).toContain(
       `Roughdraft doctor can only validate .md files: ${documentPath}`,
     );
+  });
+
+  it("migrate converts a CriticMarkup file in place and reports the record count", async () => {
+    const test = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.md");
+    fs.writeFileSync(
+      documentPath,
+      "Please revisit {==this sentence==}{>>Needs a source.<<}.\n",
+    );
+
+    const exitCode = await runCli(["migrate", documentPath], test.deps);
+
+    expect(exitCode).toBe(0);
+    expect(test.logs).toContain("Converted 1 record(s): draft.md");
+
+    const migrated = fs.readFileSync(documentPath, "utf8");
+    expect(migrated).toContain('<span id="rd-c1">this sentence</span>');
+    const validation = validateRoughdraftMarkdown(migrated);
+    expect(validation.diagnostics).toEqual([]);
+    expect(validation.summary).toEqual({ comments: 1, suggestions: 0 });
+  });
+
+  it("migrate --dry-run prints the converted document and leaves the file byte-identical", async () => {
+    const test = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.md");
+    const original =
+      "Please revisit {==this sentence==}{>>Needs a source.<<}.\n";
+    fs.writeFileSync(documentPath, original);
+
+    const exitCode = await runCli(
+      ["migrate", documentPath, "--dry-run"],
+      test.deps,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(test.writes.join("")).toContain(
+      '<span id="rd-c1">this sentence</span>',
+    );
+    expect(fs.readFileSync(documentPath, "utf8")).toBe(original);
+  });
+
+  it("migrate --dry-run prints the exact bytes the real run writes, for a document with no trailing newline", async () => {
+    const dryRun = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.md");
+    const original =
+      "# Title\n\nPlease revisit {==this sentence==}{>>Needs a source.<<}.";
+    fs.writeFileSync(documentPath, original);
+
+    const dryRunExitCode = await runCli(
+      ["migrate", documentPath, "--dry-run"],
+      dryRun.deps,
+    );
+
+    // The dry run leaves the file as it was, so the real run that follows reads
+    // the same input and its result is exactly what the preview claimed.
+    expect(dryRunExitCode).toBe(0);
+    expect(fs.readFileSync(documentPath, "utf8")).toBe(original);
+
+    const realRun = createTestDependencies();
+    const realRunExitCode = await runCli(
+      ["migrate", documentPath],
+      realRun.deps,
+    );
+
+    expect(realRunExitCode).toBe(0);
+    // Byte equality, not line-wise containment: the preview goes to a sink that
+    // adds nothing of its own, so piping it into a diff against the file shows
+    // no difference. Each run stamps its converted record with its own wall
+    // clock, and that one field is the only byte the two runs are entitled to
+    // disagree on, so it is held constant rather than faked globally.
+    expect(withFixedRecordTimes(dryRun.writes.join(""))).toBe(
+      withFixedRecordTimes(fs.readFileSync(documentPath, "utf8")),
+    );
+  });
+
+  it("migrate on a file holding no CriticMarkup refuses and does not touch the file", async () => {
+    const test = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.md");
+    const original = "# Title\n\nNothing here needs converting.\n";
+    fs.writeFileSync(documentPath, original);
+
+    // A rewrite with identical bytes still bumps the mtime and wakes every
+    // watcher on the file, so the modification time is the behavior under test.
+    // It is set explicitly rather than read back, so the assertion does not
+    // depend on the filesystem's timestamp resolution.
+    const untouchedTime = new Date("2026-01-01T00:00:00.000Z");
+    fs.utimesSync(documentPath, untouchedTime, untouchedTime);
+
+    const exitCode = await runCli(["migrate", documentPath], test.deps);
+
+    expect(exitCode).toBe(2);
+    expect(test.errors).toContain(
+      `No CriticMarkup comments or suggestions to convert, nothing was written: ${documentPath}`,
+    );
+    expect(fs.readFileSync(documentPath, "utf8")).toBe(original);
+    expect(fs.statSync(documentPath).mtimeMs).toBe(untouchedTime.getTime());
+  });
+
+  it("migrate on a file already carrying a roughdraft endmatter key refuses, writes nothing, and exits non-zero", async () => {
+    const test = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.md");
+    const original = [
+      'Ship <span id="rd-c1">guest checkout</span>.',
+      "",
+      "---",
+      'roughdraft: "1.0"',
+      "comments:",
+      "  rd-c1:",
+      "    body: Confirm this excludes SSO-only workspaces.",
+      "    by: AI",
+      '    at: "2026-08-28T12:00:00.000Z"',
+      "",
+    ].join("\n");
+    fs.writeFileSync(documentPath, original);
+
+    const exitCode = await runCli(["migrate", documentPath], test.deps);
+
+    expect(exitCode).toBe(2);
+    expect(test.errors).toContain(
+      `Already Roughdraft Flavored Markdown, nothing was written: ${documentPath}`,
+    );
+    expect(fs.readFileSync(documentPath, "utf8")).toBe(original);
   });
 
   it("starts a new server when the preferred port belongs to another checkout", async () => {

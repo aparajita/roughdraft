@@ -1,0 +1,18 @@
+{
+  "format": "roughdraft-flavored-markdown",
+  "version": "1.0",
+  "source": {
+    "markdown": "Use <span id=\"rd-s3\"><del>rough</del><ins>specific</ins></span> wording.\n\n---\nroughdraft: \"1.0\"\nsuggestions:\n  rd-s3:\n    by: AI\n    at: \"2026-04-28T12:07:00.000Z\"\n"
+  },
+  "comments": [],
+  "suggestions": [
+    {
+      "id": "rd-s3",
+      "kind": "replace",
+      "oldText": "rough",
+      "newText": "specific",
+      "by": "AI",
+      "at": "2026-04-28T12:07:00.000Z"
+    }
+  ]
+}

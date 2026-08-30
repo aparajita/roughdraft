@@ -58,7 +58,7 @@ test.describe("review handoff", () => {
     await expect
       .poll(() => readProjectFile(projectDir, relativePath))
       .toMatch(
-        /---\ncomments:\n {2}c1:\n {4}body: Please prioritize the CLI contract\.\n {4}by: user\n {4}at: [^\n]+\n?$/,
+        /---\nroughdraft: "1\.0"\ncomments:\n {2}rd-c1:\n {4}body: Please prioritize the CLI contract\.\n {4}by: user\n {4}at: [^\n]+\n {4}scope: document\n?$/,
       );
 
     const watchResponse = await pendingWatch;

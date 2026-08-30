@@ -170,17 +170,17 @@
     background-color: rgb(180 83 9 / 0.55);
   }
 
-  .tiptap .comment-decoration.comment-decoration-on-critic-change {
+  .tiptap .comment-decoration.comment-decoration-on-suggestion {
     background-color: transparent;
   }
 
-  .tiptap .critic-change {
+  .tiptap .suggestion {
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
   }
 
-  .tiptap .critic-change-addition,
-  .tiptap .critic-change-substitution-new {
+  .tiptap .suggestion-insert,
+  .tiptap .suggestion-replace-new {
     @apply rounded-sm px-0.5 text-emerald-850 dark:text-emerald-300;
     background-color: rgb(236 253 245 / 0.95);
     text-decoration: underline;
@@ -188,167 +188,123 @@
     text-underline-offset: 0.16em;
   }
 
-  .dark .tiptap .critic-change-addition,
-  .dark .tiptap .critic-change-substitution-new {
+  .dark .tiptap .suggestion-insert,
+  .dark .tiptap .suggestion-replace-new {
     background-color: rgb(6 78 59 / 0.5);
     text-decoration-color: rgb(52 211 153 / 0.6);
   }
 
-  .tiptap .critic-change-deletion,
-  .tiptap .critic-change-substitution-old {
+  .tiptap .suggestion-delete,
+  .tiptap .suggestion-replace-old {
     @apply rounded-sm px-0.5 text-rose-950 dark:text-rose-300;
     background-color: rgb(255 241 242 / 0.95);
     text-decoration: line-through;
     text-decoration-color: rgb(225 29 72 / 0.75);
   }
 
-  .dark .tiptap .critic-change-deletion,
-  .dark .tiptap .critic-change-substitution-old {
+  .dark .tiptap .suggestion-delete,
+  .dark .tiptap .suggestion-replace-old {
     background-color: rgb(136 19 55 / 0.35);
     text-decoration-color: rgb(251 113 133 / 0.6);
   }
 
-  .tiptap .critic-change-decoration-hovered {
+  .tiptap .suggestion-decoration-hovered {
     border-radius: 0.2rem;
   }
 
-  .tiptap .critic-change-decoration-active {
+  .tiptap .suggestion-decoration-active {
     border-radius: 0.2rem;
   }
 
-  .tiptap .critic-change-addition.critic-change-decoration-hovered,
-  .tiptap .critic-change-substitution-new.critic-change-decoration-hovered,
-  .tiptap .critic-change-decoration-addition.critic-change-decoration-hovered,
-  .tiptap
-    .critic-change-decoration-substitution-new.critic-change-decoration-hovered,
-  .tiptap .critic-change-decoration-hovered .critic-change-addition,
-  .tiptap .critic-change-decoration-hovered .critic-change-substitution-new,
-  .tiptap .critic-change-addition .critic-change-decoration-hovered,
-  .tiptap .critic-change-substitution-new .critic-change-decoration-hovered {
+  .tiptap .suggestion-insert.suggestion-decoration-hovered,
+  .tiptap .suggestion-replace-new.suggestion-decoration-hovered,
+  .tiptap .suggestion-decoration-insert.suggestion-decoration-hovered,
+  .tiptap .suggestion-decoration-replace-new.suggestion-decoration-hovered,
+  .tiptap .suggestion-decoration-hovered .suggestion-insert,
+  .tiptap .suggestion-decoration-hovered .suggestion-replace-new,
+  .tiptap .suggestion-insert .suggestion-decoration-hovered,
+  .tiptap .suggestion-replace-new .suggestion-decoration-hovered {
     background-color: rgb(209 250 229 / 0.95);
   }
 
-  .tiptap .critic-change-addition.critic-change-decoration-active,
-  .tiptap .critic-change-substitution-new.critic-change-decoration-active,
-  .tiptap .critic-change-decoration-addition.critic-change-decoration-active,
-  .tiptap
-    .critic-change-decoration-substitution-new.critic-change-decoration-active,
-  .tiptap .critic-change-decoration-active .critic-change-addition,
-  .tiptap .critic-change-decoration-active .critic-change-substitution-new,
-  .tiptap .critic-change-addition .critic-change-decoration-active,
-  .tiptap .critic-change-substitution-new .critic-change-decoration-active {
+  .tiptap .suggestion-insert.suggestion-decoration-active,
+  .tiptap .suggestion-replace-new.suggestion-decoration-active,
+  .tiptap .suggestion-decoration-insert.suggestion-decoration-active,
+  .tiptap .suggestion-decoration-replace-new.suggestion-decoration-active,
+  .tiptap .suggestion-decoration-active .suggestion-insert,
+  .tiptap .suggestion-decoration-active .suggestion-replace-new,
+  .tiptap .suggestion-insert .suggestion-decoration-active,
+  .tiptap .suggestion-replace-new .suggestion-decoration-active {
     background-color: rgb(167 243 208 / 0.95);
   }
 
-  .tiptap .critic-change-deletion.critic-change-decoration-hovered,
-  .tiptap .critic-change-substitution-old.critic-change-decoration-hovered,
-  .tiptap .critic-change-decoration-deletion.critic-change-decoration-hovered,
-  .tiptap
-    .critic-change-decoration-substitution-old.critic-change-decoration-hovered,
-  .tiptap .critic-change-decoration-hovered .critic-change-deletion,
-  .tiptap .critic-change-decoration-hovered .critic-change-substitution-old,
-  .tiptap .critic-change-deletion .critic-change-decoration-hovered,
-  .tiptap .critic-change-substitution-old .critic-change-decoration-hovered {
+  .tiptap .suggestion-delete.suggestion-decoration-hovered,
+  .tiptap .suggestion-replace-old.suggestion-decoration-hovered,
+  .tiptap .suggestion-decoration-delete.suggestion-decoration-hovered,
+  .tiptap .suggestion-decoration-replace-old.suggestion-decoration-hovered,
+  .tiptap .suggestion-decoration-hovered .suggestion-delete,
+  .tiptap .suggestion-decoration-hovered .suggestion-replace-old,
+  .tiptap .suggestion-delete .suggestion-decoration-hovered,
+  .tiptap .suggestion-replace-old .suggestion-decoration-hovered {
     background-color: rgb(255 228 230 / 0.95);
   }
 
-  .tiptap .critic-change-deletion.critic-change-decoration-active,
-  .tiptap .critic-change-substitution-old.critic-change-decoration-active,
-  .tiptap .critic-change-decoration-deletion.critic-change-decoration-active,
-  .tiptap
-    .critic-change-decoration-substitution-old.critic-change-decoration-active,
-  .tiptap .critic-change-decoration-active .critic-change-deletion,
-  .tiptap .critic-change-decoration-active .critic-change-substitution-old,
-  .tiptap .critic-change-deletion .critic-change-decoration-active,
-  .tiptap .critic-change-substitution-old .critic-change-decoration-active {
+  .tiptap .suggestion-delete.suggestion-decoration-active,
+  .tiptap .suggestion-replace-old.suggestion-decoration-active,
+  .tiptap .suggestion-decoration-delete.suggestion-decoration-active,
+  .tiptap .suggestion-decoration-replace-old.suggestion-decoration-active,
+  .tiptap .suggestion-decoration-active .suggestion-delete,
+  .tiptap .suggestion-decoration-active .suggestion-replace-old,
+  .tiptap .suggestion-delete .suggestion-decoration-active,
+  .tiptap .suggestion-replace-old .suggestion-decoration-active {
     background-color: rgb(254 205 211 / 0.95);
   }
 
-  .dark .tiptap .critic-change-addition.critic-change-decoration-hovered,
+  .dark .tiptap .suggestion-insert.suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-replace-new.suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-decoration-insert.suggestion-decoration-hovered,
   .dark
     .tiptap
-    .critic-change-substitution-new.critic-change-decoration-hovered,
-  .dark
-    .tiptap
-    .critic-change-decoration-addition.critic-change-decoration-hovered,
-  .dark
-    .tiptap
-    .critic-change-decoration-substitution-new.critic-change-decoration-hovered,
-  .dark .tiptap .critic-change-decoration-hovered .critic-change-addition,
-  .dark
-    .tiptap
-    .critic-change-decoration-hovered
-    .critic-change-substitution-new,
-  .dark .tiptap .critic-change-addition .critic-change-decoration-hovered,
-  .dark
-    .tiptap
-    .critic-change-substitution-new
-    .critic-change-decoration-hovered {
+    .suggestion-decoration-replace-new.suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-decoration-hovered .suggestion-insert,
+  .dark .tiptap .suggestion-decoration-hovered .suggestion-replace-new,
+  .dark .tiptap .suggestion-insert .suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-replace-new .suggestion-decoration-hovered {
     background-color: rgb(6 78 59 / 0.65);
   }
 
-  .dark .tiptap .critic-change-addition.critic-change-decoration-active,
-  .dark .tiptap .critic-change-substitution-new.critic-change-decoration-active,
-  .dark
-    .tiptap
-    .critic-change-decoration-addition.critic-change-decoration-active,
-  .dark
-    .tiptap
-    .critic-change-decoration-substitution-new.critic-change-decoration-active,
-  .dark .tiptap .critic-change-decoration-active .critic-change-addition,
-  .dark
-    .tiptap
-    .critic-change-decoration-active
-    .critic-change-substitution-new,
-  .dark .tiptap .critic-change-addition .critic-change-decoration-active,
-  .dark
-    .tiptap
-    .critic-change-substitution-new
-    .critic-change-decoration-active {
+  .dark .tiptap .suggestion-insert.suggestion-decoration-active,
+  .dark .tiptap .suggestion-replace-new.suggestion-decoration-active,
+  .dark .tiptap .suggestion-decoration-insert.suggestion-decoration-active,
+  .dark .tiptap .suggestion-decoration-replace-new.suggestion-decoration-active,
+  .dark .tiptap .suggestion-decoration-active .suggestion-insert,
+  .dark .tiptap .suggestion-decoration-active .suggestion-replace-new,
+  .dark .tiptap .suggestion-insert .suggestion-decoration-active,
+  .dark .tiptap .suggestion-replace-new .suggestion-decoration-active {
     background-color: rgb(6 78 59 / 0.8);
   }
 
-  .dark .tiptap .critic-change-deletion.critic-change-decoration-hovered,
+  .dark .tiptap .suggestion-delete.suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-replace-old.suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-decoration-delete.suggestion-decoration-hovered,
   .dark
     .tiptap
-    .critic-change-substitution-old.critic-change-decoration-hovered,
-  .dark
-    .tiptap
-    .critic-change-decoration-deletion.critic-change-decoration-hovered,
-  .dark
-    .tiptap
-    .critic-change-decoration-substitution-old.critic-change-decoration-hovered,
-  .dark .tiptap .critic-change-decoration-hovered .critic-change-deletion,
-  .dark
-    .tiptap
-    .critic-change-decoration-hovered
-    .critic-change-substitution-old,
-  .dark .tiptap .critic-change-deletion .critic-change-decoration-hovered,
-  .dark
-    .tiptap
-    .critic-change-substitution-old
-    .critic-change-decoration-hovered {
+    .suggestion-decoration-replace-old.suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-decoration-hovered .suggestion-delete,
+  .dark .tiptap .suggestion-decoration-hovered .suggestion-replace-old,
+  .dark .tiptap .suggestion-delete .suggestion-decoration-hovered,
+  .dark .tiptap .suggestion-replace-old .suggestion-decoration-hovered {
     background-color: rgb(136 19 55 / 0.5);
   }
 
-  .dark .tiptap .critic-change-deletion.critic-change-decoration-active,
-  .dark .tiptap .critic-change-substitution-old.critic-change-decoration-active,
-  .dark
-    .tiptap
-    .critic-change-decoration-deletion.critic-change-decoration-active,
-  .dark
-    .tiptap
-    .critic-change-decoration-substitution-old.critic-change-decoration-active,
-  .dark .tiptap .critic-change-decoration-active .critic-change-deletion,
-  .dark
-    .tiptap
-    .critic-change-decoration-active
-    .critic-change-substitution-old,
-  .dark .tiptap .critic-change-deletion .critic-change-decoration-active,
-  .dark
-    .tiptap
-    .critic-change-substitution-old
-    .critic-change-decoration-active {
+  .dark .tiptap .suggestion-delete.suggestion-decoration-active,
+  .dark .tiptap .suggestion-replace-old.suggestion-decoration-active,
+  .dark .tiptap .suggestion-decoration-delete.suggestion-decoration-active,
+  .dark .tiptap .suggestion-decoration-replace-old.suggestion-decoration-active,
+  .dark .tiptap .suggestion-decoration-active .suggestion-delete,
+  .dark .tiptap .suggestion-decoration-active .suggestion-replace-old,
+  .dark .tiptap .suggestion-delete .suggestion-decoration-active,
+  .dark .tiptap .suggestion-replace-old .suggestion-decoration-active {
     background-color: rgb(136 19 55 / 0.65);
   }
 
@@ -358,14 +314,14 @@
 
   .tiptap .comment-decoration code,
   .tiptap .comment-anchor code,
-  .tiptap .critic-change code {
+  .tiptap .suggestion code {
     @apply bg-transparent;
     box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%);
   }
 
   .dark .tiptap .comment-decoration code,
   .dark .tiptap .comment-anchor code,
-  .dark .tiptap .critic-change code {
+  .dark .tiptap .suggestion code {
     box-shadow: inset 0 0 0 1px rgb(226 232 240 / 15%);
   }
 

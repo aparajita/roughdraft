@@ -1,38 +1,50 @@
+import { RecordIdAllocator } from "@roughdraft/rfm";
 import type { JSONContent } from "@tiptap/core";
-import type { Mark as ProseMirrorMark } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { buildLocationForLinkedMarkdownDocument } from "./app-navigation";
 import { CommentEditorList } from "./CommentEditorList";
 import {
-  type CriticChangeAttrs,
-  type CriticComment,
-  createCriticChange,
-  createCriticComment,
-  criticMarkdownHasReviewRail,
-  criticMarkdownToEditorState,
-  editorStateToCriticMarkdown,
-  getCommentDescendantIds,
-} from "./critic-markup";
-import {
-  type CriticChangeRailItem,
   DocumentReviewRail,
+  type SuggestionRailItem,
 } from "./DocumentReviewRail";
-import { getPreferredCommentId, parseCommentIds } from "./document-comments";
+import {
+  COMMENT_ANCHOR_SELECTOR,
+  getPreferredCommentId,
+  readCommentAnchorIds,
+} from "./document-comments";
 import { EditorContextMenu } from "./EditorContextMenu";
 import {
   commentHighlightPluginKey,
   createEditorExtensions,
-  criticChangeHighlightPluginKey,
-  SUGGESTED_PARAGRAPH_SENTINEL,
+  inlineNodeText,
+  suggestionHighlightPluginKey,
 } from "./editor-extensions";
 import { cn } from "./lib/utils";
 import { MarkdownCodeEditor } from "./MarkdownCodeEditor";
-import { buildLocationForLinkedMarkdownDocument } from "./app-navigation";
-import { toHtml } from "./markdown";
+import { EMPTY_ANCHOR_SENTINEL, toHtml } from "./markdown";
+import {
+  createReviewComment,
+  createSuggestion,
+  editorStateToReviewMarkdown,
+  getCommentDescendantIds,
+  getOrderedAnchorComments,
+  type ReviewComment,
+  reviewMarkdownHasReviewRail,
+  reviewMarkdownToEditorState,
+  type SuggestionAttrs,
+} from "./review";
+import { getReviewMarkupBlockedReason } from "./review-markup-selection";
 import type { Page, StorageBackend } from "./storage";
+import {
+  applySuggestedInput,
+  applySuggestedRemoval,
+  type CreateSuggestionAttrs,
+  resolveRemovalRange,
+  segmentSuggestedRange,
+} from "./suggesting-mode";
 import { useCommentAnchorLayout } from "./useCommentAnchorLayout";
 
 export type DocumentSaveState = "saved" | "unsaved" | "saving" | "error";
@@ -131,7 +143,7 @@ function areCommentIdListsEqual(
 function getSelectionCommentIds(editor: Editor | null): string[] {
   if (!editor) return [];
 
-  const directAttributes = editor.getAttributes("commentRef").commentIds;
+  const directAttributes = editor.getAttributes("commentAnchor").commentIds;
 
   if (Array.isArray(directAttributes) && directAttributes.length > 0) {
     return directAttributes;
@@ -142,7 +154,7 @@ function getSelectionCommentIds(editor: Editor | null): string[] {
 
   if (empty) {
     for (const mark of $from.marks()) {
-      if (mark.type.name !== "commentRef") continue;
+      if (mark.type.name !== "commentAnchor") continue;
 
       for (const commentId of mark.attrs.commentIds ?? []) {
         commentIds.add(commentId);
@@ -153,7 +165,7 @@ function getSelectionCommentIds(editor: Editor | null): string[] {
       if (!node.isText) return;
 
       for (const mark of node.marks) {
-        if (mark.type.name !== "commentRef") continue;
+        if (mark.type.name !== "commentAnchor") continue;
 
         for (const commentId of mark.attrs.commentIds ?? []) {
           commentIds.add(commentId);
@@ -165,23 +177,23 @@ function getSelectionCommentIds(editor: Editor | null): string[] {
   return [...commentIds];
 }
 
-function getSelectionCriticChangeIds(editor: Editor | null): string[] {
+function getSelectionSuggestionIds(editor: Editor | null): string[] {
   if (!editor) return [];
 
-  const directChangeId = editor.getAttributes("criticChange").changeId;
+  const directSuggestionId = editor.getAttributes("suggestion").suggestionId;
 
-  if (typeof directChangeId === "string" && directChangeId.length > 0) {
-    return [directChangeId];
+  if (typeof directSuggestionId === "string" && directSuggestionId.length > 0) {
+    return [directSuggestionId];
   }
 
   const { from, to, empty, $from } = editor.state.selection;
-  const changeIds = new Set<string>();
+  const suggestionIds = new Set<string>();
 
   if (empty) {
     for (const mark of $from.marks()) {
-      if (mark.type.name !== "criticChange") continue;
-      if (typeof mark.attrs.changeId === "string") {
-        changeIds.add(mark.attrs.changeId);
+      if (mark.type.name !== "suggestion") continue;
+      if (typeof mark.attrs.suggestionId === "string") {
+        suggestionIds.add(mark.attrs.suggestionId);
       }
     }
   } else {
@@ -189,32 +201,32 @@ function getSelectionCriticChangeIds(editor: Editor | null): string[] {
       if (!node.isText) return;
 
       for (const mark of node.marks) {
-        if (mark.type.name !== "criticChange") continue;
-        if (typeof mark.attrs.changeId === "string") {
-          changeIds.add(mark.attrs.changeId);
+        if (mark.type.name !== "suggestion") continue;
+        if (typeof mark.attrs.suggestionId === "string") {
+          suggestionIds.add(mark.attrs.suggestionId);
         }
       }
     });
   }
 
-  return [...changeIds];
+  return [...suggestionIds];
 }
 
-function getPreferredCriticChangeId(
-  changeIds: string[],
-  currentChangeId: string | null,
+function getPreferredSuggestionId(
+  suggestionIds: string[],
+  currentSuggestionId: string | null,
 ): string | null {
-  if (currentChangeId && changeIds.includes(currentChangeId)) {
-    return currentChangeId;
+  if (currentSuggestionId && suggestionIds.includes(currentSuggestionId)) {
+    return currentSuggestionId;
   }
 
-  return changeIds[0] ?? null;
+  return suggestionIds[0] ?? null;
 }
 
 function findCommentRange(editor: Editor | null, commentId: string) {
   if (!editor) return null;
 
-  const commentMarkType = editor.state.schema.marks.commentRef;
+  const commentMarkType = editor.state.schema.marks.commentAnchor;
   if (!commentMarkType) return null;
 
   let from: number | null = null;
@@ -261,12 +273,12 @@ function findCommentAnchorElement(editor: Editor | null, commentId: string) {
   if (!editor) return null;
 
   const anchors = editor.view.dom.querySelectorAll<HTMLElement>(
-    ".comment-anchor[data-comment-ids]",
+    COMMENT_ANCHOR_SELECTOR,
   );
 
   return (
     [...anchors].find((anchor) =>
-      parseCommentIds(anchor.dataset.commentIds).includes(commentId),
+      readCommentAnchorIds(anchor).includes(commentId),
     ) ?? null
   );
 }
@@ -277,7 +289,7 @@ function getAnchorCommentIds(
 ): string[] {
   const anchorElement = findCommentAnchorElement(editor, commentId);
   if (!anchorElement) return [];
-  return parseCommentIds(anchorElement.dataset.commentIds);
+  return readCommentAnchorIds(anchorElement);
 }
 
 function addCommentIdsToAnchor(
@@ -287,7 +299,7 @@ function addCommentIdsToAnchor(
 ): string[] | null {
   if (!editor) return null;
 
-  const commentMarkType = editor.state.schema.marks.commentRef;
+  const commentMarkType = editor.state.schema.marks.commentAnchor;
   const anchorCommentIds = getAnchorCommentIds(editor, anchorCommentId);
   const nextCommentIds = [
     ...new Set([...anchorCommentIds, ...commentIdsToAdd]),
@@ -327,75 +339,25 @@ function addCommentIdsToAnchor(
   return nextCommentIds;
 }
 
-function getDocumentCriticChanges(
-  editor: Editor,
-): Array<Pick<CriticChangeAttrs, "changeId">> {
-  const changes = new Map<string, Pick<CriticChangeAttrs, "changeId">>();
+/**
+ * A suggestion in the rendered document is an `<ins>` or `<del>` carrying the
+ * suggestion id as its element id, or one half of a replacement pair, which
+ * carries the shared id in `data-rd-replace` because an id must be unique.
+ */
+const SUGGESTION_ANCHOR_SELECTOR =
+  'ins[id^="rd-s"], del[id^="rd-s"], [data-rd-replace]';
 
-  editor.state.doc.descendants((node) => {
-    if (!node.isText) return;
-
-    for (const mark of node.marks) {
-      if (mark.type.name !== "criticChange") continue;
-      if (typeof mark.attrs.changeId !== "string") continue;
-
-      changes.set(mark.attrs.changeId, { changeId: mark.attrs.changeId });
-    }
-  });
-
-  return [...changes.values()];
+function readSuggestionAnchorId(element: HTMLElement): string | null {
+  return element.dataset.rdReplace ?? (element.id || null);
 }
 
-function getReusableSuggestionInputMark(
-  editor: Editor,
-  position: number,
-): ProseMirrorMark | null {
-  const markType = editor.state.schema.marks.criticChange;
-  if (!markType) return null;
-
-  const isReusableSuggestionMark = (mark: ProseMirrorMark) =>
-    mark.type === markType &&
-    (mark.attrs.kind === "addition" || mark.attrs.kind === "substitution-new");
-  const $position = editor.state.doc.resolve(position);
-  const previousMark = $position.nodeBefore?.marks.find(
-    isReusableSuggestionMark,
-  );
-
-  if (previousMark) return previousMark;
-
-  return $position.nodeAfter?.marks.find(isReusableSuggestionMark) ?? null;
-}
-
-function getReusableSuggestionDeletionMark(
-  editor: Editor,
-  from: number,
-  to: number,
-): ProseMirrorMark | null {
-  const markType = editor.state.schema.marks.criticChange;
-  if (!markType) return null;
-
-  const isReusableDeletionMark = (mark: ProseMirrorMark) =>
-    mark.type === markType && mark.attrs.kind === "deletion";
-  const beforeRange = editor.state.doc
-    .resolve(from)
-    .nodeBefore?.marks.find(isReusableDeletionMark);
-
-  if (beforeRange) return beforeRange;
-
-  return (
-    editor.state.doc
-      .resolve(to)
-      .nodeAfter?.marks.find(isReusableDeletionMark) ?? null
-  );
-}
-
-function getDocumentCriticChangeRailItems(
+function getDocumentSuggestionRailItems(
   editor: Editor | null,
-  comments: ReadonlyMap<string, CriticComment>,
-): CriticChangeRailItem[] {
+  comments: ReadonlyMap<string, ReviewComment>,
+): SuggestionRailItem[] {
   if (!editor) return [];
 
-  const changes = new Map<string, CriticChangeRailItem>();
+  const suggestions = new Map<string, SuggestionRailItem>();
   const anchors = new Map<
     string,
     {
@@ -411,17 +373,17 @@ function getDocumentCriticChangeRailItems(
     return [];
   }
 
-  const changeElements = editorElement.querySelectorAll<HTMLElement>(
-    ".critic-change[data-critic-change-id]",
+  const suggestionElements = editorElement.querySelectorAll<HTMLElement>(
+    SUGGESTION_ANCHOR_SELECTOR,
   );
   const editorRect = editorElement.getBoundingClientRect();
 
-  for (const element of changeElements) {
-    const changeId = element.dataset.criticChangeId;
-    if (!changeId) continue;
+  for (const element of suggestionElements) {
+    const suggestionId = readSuggestionAnchorId(element);
+    if (!suggestionId) continue;
 
     const rect = element.getBoundingClientRect();
-    const existing = anchors.get(changeId);
+    const existing = anchors.get(suggestionId);
     const anchorTop = rect.top - editorRect.top;
     const anchorBottom = rect.bottom - editorRect.top;
 
@@ -429,54 +391,56 @@ function getDocumentCriticChangeRailItems(
       existing.anchorTop = Math.min(existing.anchorTop, anchorTop);
       existing.anchorBottom = Math.max(existing.anchorBottom, anchorBottom);
     } else {
-      anchors.set(changeId, {
+      anchors.set(suggestionId, {
         anchorTop,
         anchorBottom,
       });
     }
   }
 
+  // A suggestion can cover an inline leaf as well as text — a proposed deletion
+  // of a hard break is one — and a suggestion the rail never lists is one the
+  // reviewer cannot accept or reject.
   editor.state.doc.descendants((node) => {
-    if (!node.isText || !node.text) return;
+    if (!node.isInline) return;
 
-    const changeMark = node.marks.find(
+    const suggestionMark = node.marks.find(
       (mark) =>
-        mark.type.name === "criticChange" &&
-        typeof mark.attrs.changeId === "string",
+        mark.type.name === "suggestion" &&
+        typeof mark.attrs.suggestionId === "string",
     );
-    if (!changeMark) return;
+    if (!suggestionMark) return;
 
-    const change = changeMark.attrs as CriticChangeAttrs;
-    const changeId = change.changeId;
-    const kind =
-      change.kind === "substitution-new" ? "substitution-old" : change.kind;
+    const attrs = suggestionMark.attrs as SuggestionAttrs;
+    const suggestionId = attrs.suggestionId;
+    const kind = attrs.kind === "replace-new" ? "replace-old" : attrs.kind;
     const existing =
-      changes.get(changeId) ??
+      suggestions.get(suggestionId) ??
       ({
-        changeId,
-        change,
+        suggestionId,
+        attrs,
         kind,
         oldText: "",
         newText: "",
         commentIds: [],
-        anchorTop: anchors.get(changeId)?.anchorTop ?? 0,
-        anchorBottom: anchors.get(changeId)?.anchorBottom ?? 24,
-      } satisfies CriticChangeRailItem);
+        anchorTop: anchors.get(suggestionId)?.anchorTop ?? 0,
+        anchorBottom: anchors.get(suggestionId)?.anchorBottom ?? 24,
+      } satisfies SuggestionRailItem);
 
-    existing.change = {
-      ...change,
+    existing.attrs = {
+      ...attrs,
       kind,
     };
     existing.kind = kind;
 
-    if (change.kind === "addition" || change.kind === "substitution-new") {
-      existing.newText += node.text;
+    if (attrs.kind === "insert" || attrs.kind === "replace-new") {
+      existing.newText += inlineNodeText(node);
     } else {
-      existing.oldText += node.text;
+      existing.oldText += inlineNodeText(node);
     }
 
     for (const mark of node.marks) {
-      if (mark.type.name !== "commentRef") continue;
+      if (mark.type.name !== "commentAnchor") continue;
       if (!Array.isArray(mark.attrs.commentIds)) continue;
 
       existing.commentIds = [
@@ -484,28 +448,32 @@ function getDocumentCriticChangeRailItems(
       ];
     }
 
-    changes.set(changeId, existing);
+    suggestions.set(suggestionId, existing);
   });
 
-  for (const change of changes.values()) {
+  for (const suggestion of suggestions.values()) {
     const rootCommentIds = [...comments.values()]
-      .filter((comment) => comment.parentCommentId === change.changeId)
+      .filter((comment) => comment.parentCommentId === suggestion.suggestionId)
       .map((comment) => comment.id);
     const descendantIds = rootCommentIds.flatMap((commentId) =>
       getCommentDescendantIds(commentId, comments),
     );
 
-    change.commentIds = [
-      ...new Set([...change.commentIds, ...rootCommentIds, ...descendantIds]),
+    suggestion.commentIds = [
+      ...new Set([
+        ...suggestion.commentIds,
+        ...rootCommentIds,
+        ...descendantIds,
+      ]),
     ];
   }
 
-  return [...changes.values()].sort(
+  return [...suggestions.values()].sort(
     (left, right) => left.anchorTop - right.anchorTop,
   );
 }
 
-function getCriticChangeRange(editor: Editor | null, changeId: string) {
+function getSuggestionRange(editor: Editor | null, suggestionId: string) {
   if (!editor) return null;
 
   let from: number | null = null;
@@ -514,11 +482,12 @@ function getCriticChangeRange(editor: Editor | null, changeId: string) {
   editor.state.doc.descendants((node, pos) => {
     if (!node.isText) return;
 
-    const hasChange = node.marks.some(
+    const hasSuggestion = node.marks.some(
       (mark) =>
-        mark.type.name === "criticChange" && mark.attrs.changeId === changeId,
+        mark.type.name === "suggestion" &&
+        mark.attrs.suggestionId === suggestionId,
     );
-    if (!hasChange) return;
+    if (!hasSuggestion) return;
 
     from = from == null ? pos : Math.min(from, pos);
     to = to == null ? pos + node.nodeSize : Math.max(to, pos + node.nodeSize);
@@ -529,14 +498,14 @@ function getCriticChangeRange(editor: Editor | null, changeId: string) {
   return { from, to };
 }
 
-function addCommentIdsToCriticChange(
+function addCommentIdsToSuggestion(
   editor: Editor | null,
-  changeId: string,
+  suggestionId: string,
   commentIdsToAdd: string[],
 ) {
   if (!editor) return false;
 
-  const commentMarkType = editor.state.schema.marks.commentRef;
+  const commentMarkType = editor.state.schema.marks.commentAnchor;
   if (!commentMarkType) return false;
 
   let found = false;
@@ -545,11 +514,12 @@ function addCommentIdsToCriticChange(
   editor.state.doc.descendants((node, pos) => {
     if (!node.isText) return;
 
-    const hasChange = node.marks.some(
+    const hasSuggestion = node.marks.some(
       (mark) =>
-        mark.type.name === "criticChange" && mark.attrs.changeId === changeId,
+        mark.type.name === "suggestion" &&
+        mark.attrs.suggestionId === suggestionId,
     );
-    if (!hasChange) return;
+    if (!hasSuggestion) return;
 
     found = true;
     const existingMark = node.marks.find(
@@ -584,7 +554,7 @@ export function shouldDismissCommentThread(target: EventTarget | null) {
   if (!(target instanceof Element)) return true;
 
   return !target.closest(
-    '[data-comment-thread-container="true"], [data-suggestion-thread-container="true"], .comment-anchor[data-comment-ids], .critic-change[data-critic-change-id]',
+    `[data-comment-thread-container="true"], [data-suggestion-thread-container="true"], ${COMMENT_ANCHOR_SELECTOR}, ${SUGGESTION_ANCHOR_SELECTOR}`,
   );
 }
 
@@ -602,9 +572,9 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   onCommentRailPresenceChange,
 }: RichTextEditorSurfaceProps) {
   const editorRef = useRef<Editor | null>(null);
-  const criticChangeFrameRef = useRef<number | null>(null);
+  const suggestionFrameRef = useRef<number | null>(null);
   const interactionModeRef = useRef<DocumentInteractionMode>(interactionMode);
-  const commentsRef = useRef<Map<string, CriticComment>>(new Map());
+  const commentsRef = useRef<Map<string, ReviewComment>>(new Map());
   const suppressNextMarkdownUpdateRef = useRef(false);
   const lastFocusRequestKeyRef = useRef<string | null>(null);
   const selectedCommentIdRef = useRef<string | null>(null);
@@ -615,9 +585,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null);
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
   const [hoveredChangeId, setHoveredChangeId] = useState<string | null>(null);
-  const [criticChanges, setCriticChanges] = useState<CriticChangeRailItem[]>(
-    [],
-  );
+  const [suggestions, setSuggestions] = useState<SuggestionRailItem[]>([]);
   const [draftSuggestion, setDraftSuggestion] =
     useState<DraftSuggestionState | null>(null);
   const [pendingFocusCommentId, setPendingFocusCommentId] = useState<
@@ -640,17 +608,25 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
   const parsedContent = useMemo(
     () =>
-      criticMarkdownToEditorState(sourceMarkdown, {
+      reviewMarkdownToEditorState(sourceMarkdown, {
         resolveFileUrl,
         resolveLinkUrl,
       }),
     [resolveFileUrl, resolveLinkUrl, sourceMarkdown],
   );
-  const [comments, setComments] = useState<Map<string, CriticComment>>(
+  const [comments, setComments] = useState<Map<string, ReviewComment>>(
     () => parsedContent.comments,
   );
   const frontmatterRef = useRef<string | null>(parsedContent.frontmatter);
   const endmatterRef = useRef<string | null>(parsedContent.endmatter);
+  /**
+   * Ids for the comments and suggestions made in this editor. The mark only
+   * rises, so an id stays spoken for after an undo removes the record carrying
+   * it, and after a write from outside replaces the document.
+   */
+  const idsRef = useRef<RecordIdAllocator>(
+    new RecordIdAllocator(parsedContent.document),
+  );
 
   useEffect(() => {
     commentsRef.current = comments;
@@ -661,19 +637,17 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   }, [interactionMode]);
 
   useEffect(() => {
-    onCommentRailPresenceChange?.(
-      comments.size > 0 || criticChanges.length > 0,
-    );
-  }, [comments.size, criticChanges.length, onCommentRailPresenceChange]);
+    onCommentRailPresenceChange?.(comments.size > 0 || suggestions.length > 0);
+  }, [comments.size, suggestions.length, onCommentRailPresenceChange]);
 
   const emitMarkdownChange = useCallback(
-    (doc?: JSONContent, nextComments?: Map<string, CriticComment>) => {
+    (doc?: JSONContent, nextComments?: Map<string, ReviewComment>) => {
       const currentEditor = editorRef.current;
       const currentDoc = doc ?? currentEditor?.getJSON();
       if (!currentDoc) return;
 
       onMarkdownChange(
-        editorStateToCriticMarkdown(
+        editorStateToReviewMarkdown(
           currentDoc,
           nextComments ?? commentsRef.current,
           {
@@ -684,6 +658,12 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       );
     },
     [onMarkdownChange],
+  );
+
+  /** Fresh suggestion attributes, which suggesting-mode edits mint per run. */
+  const suggestionAttrs = useCallback<CreateSuggestionAttrs>(
+    (kind) => createSuggestion(kind, undefined, { ids: idsRef.current }),
+    [],
   );
 
   const insertFiles = useCallback(
@@ -718,26 +698,23 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     [backend, resolveFileUrl, resolveLinkUrl],
   );
 
-  const refreshCriticChanges = useCallback(() => {
-    if (criticChangeFrameRef.current != null) {
-      cancelAnimationFrame(criticChangeFrameRef.current);
+  const refreshSuggestions = useCallback(() => {
+    if (suggestionFrameRef.current != null) {
+      cancelAnimationFrame(suggestionFrameRef.current);
     }
 
-    criticChangeFrameRef.current = requestAnimationFrame(() => {
-      criticChangeFrameRef.current = null;
-      setCriticChanges(
-        getDocumentCriticChangeRailItems(
-          editorRef.current,
-          commentsRef.current,
-        ),
+    suggestionFrameRef.current = requestAnimationFrame(() => {
+      suggestionFrameRef.current = null;
+      setSuggestions(
+        getDocumentSuggestionRailItems(editorRef.current, commentsRef.current),
       );
     });
   }, []);
 
   useEffect(() => {
     return () => {
-      if (criticChangeFrameRef.current != null) {
-        cancelAnimationFrame(criticChangeFrameRef.current);
+      if (suggestionFrameRef.current != null) {
+        cancelAnimationFrame(suggestionFrameRef.current);
       }
     };
   }, []);
@@ -778,109 +755,16 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           event.preventDefault();
 
           const { selection } = view.state;
-          const from = selection.from;
-          const to = selection.to;
           const tr = view.state.tr;
 
-          if (from !== to) {
-            const criticMarkType = view.state.schema.marks.criticChange;
-            const isAdditionKind = (m: ProseMirrorMark) =>
-              m.type === criticMarkType &&
-              (m.attrs.kind === "addition" ||
-                m.attrs.kind === "substitution-new");
-
-            type Segment = {
-              from: number;
-              to: number;
-              isAddition: boolean;
-            };
-            const segments: Segment[] = [];
-            view.state.doc.nodesBetween(from, to, (node, pos) => {
-              if (!node.isText) return;
-              const segFrom = Math.max(pos, from);
-              const segTo = Math.min(pos + node.nodeSize, to);
-              if (segFrom >= segTo) return;
-              const isAdd = node.marks.some(isAdditionKind);
-              const prev = segments[segments.length - 1];
-              if (prev && prev.isAddition === isAdd && prev.to === segFrom) {
-                prev.to = segTo;
-              } else {
-                segments.push({
-                  from: segFrom,
-                  to: segTo,
-                  isAddition: isAdd,
-                });
-              }
-            });
-
-            const hasOriginalText = segments.some((s) => !s.isAddition);
-
-            if (hasOriginalText) {
-              const oldChange = createCriticChange(
-                "substitution-old",
-                undefined,
-                {
-                  existingChanges: getDocumentCriticChanges(currentEditor),
-                },
-              );
-              const newMark = view.state.schema.marks.criticChange.create({
-                ...oldChange,
-                kind: "substitution-new",
-              });
-
-              for (const seg of [...segments].reverse()) {
-                if (seg.isAddition) {
-                  tr.delete(seg.from, seg.to);
-                } else {
-                  tr.addMark(
-                    seg.from,
-                    seg.to,
-                    view.state.schema.marks.criticChange.create(oldChange),
-                  );
-                }
-              }
-
-              const insertPos = tr.mapping.map(to, -1);
-              tr.insert(insertPos, view.state.schema.text(text, [newMark]));
-              tr.setSelection(
-                TextSelection.create(tr.doc, insertPos + text.length),
-              );
-            } else {
-              for (const seg of [...segments].reverse()) {
-                tr.delete(seg.from, seg.to);
-              }
-              const insertPos = tr.mapping.map(from, -1);
-              const existingMark = getReusableSuggestionInputMark(
-                currentEditor,
-                insertPos,
-              );
-              const mark =
-                existingMark ??
-                view.state.schema.marks.criticChange.create(
-                  createCriticChange("addition", undefined, {
-                    existingChanges: getDocumentCriticChanges(currentEditor),
-                  }),
-                );
-              tr.insert(insertPos, view.state.schema.text(text, [mark]));
-              tr.setSelection(
-                TextSelection.create(tr.doc, insertPos + text.length),
-              );
-            }
-          } else {
-            const existingMark = getReusableSuggestionInputMark(
-              currentEditor,
-              from,
-            );
-            const mark =
-              existingMark ??
-              view.state.schema.marks.criticChange.create(
-                createCriticChange("addition", undefined, {
-                  existingChanges: getDocumentCriticChanges(currentEditor),
-                }),
-              );
-            tr.insert(from, view.state.schema.text(text, [mark]));
-            tr.setSelection(TextSelection.create(tr.doc, from + text.length));
-          }
+          applySuggestedInput(
+            view.state,
+            tr,
+            selection.from,
+            selection.to,
+            text,
+            suggestionAttrs,
+          );
 
           view.dispatch(tr.scrollIntoView());
           return true;
@@ -894,105 +778,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
           const tr = view.state.tr;
 
-          if (from !== to) {
-            const criticMarkType = view.state.schema.marks.criticChange;
-            const isAdditionKind = (m: ProseMirrorMark) =>
-              m.type === criticMarkType &&
-              (m.attrs.kind === "addition" ||
-                m.attrs.kind === "substitution-new");
-
-            type Segment = {
-              from: number;
-              to: number;
-              isAddition: boolean;
-            };
-            const segments: Segment[] = [];
-            view.state.doc.nodesBetween(from, to, (node, pos) => {
-              if (!node.isText) return;
-              const segFrom = Math.max(pos, from);
-              const segTo = Math.min(pos + node.nodeSize, to);
-              if (segFrom >= segTo) return;
-              const isAdd = node.marks.some(isAdditionKind);
-              const prev = segments[segments.length - 1];
-              if (prev && prev.isAddition === isAdd && prev.to === segFrom) {
-                prev.to = segTo;
-              } else {
-                segments.push({
-                  from: segFrom,
-                  to: segTo,
-                  isAddition: isAdd,
-                });
-              }
-            });
-
-            const hasOriginalText = segments.some((s) => !s.isAddition);
-
-            if (hasOriginalText) {
-              const oldChange = createCriticChange(
-                "substitution-old",
-                undefined,
-                {
-                  existingChanges: getDocumentCriticChanges(currentEditor),
-                },
-              );
-              const newMark = view.state.schema.marks.criticChange.create({
-                ...oldChange,
-                kind: "substitution-new",
-              });
-
-              for (const seg of [...segments].reverse()) {
-                if (seg.isAddition) {
-                  tr.delete(seg.from, seg.to);
-                } else {
-                  tr.addMark(
-                    seg.from,
-                    seg.to,
-                    view.state.schema.marks.criticChange.create(oldChange),
-                  );
-                }
-              }
-
-              const insertPos = tr.mapping.map(to, -1);
-              tr.insert(insertPos, view.state.schema.text(text, [newMark]));
-              tr.setSelection(
-                TextSelection.create(tr.doc, insertPos + text.length),
-              );
-            } else {
-              for (const seg of [...segments].reverse()) {
-                tr.delete(seg.from, seg.to);
-              }
-              const insertPos = tr.mapping.map(from, -1);
-              const existingMark = getReusableSuggestionInputMark(
-                currentEditor,
-                insertPos,
-              );
-              const mark =
-                existingMark ??
-                view.state.schema.marks.criticChange.create(
-                  createCriticChange("addition", undefined, {
-                    existingChanges: getDocumentCriticChanges(currentEditor),
-                  }),
-                );
-              tr.insert(insertPos, view.state.schema.text(text, [mark]));
-              tr.setSelection(
-                TextSelection.create(tr.doc, insertPos + text.length),
-              );
-            }
-          } else {
-            const existingMark = getReusableSuggestionInputMark(
-              currentEditor,
-              from,
-            );
-            const mark =
-              existingMark ??
-              view.state.schema.marks.criticChange.create(
-                createCriticChange("addition", undefined, {
-                  existingChanges: getDocumentCriticChanges(currentEditor),
-                }),
-              );
-            tr.insert(from, view.state.schema.text(text, [mark]));
-            tr.setSelection(TextSelection.create(tr.doc, from + text.length));
-          }
+          applySuggestedInput(view.state, tr, from, to, text, suggestionAttrs);
 
           view.dispatch(tr.scrollIntoView());
           return true;
@@ -1013,21 +799,21 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
             if (!$from.parent.isTextblock) return true;
             if ($from.parentOffset !== $from.parent.content.size) return true;
 
-            const change = createCriticChange("addition", undefined, {
-              existingChanges: getDocumentCriticChanges(currentEditor),
+            const suggestion = createSuggestion("insert", undefined, {
+              ids: idsRef.current,
             });
-            const mark = view.state.schema.marks.criticChange.create(change);
+            const mark = view.state.schema.marks.suggestion.create(suggestion);
             const tr = view.state.tr.split(selection.from);
             const insertPos = tr.selection.from;
 
             tr.insert(
               insertPos,
-              view.state.schema.text(SUGGESTED_PARAGRAPH_SENTINEL, [mark]),
+              view.state.schema.text(EMPTY_ANCHOR_SENTINEL, [mark]),
             );
             tr.setSelection(
               TextSelection.create(
                 tr.doc,
-                insertPos + SUGGESTED_PARAGRAPH_SENTINEL.length,
+                insertPos + EMPTY_ANCHOR_SENTINEL.length,
               ),
             );
             tr.scrollIntoView();
@@ -1052,55 +838,15 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
             const selectedText = view.state.doc.textBetween(from, to);
             void navigator.clipboard.writeText(selectedText);
 
-            const criticMarkType = view.state.schema.marks.criticChange;
-            const isAdditionKind = (m: ProseMirrorMark) =>
-              m.type === criticMarkType &&
-              (m.attrs.kind === "addition" ||
-                m.attrs.kind === "substitution-new");
-
-            type Segment = {
-              from: number;
-              to: number;
-              isAddition: boolean;
-            };
-            const segments: Segment[] = [];
-            view.state.doc.nodesBetween(from, to, (node, pos) => {
-              if (!node.isText) return;
-              const segFrom = Math.max(pos, from);
-              const segTo = Math.min(pos + node.nodeSize, to);
-              if (segFrom >= segTo) return;
-              const isAdd = node.marks.some(isAdditionKind);
-              const prev = segments[segments.length - 1];
-              if (prev && prev.isAddition === isAdd && prev.to === segFrom) {
-                prev.to = segTo;
-              } else {
-                segments.push({
-                  from: segFrom,
-                  to: segTo,
-                  isAddition: isAdd,
-                });
-              }
-            });
-
             const tr = view.state.tr;
-            for (const seg of [...segments].reverse()) {
-              if (seg.isAddition) {
-                tr.delete(seg.from, seg.to);
-              } else {
-                const deletionMark =
-                  getReusableSuggestionDeletionMark(
-                    currentEditor,
-                    seg.from,
-                    seg.to,
-                  ) ??
-                  view.state.schema.marks.criticChange.create(
-                    createCriticChange("deletion", undefined, {
-                      existingChanges: getDocumentCriticChanges(currentEditor),
-                    }),
-                  );
-                tr.addMark(seg.from, seg.to, deletionMark);
-              }
-            }
+
+            applySuggestedRemoval(
+              view.state,
+              tr,
+              segmentSuggestedRange(view.state, from, to),
+              suggestionAttrs,
+            );
+
             view.dispatch(tr.scrollIntoView());
             return true;
           }
@@ -1110,103 +856,29 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           const currentEditor = editorRef.current;
           if (!currentEditor) return false;
 
-          const { selection } = view.state;
-          let from = selection.from;
-          let to = selection.to;
-
-          if (selection.empty) {
-            const $pos = view.state.doc.resolve(selection.from);
-            const blockStart = $pos.start($pos.depth);
-            const blockEnd = $pos.end($pos.depth);
-
-            if (event.key === "Backspace") {
-              if (event.ctrlKey || event.altKey) {
-                const textBefore = view.state.doc.textBetween(
-                  blockStart,
-                  selection.from,
-                );
-                const match = textBefore.match(/\S+\s*$/);
-                from = match
-                  ? selection.from - match[0].length
-                  : Math.max(blockStart, selection.from - 1);
-              } else {
-                from = Math.max(blockStart, selection.from - 1);
-              }
-            } else {
-              if (event.ctrlKey || event.altKey) {
-                const textAfter = view.state.doc.textBetween(
-                  selection.to,
-                  blockEnd,
-                );
-                const match = textAfter.match(/^\s*\S+/);
-                to = match
-                  ? selection.to + match[0].length
-                  : Math.min(blockEnd, selection.to + 1);
-              } else {
-                to = Math.min(blockEnd, selection.to + 1);
-              }
-            }
-          }
-
-          if (from === to) {
-            event.preventDefault();
-            return true;
-          }
+          const isBackspace = event.key === "Backspace";
+          const { from, to } = resolveRemovalRange(
+            view.state,
+            isBackspace ? "backward" : "forward",
+            event.ctrlKey || event.altKey ? "word" : "character",
+          );
 
           event.preventDefault();
 
-          const criticMarkType = view.state.schema.marks.criticChange;
-          const isAdditionKind = (m: ProseMirrorMark) =>
-            m.type === criticMarkType &&
-            (m.attrs.kind === "addition" ||
-              m.attrs.kind === "substitution-new");
-
-          // Collect segments, distinguishing suggested-insertion text
-          // from original text so we can delete the former and mark the
-          // latter.
-          type Segment = {
-            from: number;
-            to: number;
-            isAddition: boolean;
-          };
-          const segments: Segment[] = [];
-          view.state.doc.nodesBetween(from, to, (node, pos) => {
-            if (!node.isText) return;
-            const segFrom = Math.max(pos, from);
-            const segTo = Math.min(pos + node.nodeSize, to);
-            if (segFrom >= segTo) return;
-            const isAdd = node.marks.some(isAdditionKind);
-            const prev = segments[segments.length - 1];
-            if (prev && prev.isAddition === isAdd && prev.to === segFrom) {
-              prev.to = segTo;
-            } else {
-              segments.push({ from: segFrom, to: segTo, isAddition: isAdd });
-            }
-          });
+          if (from === to) return true;
 
           const tr = view.state.tr;
 
-          // Process right-to-left so earlier positions stay valid.
-          for (const seg of [...segments].reverse()) {
-            if (seg.isAddition) {
-              tr.delete(seg.from, seg.to);
-            } else {
-              const deletionMark =
-                getReusableSuggestionDeletionMark(
-                  currentEditor,
-                  seg.from,
-                  seg.to,
-                ) ??
-                view.state.schema.marks.criticChange.create(
-                  createCriticChange("deletion", undefined, {
-                    existingChanges: getDocumentCriticChanges(currentEditor),
-                  }),
-                );
-              tr.addMark(seg.from, seg.to, deletionMark);
-            }
-          }
+          const segments = segmentSuggestedRange(view.state, from, to);
 
-          const basePos = event.key === "Backspace" ? from : to;
+          applySuggestedRemoval(view.state, tr, segments, suggestionAttrs);
+
+          // The range holds no inline content — a thematic break or a block
+          // image, selected as a node — so the removal was refused, and there
+          // is no text position in it to put a caret at either.
+          if (segments.length === 0) return true;
+
+          const basePos = isBackspace ? from : to;
           const mappedPos = tr.mapping.map(basePos, -1);
           tr.setSelection(TextSelection.create(tr.doc, mappedPos));
           tr.scrollIntoView();
@@ -1222,7 +894,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
         }
 
         emitMarkdownChange(currentEditor.getJSON());
-        refreshCriticChanges();
+        refreshSuggestions();
       },
     },
     [page.id],
@@ -1247,7 +919,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     useEditorState({
       editor,
       selector: ({ editor: currentEditor }) =>
-        getSelectionCriticChangeIds(currentEditor),
+        getSelectionSuggestionIds(currentEditor),
       equalityFn: areCommentIdListsEqual,
     }) ?? [];
 
@@ -1270,7 +942,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
   useEffect(() => {
     setSelectedChangeId((current) =>
-      getPreferredCriticChangeId(activeChangeIds, current),
+      getPreferredSuggestionId(activeChangeIds, current),
     );
   }, [activeChangeIds]);
 
@@ -1280,6 +952,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     frontmatterRef.current = parsedContent.frontmatter;
     endmatterRef.current = parsedContent.endmatter;
     commentsRef.current = parsedContent.comments;
+    idsRef.current.reserve(parsedContent.document);
     setComments(parsedContent.comments);
     setSelectedCommentId(null);
     setHoveredCommentId(null);
@@ -1293,8 +966,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       editor.commands.setContent(nextDoc, { emitUpdate: false });
     }
 
-    refreshCriticChanges();
-  }, [editor, parsedContent, refreshCriticChanges]);
+    refreshSuggestions();
+  }, [editor, parsedContent, refreshSuggestions]);
 
   useEffect(() => {
     if (!editor || !selected || !focusRequestKey) return;
@@ -1314,8 +987,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     if (hoveredCommentId && !comments.has(hoveredCommentId)) {
       setHoveredCommentId(null);
     }
-    refreshCriticChanges();
-  }, [comments, hoveredCommentId, refreshCriticChanges, selectedCommentId]);
+    refreshSuggestions();
+  }, [comments, hoveredCommentId, refreshSuggestions, selectedCommentId]);
 
   useEffect(() => {
     if (!editor) return;
@@ -1338,7 +1011,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     const effectiveHoveredChangeId = selectedChangeId ? hoveredChangeId : null;
 
     editor.view.dispatch(
-      editor.state.tr.setMeta(criticChangeHighlightPluginKey, {
+      editor.state.tr.setMeta(suggestionHighlightPluginKey, {
         selectedChangeId,
         hoveredChangeId: effectiveHoveredChangeId,
       }),
@@ -1349,12 +1022,12 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     if (!editor) return;
 
     const anchorElements = editor.view.dom.querySelectorAll<HTMLElement>(
-      ".comment-anchor[data-comment-ids]",
+      COMMENT_ANCHOR_SELECTOR,
     );
     const cleanupCallbacks: Array<() => void> = [];
 
     for (const anchor of anchorElements) {
-      const commentIds = parseCommentIds(anchor.dataset.commentIds);
+      const commentIds = readCommentAnchorIds(anchor);
       if (commentIds.length === 0) continue;
 
       const handleMouseEnter = () => {
@@ -1403,27 +1076,27 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   useEffect(() => {
     if (!editor) return;
 
-    const changeElements = editor.view.dom.querySelectorAll<HTMLElement>(
-      ".critic-change[data-critic-change-id]",
+    const suggestionElements = editor.view.dom.querySelectorAll<HTMLElement>(
+      SUGGESTION_ANCHOR_SELECTOR,
     );
     const cleanupCallbacks: Array<() => void> = [];
 
-    for (const element of changeElements) {
-      const changeId = element.dataset.criticChangeId;
-      if (!changeId) continue;
+    for (const element of suggestionElements) {
+      const suggestionId = readSuggestionAnchorId(element);
+      if (!suggestionId) continue;
 
       const handleMouseEnter = () => {
-        setHoveredChangeId(changeId);
+        setHoveredChangeId(suggestionId);
       };
 
       const handleMouseLeave = () => {
         setHoveredChangeId((current) =>
-          current === changeId ? null : current,
+          current === suggestionId ? null : current,
         );
       };
 
       const handleClick = () => {
-        setSelectedChangeId(changeId);
+        setSelectedChangeId(suggestionId);
       };
 
       element.addEventListener("mouseenter", handleMouseEnter);
@@ -1469,10 +1142,13 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   const handleAddComment = useCallback(() => {
     const currentEditor = editorRef.current;
     if (!currentEditor || currentEditor.state.selection.empty) return;
+    // The one test that decides whether commenting is offered decides whether
+    // it happens, so the two cannot disagree about which selections are legal.
+    if (getReviewMarkupBlockedReason(currentEditor, "comment")) return;
 
     const existingIds = getSelectionCommentIds(currentEditor);
-    const comment = createCriticComment(undefined, {
-      existingComments: commentsRef.current.values(),
+    const comment = createReviewComment(undefined, {
+      ids: idsRef.current,
     });
     const nextComments = new Map(commentsRef.current);
     nextComments.set(comment.id, comment);
@@ -1483,7 +1159,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     currentEditor
       .chain()
       .focus()
-      .setCommentRef({ commentIds: [...existingIds, comment.id] })
+      .setCommentAnchor({ commentIds: [...existingIds, comment.id] })
       .run();
     if (suppressNextMarkdownUpdateRef.current) {
       suppressNextMarkdownUpdateRef.current = false;
@@ -1499,19 +1175,34 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   const handleSuggestDeletion = useCallback(() => {
     const currentEditor = editorRef.current;
     if (!currentEditor || currentEditor.state.selection.empty) return;
+    if (getReviewMarkupBlockedReason(currentEditor, "suggestion")) return;
 
-    const change = createCriticChange("deletion", undefined, {
-      existingChanges: getDocumentCriticChanges(currentEditor),
-    });
+    // Proposing a deletion from the menu is the same act as pressing Backspace
+    // in suggesting mode, so it goes through the same code. Stamping a fresh
+    // mark over the selection instead would overwrite any suggestion the
+    // selection covers, splitting one deletion into two records or destroying
+    // an existing suggestion outright.
+    const { state } = currentEditor;
+    const { from, to } = state.selection;
+    const tr = state.tr;
 
-    currentEditor.chain().focus().setCriticChange(change).run();
+    applySuggestedRemoval(
+      state,
+      tr,
+      segmentSuggestedRange(state, from, to),
+      suggestionAttrs,
+    );
+
+    currentEditor.view.focus();
+    currentEditor.view.dispatch(tr);
     emitMarkdownChange(currentEditor.getJSON());
-    refreshCriticChanges();
-  }, [emitMarkdownChange, refreshCriticChanges]);
+    refreshSuggestions();
+  }, [emitMarkdownChange, refreshSuggestions, suggestionAttrs]);
 
   const handleSuggestReplacement = useCallback(() => {
     const currentEditor = editorRef.current;
     if (!currentEditor || currentEditor.state.selection.empty) return;
+    if (getReviewMarkupBlockedReason(currentEditor, "suggestion")) return;
 
     const { from, to } = currentEditor.state.selection;
     setDraftSuggestion({
@@ -1534,8 +1225,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     }
 
     if (draftSuggestion.type === "insertion") {
-      const change = createCriticChange("addition", undefined, {
-        existingChanges: getDocumentCriticChanges(currentEditor),
+      const suggestion = createSuggestion("insert", undefined, {
+        ids: idsRef.current,
       });
 
       currentEditor
@@ -1546,52 +1237,53 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           text: nextText,
           marks: [
             {
-              type: "criticChange",
-              attrs: change,
+              type: "suggestion",
+              attrs: suggestion,
             },
           ],
         })
         .run();
-      setSelectedChangeId(change.changeId);
+      setSelectedChangeId(suggestion.suggestionId);
       setDraftSuggestion(null);
       emitMarkdownChange(currentEditor.getJSON());
-      refreshCriticChanges();
+      refreshSuggestions();
       return;
     }
 
-    const change = createCriticChange("substitution-old", undefined, {
-      existingChanges: getDocumentCriticChanges(currentEditor),
+    const suggestion = createSuggestion("replace-old", undefined, {
+      ids: idsRef.current,
     });
-    const replacementChange: CriticChangeAttrs = {
-      ...change,
-      kind: "substitution-new",
+    const replacement: SuggestionAttrs = {
+      ...suggestion,
+      kind: "replace-new",
     };
 
     currentEditor
       .chain()
       .focus()
       .setTextSelection({ from: draftSuggestion.from, to: draftSuggestion.to })
-      .setCriticChange(change)
+      .setSuggestion(suggestion)
       .insertContentAt(draftSuggestion.to, {
         type: "text",
         text: nextText,
         marks: [
           {
-            type: "criticChange",
-            attrs: replacementChange,
+            type: "suggestion",
+            attrs: replacement,
           },
         ],
       })
       .run();
-    setSelectedChangeId(change.changeId);
+    setSelectedChangeId(suggestion.suggestionId);
     setDraftSuggestion(null);
     emitMarkdownChange(currentEditor.getJSON());
-    refreshCriticChanges();
-  }, [draftSuggestion, emitMarkdownChange, refreshCriticChanges]);
+    refreshSuggestions();
+  }, [draftSuggestion, emitMarkdownChange, refreshSuggestions]);
 
   const handleSuggestInsertion = useCallback(() => {
     const currentEditor = editorRef.current;
     if (!currentEditor) return;
+    if (getReviewMarkupBlockedReason(currentEditor, "suggestion")) return;
 
     const { from } = currentEditor.state.selection;
     const before = currentEditor.state.doc.textBetween(
@@ -1615,7 +1307,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   }, []);
 
   const updateComment = useCallback(
-    (commentId: string, updater: (comment: CriticComment) => CriticComment) => {
+    (commentId: string, updater: (comment: ReviewComment) => ReviewComment) => {
       const existingComment = commentsRef.current.get(commentId);
       if (!existingComment) return;
 
@@ -1633,12 +1325,12 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       const currentEditor = editorRef.current;
       if (!currentEditor) return;
 
-      const comment = createCriticComment(
+      const comment = createReviewComment(
         {
           parentCommentId: commentId,
         },
         {
-          existingComments: commentsRef.current.values(),
+          ids: idsRef.current,
         },
       );
       suppressNextMarkdownUpdateRef.current = true;
@@ -1667,9 +1359,9 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   );
 
   const removeSuggestionComments = useCallback(
-    (changeId: string, currentEditor: Editor) => {
+    (suggestionId: string, currentEditor: Editor) => {
       const directCommentIds = [...commentsRef.current.values()]
-        .filter((comment) => comment.parentCommentId === changeId)
+        .filter((comment) => comment.parentCommentId === suggestionId)
         .map((comment) => comment.id);
       const commentIdsToDelete = [
         ...directCommentIds,
@@ -1699,52 +1391,66 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   );
 
   const acceptSuggestion = useCallback(
-    (changeId: string) => {
+    (suggestionId: string) => {
       const currentEditor = editorRef.current;
       if (!currentEditor) return;
 
-      currentEditor.chain().focus().acceptCriticChange(changeId).run();
-      const nextComments = removeSuggestionComments(changeId, currentEditor);
-      setSelectedChangeId((current) => (current === changeId ? null : current));
-      setHoveredChangeId((current) => (current === changeId ? null : current));
+      currentEditor.chain().focus().acceptSuggestion(suggestionId).run();
+      const nextComments = removeSuggestionComments(
+        suggestionId,
+        currentEditor,
+      );
+      setSelectedChangeId((current) =>
+        current === suggestionId ? null : current,
+      );
+      setHoveredChangeId((current) =>
+        current === suggestionId ? null : current,
+      );
       emitMarkdownChange(currentEditor.getJSON(), nextComments);
-      refreshCriticChanges();
+      refreshSuggestions();
     },
-    [emitMarkdownChange, refreshCriticChanges, removeSuggestionComments],
+    [emitMarkdownChange, refreshSuggestions, removeSuggestionComments],
   );
 
   const rejectSuggestion = useCallback(
-    (changeId: string) => {
+    (suggestionId: string) => {
       const currentEditor = editorRef.current;
       if (!currentEditor) return;
 
-      currentEditor.chain().focus().rejectCriticChange(changeId).run();
-      const nextComments = removeSuggestionComments(changeId, currentEditor);
-      setSelectedChangeId((current) => (current === changeId ? null : current));
-      setHoveredChangeId((current) => (current === changeId ? null : current));
+      currentEditor.chain().focus().rejectSuggestion(suggestionId).run();
+      const nextComments = removeSuggestionComments(
+        suggestionId,
+        currentEditor,
+      );
+      setSelectedChangeId((current) =>
+        current === suggestionId ? null : current,
+      );
+      setHoveredChangeId((current) =>
+        current === suggestionId ? null : current,
+      );
       emitMarkdownChange(currentEditor.getJSON(), nextComments);
-      refreshCriticChanges();
+      refreshSuggestions();
     },
-    [emitMarkdownChange, refreshCriticChanges, removeSuggestionComments],
+    [emitMarkdownChange, refreshSuggestions, removeSuggestionComments],
   );
 
   const replyToSuggestion = useCallback(
-    (changeId: string) => {
+    (suggestionId: string) => {
       const currentEditor = editorRef.current;
       if (!currentEditor) return;
 
-      const comment = createCriticComment(
+      const comment = createReviewComment(
         {
-          parentCommentId: changeId,
+          parentCommentId: suggestionId,
         },
         {
-          existingComments: commentsRef.current.values(),
+          ids: idsRef.current,
         },
       );
       suppressNextMarkdownUpdateRef.current = true;
-      const didAddCommentId = addCommentIdsToCriticChange(
+      const didAddCommentId = addCommentIdsToSuggestion(
         currentEditor,
-        changeId,
+        suggestionId,
         [comment.id],
       );
       if (suppressNextMarkdownUpdateRef.current) {
@@ -1758,16 +1464,16 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       nextComments.set(comment.id, comment);
       commentsRef.current = nextComments;
       setComments(nextComments);
-      setSelectedChangeId(changeId);
+      setSelectedChangeId(suggestionId);
       setSelectedCommentId(comment.id);
       setHoveredCommentId(null);
       setPendingFocusCommentId(comment.id);
-      refreshCriticChanges();
+      refreshSuggestions();
       requestAnimationFrame(() => {
         measureLayout();
       });
     },
-    [measureLayout, refreshCriticChanges],
+    [measureLayout, refreshSuggestions],
   );
 
   const deleteComment = useCallback(
@@ -1814,8 +1520,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     setSelectedCommentId(commentId);
   }, []);
 
-  const selectSuggestion = useCallback((changeId: string) => {
-    setSelectedChangeId(changeId);
+  const selectSuggestion = useCallback((suggestionId: string) => {
+    setSelectedChangeId(suggestionId);
     setSelectedCommentId(null);
   }, []);
 
@@ -1841,14 +1547,14 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     currentEditor.commands.focus(undefined, { scrollIntoView: false });
   }, []);
 
-  const focusSuggestion = useCallback((changeId: string) => {
+  const focusSuggestion = useCallback((suggestionId: string) => {
     const currentEditor = editorRef.current;
     if (!currentEditor) return;
 
-    setSelectedChangeId(changeId);
+    setSelectedChangeId(suggestionId);
     setSelectedCommentId(null);
 
-    const range = getCriticChangeRange(currentEditor, changeId);
+    const range = getSuggestionRange(currentEditor, suggestionId);
     if (!range) return;
 
     currentEditor.commands.focus(undefined, { scrollIntoView: false });
@@ -1859,10 +1565,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     );
   }, []);
 
-  const hasReviewRail = comments.size > 0 || criticChanges.length > 0;
-  const activeComments = activeCommentIds
-    .map((commentId) => comments.get(commentId))
-    .filter((comment): comment is CriticComment => Boolean(comment));
+  const hasReviewRail = comments.size > 0 || suggestions.length > 0;
+  const activeComments = getOrderedAnchorComments(activeCommentIds, comments);
   const contentCardClass =
     "rounded-[0.75rem] border border-[#E9E9E8] dark:border-border bg-white dark:bg-card shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)]";
   const documentShellClass = cn(
@@ -1935,6 +1639,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
                 onAddComment={
                   interactionMode === "viewing" ? undefined : handleAddComment
                 }
+                getBlockedReason={getReviewMarkupBlockedReason}
                 onSuggestDeletion={
                   interactionMode === "viewing"
                     ? undefined
@@ -1964,7 +1669,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           testId="document-review-rail"
           commentGroups={commentGroups}
           comments={comments}
-          suggestions={criticChanges}
+          suggestions={suggestions}
           selectedCommentId={selectedCommentId}
           hoveredCommentId={hoveredCommentId}
           selectedChangeId={selectedChangeId}
@@ -2305,7 +2010,7 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
   }, []);
 
   const hasCommentRailSpace = useMemo(
-    () => criticMarkdownHasReviewRail(markdown),
+    () => reviewMarkdownHasReviewRail(markdown),
     [markdown],
   );
 

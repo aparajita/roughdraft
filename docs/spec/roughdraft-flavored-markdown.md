@@ -51,7 +51,6 @@ id = "rd-" ( "c" / "s" ) 1*DIGIT
 | Form | Binds |
 | --- | --- |
 | `<span id="rd-c1">anchored text</span>` | a comment to an inline span of text |
-| `<div id="rd-c1">` … `</div>` | a comment to one or more whole blocks |
 | `<span id="rd-c1"></span>` | a comment to a point, with no text of its own |
 | `<ins id="rd-s1">new text</ins>` | a suggested insertion |
 | `<del id="rd-s2">old text</del>` | a suggested deletion |
@@ -59,23 +58,15 @@ id = "rd-" ( "c" / "s" ) 1*DIGIT
 
 The `id` always sits on the outermost element of the anchor. A replacement wraps its `<del>` and `<ins>` in a `<span>` because an `id` MUST be unique within the document.
 
-A `<span>` anchor is inline content and cannot cross a block boundary, which is why a range of blocks takes a `<div>` instead. A `<div>` anchor MUST have a blank line after its opening tag and before its closing tag, so that the Markdown it encloses is still parsed as Markdown:
+A comment anchor is inline content, so the text it covers MUST lie within a single block. A range spanning a block boundary is not expressible in this format, and implementations MUST NOT write one.
 
-```markdown
-<div id="rd-c2">
+An id MUST appear at most once as an anchor. Anchors MAY nest. Anchors MUST NOT partially overlap, since no HTML element structure can express that. A writer offered a range that partially overlaps an existing anchor MUST refuse it rather than widen either anchor.
 
-## Scope
-
-Ship guest checkout for returning teams.
-
-</div>
-```
-
-An id MUST appear at most once as an anchor. Anchors MAY nest. Anchors MUST NOT partially overlap, since no HTML element structure can express that.
-
-To allocate an id, a writer takes the highest number carried by any id of the same kind — counting both endmatter record keys and anchors in the body — and adds one. Records that have no anchor, such as replies and document-scope comments, are why the endmatter is scanned as well as the body. A writer MUST perform this scan against the document as it is about to write it, not against a copy read earlier. Two writers holding the same document at the same time can still allocate the same id; reconciling that is outside this specification.
+A writer MUST NOT issue an id that is in use in the document it is about to write, or that it has issued since it last read one. Scanning the document immediately before writing satisfies this; so does counting up from the highest number seen — counting both endmatter record keys and anchors in the body, since records with no anchor, such as replies and document-scope comments, only appear in the endmatter — which additionally never reissues the id of a record that has since been removed. A writer MAY reuse a freed id but is not required to. Two writers holding the same document at the same time can still allocate the same id; reconciling that is outside this specification.
 
 Implementations MUST preserve anchor elements and their `id` attributes across a read/write cycle, and MUST preserve any other attributes present on them.
+
+An anchor's content is the text its record covers, so implementations MUST preserve it exactly as written, including whitespace at its edges. A Markdown serializer that lifts whitespace out of an inline element changes what the record covers; an implementation MUST NOT let it do so to an anchor.
 
 Anchors inside inline code spans and fenced code blocks are literal text under ordinary CommonMark rules. Implementations need no special handling for them and MUST NOT treat them as review markup.
 
@@ -196,6 +187,7 @@ A read/write cycle that makes no review change MUST preserve:
 - YAML frontmatter delimiters and content.
 - Endmatter keys, including unrecognized ones, and record keys, including unrecognized ones.
 - Anchor elements, their ids, and their other attributes.
+- Anchor content exactly as written, including whitespace at its edges.
 - Local links and image paths.
 - Tables and task lists.
 - Inline code and fenced code blocks, including anchors appearing inside them.

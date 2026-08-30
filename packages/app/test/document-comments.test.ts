@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { CriticComment } from "../src/critic-markup";
 import {
   buildCommentThreadRailItems,
   getCommentAnchorMeasurements,
@@ -10,61 +9,59 @@ import {
   resolveCommentRailLayouts,
   resolveCommentThreadRailLayouts,
 } from "../src/document-comments";
+import type { ReviewComment } from "../src/review";
 
-function createCommentsMap(comments: CriticComment[]) {
+function createCommentsMap(comments: ReviewComment[]) {
   return new Map(comments.map((comment) => [comment.id, comment]));
 }
 
 describe("document comment layout helpers", () => {
-  it("maps DOM anchor boxes to positions relative to the editor", () => {
-    const measurements = getCommentAnchorMeasurements(
-      [
-        {
-          dataset: {
-            commentIds: JSON.stringify(["cmt-1"]),
-          },
-          getBoundingClientRect: () => ({
-            top: 180,
-            bottom: 212,
-          }),
-        },
-      ],
-      120,
-    );
-
-    expect(measurements).toEqual([
-      {
-        commentIds: ["cmt-1"],
-        anchorTop: 60,
-        anchorBottom: 92,
-      },
-    ]);
+  it.each([
+    {
+      name: "maps a DOM anchor box to a position relative to the editor",
+      id: "rd-c1",
+      rdNested: undefined,
+      rect: { top: 180, bottom: 212 },
+      containerTop: 120,
+      measurementScale: 1,
+      commentIds: ["rd-c1"],
+    },
+    {
+      name: "normalizes anchor positions with a scale factor",
+      id: "rd-c2",
+      rdNested: undefined,
+      rect: { top: 220, bottom: 284 },
+      containerTop: 100,
+      measurementScale: 2,
+      commentIds: ["rd-c2"],
+    },
+    {
+      name: "reads comments nested on the same range from data-rd-nested",
+      id: "rd-c3",
+      rdNested: JSON.stringify(["rd-c4"]),
+      rect: { top: 180, bottom: 212 },
+      containerTop: 120,
+      measurementScale: 1,
+      commentIds: ["rd-c3", "rd-c4"],
+    },
+  ])("$name", ({
+    id,
+    rdNested,
+    rect,
+    containerTop,
+    measurementScale,
+    commentIds,
+  }) => {
+    expect(
+      getCommentAnchorMeasurements(
+        [{ id, dataset: { rdNested }, getBoundingClientRect: () => rect }],
+        containerTop,
+        measurementScale,
+      ),
+    ).toEqual([{ commentIds, anchorTop: 60, anchorBottom: 92 }]);
   });
 
-  it("normalizes anchor positions with a scale factor", () => {
-    const measurements = getCommentAnchorMeasurements(
-      [
-        {
-          dataset: {
-            commentIds: JSON.stringify(["cmt-zoom"]),
-          },
-          getBoundingClientRect: () => ({
-            top: 220,
-            bottom: 284,
-          }),
-        },
-      ],
-      100,
-      2,
-    );
-
-    expect(measurements).toEqual([
-      {
-        commentIds: ["cmt-zoom"],
-        anchorTop: 60,
-        anchorBottom: 92,
-      },
-    ]);
+  it("scales a measurement up when the editor is zoomed out", () => {
     expect(normalizeCommentMeasurement(120, 0.5)).toBe(240);
   });
 

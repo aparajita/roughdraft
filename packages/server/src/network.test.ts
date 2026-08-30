@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  ROUGHDRAFT_BIND_HOST_ENV,
-  ROUGHDRAFT_LOOPBACK_HOSTS,
   hasNonLoopbackHost,
   isLoopbackHost,
+  ROUGHDRAFT_BIND_HOST_ENV,
+  ROUGHDRAFT_LOOPBACK_HOSTS,
   resolveBindHosts,
 } from "./network";
 

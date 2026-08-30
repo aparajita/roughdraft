@@ -1,11 +1,9 @@
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bold,
-  Code2,
   Check,
+  Code2,
   ExternalLink,
   Italic,
   Link2,
@@ -16,6 +14,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import type { ReactElement, ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getAddCommentShortcutLabel,
   matchesAddCommentShortcut,
@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from "./components/ui/tooltip";
 import { toHtml } from "./markdown";
+import type { ReviewMarkupSubject } from "./review-markup-selection";
 import type { StorageBackend } from "./storage";
 
 interface EditorContextMenuProps {
@@ -33,6 +34,16 @@ interface EditorContextMenuProps {
   backend: StorageBackend;
   resolveLinkUrl?: (path: string) => string | null;
   onAddComment?: () => void;
+  /**
+   * Returns why the current selection cannot carry the subject's review markup,
+   * or null when it can. The reason is shown on the disabled action, and every
+   * path that places markup — menu, selection menu and keyboard shortcut —
+   * refuses while it is set.
+   */
+  getBlockedReason?: (
+    editor: Editor,
+    subject: ReviewMarkupSubject,
+  ) => string | null;
   onSuggestDeletion?: () => void;
   onSuggestReplacement?: () => void;
   onSuggestInsertion?: () => void;
@@ -203,11 +214,44 @@ function SelectionMenuButton({
   );
 }
 
+/**
+ * Explains why an action is unavailable. With no reason the action renders
+ * exactly as it does when it is available.
+ *
+ * The trigger is a wrapper around the blocked control rather than the control
+ * itself. A tooltip opens on hover and on focus, and a disabled form control
+ * offers neither: browsers dispatch no mouse events over one, and it takes no
+ * focus, so a trigger rendered as the control would never open and the reason
+ * would never be read. The wrapper takes the hover the control cannot while the
+ * control it holds stays disabled.
+ */
+function BlockedActionTooltip({
+  reason,
+  children,
+}: {
+  reason: string | null;
+  children: ReactElement;
+}) {
+  if (!reason) return children;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="block w-full">{children}</span>}
+      />
+      <TooltipContent data-testid="blocked-action-tooltip">
+        {reason}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function EditorContextMenu({
   editor,
   backend,
   resolveLinkUrl,
   onAddComment,
+  getBlockedReason,
   onSuggestDeletion,
   onSuggestReplacement,
   onSuggestInsertion,
@@ -234,10 +278,16 @@ export function EditorContextMenu({
       isOrderedListActive: currentEditor?.isActive("orderedList") ?? false,
       isBlockquoteActive: currentEditor?.isActive("blockquote") ?? false,
       isLinkActive: currentEditor?.isActive("link") ?? false,
-      activeCriticChangeId:
-        (currentEditor?.getAttributes("criticChange").changeId as
+      activeSuggestionId:
+        (currentEditor?.getAttributes("suggestion").suggestionId as
           | string
           | null) ?? null,
+      addCommentBlockedReason: currentEditor
+        ? (getBlockedReason?.(currentEditor, "comment") ?? null)
+        : null,
+      suggestBlockedReason: currentEditor
+        ? (getBlockedReason?.(currentEditor, "suggestion") ?? null)
+        : null,
       canToggleBold:
         currentEditor?.can().chain().focus().toggleBold().run() ?? false,
       canToggleItalic:
@@ -259,7 +309,9 @@ export function EditorContextMenu({
     isOrderedListActive: false,
     isBlockquoteActive: false,
     isLinkActive: false,
-    activeCriticChangeId: null,
+    activeSuggestionId: null,
+    addCommentBlockedReason: null,
+    suggestBlockedReason: null,
     canToggleBold: false,
     canToggleItalic: false,
     canToggleCode: false,
@@ -536,6 +588,7 @@ export function EditorContextMenu({
         !onAddComment ||
         !editor.isFocused ||
         editor.state.selection.empty ||
+        getBlockedReason?.(editor, "comment") ||
         !matchesAddCommentShortcut(event, getNavigatorPlatform())
       ) {
         return;
@@ -568,7 +621,13 @@ export function EditorContextMenu({
       window.removeEventListener("resize", schedulePositionUpdate);
       window.removeEventListener("scroll", schedulePositionUpdate, true);
     };
-  }, [editor, onAddComment, updateLinkPopover, updateSelectionActionPosition]);
+  }, [
+    editor,
+    getBlockedReason,
+    onAddComment,
+    updateLinkPopover,
+    updateSelectionActionPosition,
+  ]);
 
   useEffect(() => {
     if (!linkPopoverState) return;
@@ -712,7 +771,7 @@ export function EditorContextMenu({
               onClick={openLinkPopover}
             />
           </div>
-          {selectionMenuState.activeCriticChangeId ? (
+          {selectionMenuState.activeSuggestionId ? (
             <div className="grid grid-cols-2 gap-1">
               <button
                 type="button"
@@ -723,13 +782,11 @@ export function EditorContextMenu({
                   event.stopPropagation();
                 }}
                 onClick={() => {
-                  if (selectionMenuState.activeCriticChangeId) {
+                  if (selectionMenuState.activeSuggestionId) {
                     editor
                       ?.chain()
                       .focus()
-                      .acceptCriticChange(
-                        selectionMenuState.activeCriticChangeId,
-                      )
+                      .acceptSuggestion(selectionMenuState.activeSuggestionId)
                       .run();
                   }
                   setSelectionActionPosition(null);
@@ -747,13 +804,11 @@ export function EditorContextMenu({
                   event.stopPropagation();
                 }}
                 onClick={() => {
-                  if (selectionMenuState.activeCriticChangeId) {
+                  if (selectionMenuState.activeSuggestionId) {
                     editor
                       ?.chain()
                       .focus()
-                      .rejectCriticChange(
-                        selectionMenuState.activeCriticChangeId,
-                      )
+                      .rejectSuggestion(selectionMenuState.activeSuggestionId)
                       .run();
                   }
                   setSelectionActionPosition(null);
@@ -764,25 +819,33 @@ export function EditorContextMenu({
               </button>
             </div>
           ) : null}
-          <button
-            type="button"
-            data-testid="selection-menu-action-comment"
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#E8E3DB] px-3 py-2 text-left text-sm font-bold text-black shadow-[inset_0_1px_0_rgba(255,251,245,0.72)] transition hover:bg-[#ded8ce] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:bg-slate-700 dark:text-gray-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-slate-600 dark:focus-visible:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!onAddComment || editor?.state.selection.empty}
-            onMouseDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onClick={() => {
-              onAddComment?.();
-              setSelectionActionPosition(null);
-            }}
+          <BlockedActionTooltip
+            reason={selectionMenuState.addCommentBlockedReason}
           >
-            <span className="inline-flex items-center gap-2">
-              <MessageSquarePlus className="size-4.5" />
-              <span>Comment</span>
-            </span>
-          </button>
+            <button
+              type="button"
+              data-testid="selection-menu-action-comment"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[#E8E3DB] px-3 py-2 text-left text-sm font-bold text-black shadow-[inset_0_1px_0_rgba(255,251,245,0.72)] transition hover:bg-[#ded8ce] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:bg-slate-700 dark:text-gray-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-slate-600 dark:focus-visible:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={
+                !onAddComment ||
+                editor?.state.selection.empty ||
+                !!selectionMenuState.addCommentBlockedReason
+              }
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={() => {
+                onAddComment?.();
+                setSelectionActionPosition(null);
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <MessageSquarePlus className="size-4.5" />
+                <span>Comment</span>
+              </span>
+            </button>
+          </BlockedActionTooltip>
         </div>
       ) : null}
       {linkPopoverState ? (
@@ -882,58 +945,90 @@ export function EditorContextMenu({
           className="fixed z-[200] min-w-44 rounded-2xl border border-slate-200/90 dark:border-slate-700/90 bg-white/95 dark:bg-slate-800/95 p-1.5 shadow-[0_18px_48px_rgba(15,23,42,0.16)] dark:shadow-[0_18px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl"
           style={{ left: position.x, top: position.y }}
         >
-          <button
-            type="button"
-            data-testid="editor-context-menu-action-add-comment"
-            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!editor || editor.state.selection.empty}
-            onClick={() => {
-              onAddComment?.();
-              close();
-            }}
+          <BlockedActionTooltip
+            reason={selectionMenuState.addCommentBlockedReason}
           >
-            <span>Add comment</span>
-            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
-              {shortcutLabel}
-            </span>
-          </button>
-          <button
-            type="button"
-            data-testid="editor-context-menu-action-suggest-insertion"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!editor || !onSuggestInsertion}
-            onClick={() => {
-              onSuggestInsertion?.();
-              close();
-            }}
+            <button
+              type="button"
+              data-testid="editor-context-menu-action-add-comment"
+              className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                !editor ||
+                editor.state.selection.empty ||
+                !!selectionMenuState.addCommentBlockedReason
+              }
+              onClick={() => {
+                onAddComment?.();
+                close();
+              }}
+            >
+              <span>Add comment</span>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                {shortcutLabel}
+              </span>
+            </button>
+          </BlockedActionTooltip>
+          <BlockedActionTooltip
+            reason={selectionMenuState.suggestBlockedReason}
           >
-            Suggest insertion
-          </button>
-          <button
-            type="button"
-            data-testid="editor-context-menu-action-suggest-deletion"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!editor || editor.state.selection.empty}
-            onClick={() => {
-              onSuggestDeletion?.();
-              close();
-            }}
+            <button
+              type="button"
+              data-testid="editor-context-menu-action-suggest-insertion"
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                !editor ||
+                !onSuggestInsertion ||
+                !!selectionMenuState.suggestBlockedReason
+              }
+              onClick={() => {
+                onSuggestInsertion?.();
+                close();
+              }}
+            >
+              Suggest insertion
+            </button>
+          </BlockedActionTooltip>
+          <BlockedActionTooltip
+            reason={selectionMenuState.suggestBlockedReason}
           >
-            Suggest deletion
-          </button>
-          <button
-            type="button"
-            data-testid="editor-context-menu-action-suggest-replacement"
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!editor || editor.state.selection.empty}
-            onClick={() => {
-              onSuggestReplacement?.();
-              close();
-            }}
+            <button
+              type="button"
+              data-testid="editor-context-menu-action-suggest-deletion"
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                !editor ||
+                editor.state.selection.empty ||
+                !!selectionMenuState.suggestBlockedReason
+              }
+              onClick={() => {
+                onSuggestDeletion?.();
+                close();
+              }}
+            >
+              Suggest deletion
+            </button>
+          </BlockedActionTooltip>
+          <BlockedActionTooltip
+            reason={selectionMenuState.suggestBlockedReason}
           >
-            Suggest replacement
-          </button>
-          {selectionMenuState.activeCriticChangeId ? (
+            <button
+              type="button"
+              data-testid="editor-context-menu-action-suggest-replacement"
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                !editor ||
+                editor.state.selection.empty ||
+                !!selectionMenuState.suggestBlockedReason
+              }
+              onClick={() => {
+                onSuggestReplacement?.();
+                close();
+              }}
+            >
+              Suggest replacement
+            </button>
+          </BlockedActionTooltip>
+          {selectionMenuState.activeSuggestionId ? (
             <>
               <div
                 className="my-1 h-px bg-slate-100 dark:bg-slate-700"
@@ -944,13 +1039,11 @@ export function EditorContextMenu({
                 data-testid="editor-context-menu-action-accept-suggestion"
                 className="block w-full rounded-xl px-3 py-2 text-left text-sm text-emerald-700 transition hover:bg-emerald-50"
                 onClick={() => {
-                  if (selectionMenuState.activeCriticChangeId) {
+                  if (selectionMenuState.activeSuggestionId) {
                     editor
                       ?.chain()
                       .focus()
-                      .acceptCriticChange(
-                        selectionMenuState.activeCriticChangeId,
-                      )
+                      .acceptSuggestion(selectionMenuState.activeSuggestionId)
                       .run();
                   }
                   close();
@@ -963,13 +1056,11 @@ export function EditorContextMenu({
                 data-testid="editor-context-menu-action-reject-suggestion"
                 className="block w-full rounded-xl px-3 py-2 text-left text-sm text-rose-700 transition hover:bg-rose-50"
                 onClick={() => {
-                  if (selectionMenuState.activeCriticChangeId) {
+                  if (selectionMenuState.activeSuggestionId) {
                     editor
                       ?.chain()
                       .focus()
-                      .rejectCriticChange(
-                        selectionMenuState.activeCriticChangeId,
-                      )
+                      .rejectSuggestion(selectionMenuState.activeSuggestionId)
                       .run();
                   }
                   close();

@@ -1,0 +1,20 @@
+{
+  "format": "roughdraft-flavored-markdown",
+  "version": "1.0",
+  "source": {
+    "markdown": "Press ` to focus the search box.\n\nThe <span id=\"rd-c1\">contract</span> is unclear.\n\nUse the ` key again to dismiss.\n\n---\nroughdraft: \"1.0\"\ncomments:\n  rd-c1:\n    body: Which contract?\n    by: user\n    at: \"2026-04-28T12:00:00.000Z\"\n"
+  },
+  "comments": [
+    {
+      "id": "rd-c1",
+      "body": "Which contract?",
+      "by": "user",
+      "at": "2026-04-28T12:00:00.000Z",
+      "anchor": {
+        "kind": "span",
+        "text": "contract"
+      }
+    }
+  ],
+  "suggestions": []
+}

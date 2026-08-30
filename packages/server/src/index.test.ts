@@ -257,7 +257,16 @@ describe("createApp", () => {
       [
         "# Draft",
         "",
-        'Needs {==support==}{>>Add a source<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}.',
+        'Needs <span id="rd-c1">support</span>.',
+        "",
+        "---",
+        'roughdraft: "1.0"',
+        "comments:",
+        "  rd-c1:",
+        "    body: Add a source.",
+        "    by: user",
+        '    at: "2026-04-28T12:00:00.000Z"',
+        "",
       ].join("\n"),
     );
     const { app } = createApp({
@@ -300,11 +309,13 @@ describe("createApp", () => {
       [
         "# Draft",
         "",
-        "Needs {==support==}{>>Add a source<<}{#c1}.",
+        'Needs <span id="rd-c1">support</span>.',
         "",
         "---",
+        'roughdraft: "1.0"',
         "comments:",
-        "  c1:",
+        "  rd-c1:",
+        "    body: Add a source.",
         "    by: user",
         '    at: "2026-04-28T12:00:00.000Z"',
         "workflow:",
@@ -326,8 +337,8 @@ describe("createApp", () => {
     const saved = fs.readFileSync(filePath, "utf-8");
     expect(response.status).toBe(201);
     expect(saved).toContain("workflow:\n  owner: editorial");
-    expect(saved).toContain("  c1:");
-    expect(saved).toContain("  c2:");
+    expect(saved).toContain("  rd-c1:");
+    expect(saved).toContain("  rd-c2:");
     expect(saved).toContain("    body: Please address the risk section.");
     expect(saved).toContain("    by: user");
     expect(response.body.event.summary).toMatchObject({

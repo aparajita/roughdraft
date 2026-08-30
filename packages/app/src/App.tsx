@@ -102,11 +102,13 @@ const PREVIEW_INITIAL_MARKDOWN = [
   "- Comments and suggested changes use Roughdraft flavored Markdown.",
   "- Autosave updates the in-memory document, not disk or browser storage.",
   "",
-  "{==Select this sentence==}{>>Try replying to this comment or suggesting a replacement.<<}{#preview-comment}",
+  '<span id="rd-c1">Select this sentence</span> to try replying to this comment or suggesting a replacement.',
   "",
   "---",
+  'roughdraft: "1.0"',
   "comments:",
-  "  preview-comment:",
+  "  rd-c1:",
+  "    body: Try replying to this comment or suggesting a replacement.",
   "    by: Roughdraft",
   '    at: "2026-04-28T12:00:00.000Z"',
   "",
@@ -152,30 +154,30 @@ const HOMEPAGE_WORKFLOW_SCENES = [
 const ROUGHDRAFT_MARKDOWN_SYNTAX = [
   {
     label: "Comment",
-    syntax: "{==selected text==}{>>Comment text<<}{#c1}",
+    syntax: '<span id="rd-c1">selected text</span>',
     description:
-      "Highlights the reviewed text and attaches a margin comment to it.",
+      "Highlights the reviewed text and binds a margin comment to it.",
   },
   {
     label: "Reply",
     syntax:
-      'comments:\n  c2:\n    body: I can make that edit.\n    by: AI\n    at: "2026-04-28T12:01:00.000Z"\n    re: c1',
+      'comments:\n  rd-c2:\n    body: I can make that edit.\n    by: AI\n    at: "2026-04-28T12:01:00.000Z"\n    re: rd-c1',
     description:
       "Adds a threaded reply in YAML endmatter by pointing `re` at the parent id.",
   },
   {
     label: "Insertion",
-    syntax: "{++new text++}{#s1}",
+    syntax: '<ins id="rd-s1">new text</ins>',
     description: "Suggests text to add without applying it silently.",
   },
   {
     label: "Deletion",
-    syntax: "{--old text--}{#s2}",
+    syntax: '<del id="rd-s2">old text</del>',
     description: "Suggests removing text while keeping the original visible.",
   },
   {
     label: "Substitution",
-    syntax: "{~~old text~>new text~~}{#s3}",
+    syntax: '<span id="rd-s3"><del>old text</del><ins>new text</ins></span>',
     description: "Suggests replacing one span with another.",
   },
 ] as const;
@@ -185,12 +187,6 @@ const ROUGHDRAFT_MARKDOWN_REFERENCES = [
     href: "/spec/roughdraft-flavored-markdown.md",
     description:
       "The normative syntax, metadata, round-trip, and JSON review-index contract for Roughdraft Flavored Markdown.",
-  },
-  {
-    title: "CriticMarkup",
-    href: "https://criticmarkup.com/",
-    description:
-      "The plain-text review syntax Roughdraft builds on for comments, highlights, insertions, deletions, and substitutions.",
   },
   {
     title: "Notion-flavored Markdown",
@@ -224,7 +220,7 @@ const ROUGHDRAFT_MARKDOWN_CONTRACT = [
 const ROUGHDRAFT_MARKDOWN_EXTENSION_DETAILS = [
   {
     title: "YAML metadata",
-    body: "Roughdraft stores ids inline as compact references such as {>>Looks right.<<}{#c1}, while authors, timestamps, and reply links live in final YAML endmatter.",
+    body: 'Roughdraft stores ids inline on the anchor itself, such as <span id="rd-c1">text</span>, while authors, timestamps, and reply links live in final YAML endmatter.',
   },
   {
     title: "Threaded comments",
@@ -236,13 +232,13 @@ const ROUGHDRAFT_MARKDOWN_EXTENSION_DETAILS = [
   },
   {
     title: "Literal examples stay literal",
-    body: "CriticMarkup inside inline code and fenced code blocks is preserved as example text instead of becoming live review feedback.",
+    body: "Anchor markup inside inline code and fenced code blocks is preserved as example text instead of becoming live review feedback.",
   },
 ] as const;
 const HOMEPAGE_WORKFLOW_REVIEW_ITEMS = [
   {
-    key: "nora-comment",
-    commentIds: ["nora-comment"],
+    key: "rd-c1",
+    commentIds: ["rd-c1"],
     author: "Nora",
     body: 'This should go above "It\'s just Markdown."',
     kind: "comment",
@@ -254,8 +250,8 @@ const HOMEPAGE_WORKFLOW_REVIEW_ITEMS = [
     ],
   },
   {
-    key: "nora-suggestion",
-    commentIds: ["nora-suggestion"],
+    key: "rd-s1",
+    commentIds: ["rd-s1"],
     author: "Nora",
     body: 'Replace: "agent\'s plan" with "homepage plan"',
     kind: "suggestion",
@@ -779,7 +775,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
     const railRect = railElement.getBoundingClientRect();
     const measurementScale = getHomepageWorkflowDocumentScale(shellElement);
     const anchorElements =
-      pageElement.querySelectorAll<HTMLElement>("[data-comment-ids]");
+      pageElement.querySelectorAll<HTMLElement>('span[id^="rd-"]');
 
     setCommentAnchorGroups(
       groupCommentAnchorMeasurements(
@@ -1027,7 +1023,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
                   {showUserFeedback ? (
                     <span
                       className="bg-[#FFF5C7] decoration-clone box-decoration-clone dark:bg-amber-900/35"
-                      data-comment-ids='["nora-comment"]'
+                      id="rd-c1"
                       data-testid="homepage-workflow-comment-highlight"
                     >
                       "It's just Markdown."
@@ -1046,19 +1042,22 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
                 </p>
                 {showUserFeedback ? (
                   <p className="m-0 mb-4 text-[clamp(0.95rem,2.25vw,1.12rem)] leading-[1.65] text-stone-700 dark:text-stone-300">
-                    <span
-                      className="rounded-[0.2rem] bg-rose-50 text-rose-900 line-through decoration-rose-600/75 dark:bg-rose-900/35 dark:text-rose-300"
-                      data-comment-ids='["nora-suggestion"]'
-                      data-testid="homepage-workflow-suggestion-old"
-                    >
-                      Review an agent's plan
-                    </span>{" "}
-                    <span
-                      className="rounded-[0.2rem] bg-emerald-50 text-emerald-800 underline decoration-emerald-500/75 underline-offset-[0.16em] dark:bg-emerald-950/50 dark:text-emerald-300"
-                      data-comment-ids='["nora-suggestion"]'
-                      data-testid="homepage-workflow-suggestion-new"
-                    >
-                      Review a homepage plan
+                    {/* One anchor wrapping both halves, as a replacement is
+                        written in the format: an id is unique, so the two
+                        halves cannot each carry it. */}
+                    <span id="rd-s1">
+                      <span
+                        className="rounded-[0.2rem] bg-rose-50 text-rose-900 line-through decoration-rose-600/75 dark:bg-rose-900/35 dark:text-rose-300"
+                        data-testid="homepage-workflow-suggestion-old"
+                      >
+                        Review an agent's plan
+                      </span>{" "}
+                      <span
+                        className="rounded-[0.2rem] bg-emerald-50 text-emerald-800 underline decoration-emerald-500/75 underline-offset-[0.16em] dark:bg-emerald-950/50 dark:text-emerald-300"
+                        data-testid="homepage-workflow-suggestion-new"
+                      >
+                        Review a homepage plan
+                      </span>
                     </span>{" "}
                     before it starts coding.
                   </p>
@@ -1172,16 +1171,8 @@ export function RoughdraftFlavoredMarkdownPage() {
           </h1>
           <p className="mt-5 text-lg leading-8 text-stone-600 dark:text-stone-400">
             Roughdraft Flavored Markdown is regular Markdown plus portable
-            review markup. It builds on{" "}
-            <a
-              className="font-medium text-slate-950 dark:text-slate-50 underline decoration-slate-300 dark:decoration-slate-600 underline-offset-4 hover:decoration-slate-950 dark:hover:decoration-slate-50"
-              href="https://criticmarkup.com/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              CriticMarkup
-            </a>{" "}
-            syntax and the text-first model behind{" "}
+            review markup: ordinary HTML anchors in the body and a YAML
+            endmatter block, following the text-first model behind{" "}
             <a
               className="font-medium text-slate-950 dark:text-slate-50 underline decoration-slate-300 dark:decoration-slate-600 underline-offset-4 hover:decoration-slate-950 dark:hover:decoration-slate-50"
               href="https://developers.notion.com/guides/data-apis/enhanced-markdown"
@@ -1304,11 +1295,11 @@ export function RoughdraftFlavoredMarkdownPage() {
               The review layer is small on purpose
             </h2>
             <p className="mt-4 text-base leading-7 text-stone-600 dark:text-stone-400">
-              Roughdraft uses CriticMarkup-compatible markers for comments,
-              highlights, insertions, deletions, and substitutions. Roughdraft
-              extends those markers with document-local metadata so review
-              threads, authorship, timestamps, and suggested-change discussions
-              can survive in the Markdown file itself.
+              Roughdraft uses ordinary HTML elements as anchors for comments,
+              insertions, deletions, and substitutions. Each anchor carries an
+              id that binds it to a record in YAML endmatter, so review threads,
+              authorship, timestamps, and suggested-change discussions can
+              survive in the Markdown file itself.
             </p>
           </div>
 
@@ -1349,9 +1340,10 @@ export function RoughdraftFlavoredMarkdownPage() {
               The extra fields make review state portable
             </h2>
             <p className="mt-4 text-base leading-7 text-stone-600 dark:text-stone-400">
-              Standard CriticMarkup captures the visible annotation. Roughdraft
-              keeps the same readable markers, adds compact inline references,
-              and stores review metadata in final YAML endmatter.
+              The anchor captures the visible annotation: the highlighted text,
+              the inserted text, or the deleted text. Roughdraft stores
+              everything else — authorship, timestamps, replies, and status — in
+              final YAML endmatter.
             </p>
           </div>
 

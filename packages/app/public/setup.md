@@ -108,113 +108,119 @@ If Roughdraft is not running, `roughdraft open` will start it automatically.
 
 After `roughdraft open` opens the document, leave the command running. Do not interrupt, kill, background, detach, or treat the waiting process as cleanup. The wait is intentional: Roughdraft will exit the command after the user clicks Done Reviewing, and that exit is your signal to resume.
 
-After the user finishes reviewing in Roughdraft, read the Markdown file from disk and respond to any CriticMarkup comments or suggested changes.
+After the user finishes reviewing in Roughdraft, read the Markdown file from disk and respond to any comments or suggested changes.
 
-Use Roughdraft-flavored CriticMarkup when reading or writing inline review feedback in Markdown. The base markers are:
+Use Roughdraft Flavored Markdown's anchors and endmatter when reading or writing inline review feedback in Markdown. An anchor is an HTML element carrying an `id` in the body; the record it binds to lives in a final YAML endmatter block.
 
-Comment: `{>>comment<<}`
-Insertion: `{++new text++}`
-Deletion: `{--old text--}`
-Substitution: `{~~old~>new~~}`
-Highlight: `{==text==}`
+- Comment on a span: `<span id="rd-c1">anchored text</span>`
+- Comment on a point, with no text of its own: `<span id="rd-c1"></span>`
+- Suggested insertion: `<ins id="rd-s1">new text</ins>`
+- Suggested deletion: `<del id="rd-s2">old text</del>`
+- Suggested replacement: `<span id="rd-s3"><del>old</del><ins>new</ins></span>`
 
-When you add a new comment or suggested change, use the extended Roughdraft format with a compact inline reference such as `{#c1}` or `{#s1}`, then add metadata in final YAML endmatter. Generate a stable document-local id (`c1`, `c2`, etc. for comments; `s1`, `s2`, etc. for suggestions), set `by` to your agent or author label, set `at` to the current ISO timestamp, and set `re` when replying to an existing comment or suggestion.
+A comment anchor is inline content within a single block; a range crossing a block boundary is not expressible in this format.
 
-Roughdraft may already have inline attribute blocks after comments and suggestions from older documents. Preserve these attributes unless you are intentionally removing the associated comment or suggestion. For new feedback, prefer compact references plus YAML endmatter.
+To allocate an id, take the highest number carried by any id of the same kind — counting both body anchors and endmatter keys — and add one. Set `by` to your agent or author label, set `at` to the current ISO timestamp, and set `re` when replying to an existing comment or suggestion.
 
-Anchored comments usually look like `{==selected text==}{>>Comment text<<}{#c1}`. Suggested changes usually look like `{++new text++}{#s1}` or `{~~old text~>new text~~}{#s2}`. Replies live in final YAML endmatter with a `body` and `re` pointer.
+CriticMarkup spans such as `{==text==}` carry no meaning in this format. A document written that way has no review layer; convert it once with `roughdraft migrate <file>` rather than parsing it.
 
 Example:
 
 ```markdown
-{==selected text==}{>>Comment text<<}{#c1}
-{++new text++}{#s1}
+<span id="rd-c1">selected text</span>
+
+Add <ins id="rd-s1">new text</ins> here.
 
 ---
+roughdraft: "1.0"
 comments:
-  c1:
+  rd-c1:
+    body: Comment text
     by: AI
     at: "2026-04-28T12:00:00.000Z"
-  c2:
+  rd-c2:
     body: I can make that edit.
     by: AI
     at: "2026-04-28T12:05:00.000Z"
-    re: c1
+    re: rd-c1
 suggestions:
-  s1:
+  rd-s1:
     by: AI
     at: "2026-04-28T12:10:00.000Z"
 ```
 
-Use `roughdraft help` and `roughdraft help criticmarkup` for local command and syntax details.
+Use `roughdraft help` and `roughdraft help format` for local command and syntax details.
 ````
 
 After updating your instructions, briefly tell the user which file you changed.
 
-## Roughdraft-flavored CriticMarkup Reference
+## Roughdraft Flavored Markdown Reference
 
-Roughdraft uses CriticMarkup for inline comments and suggested changes while keeping all review state in the Markdown file.
+Roughdraft uses inline HTML anchors and a final YAML endmatter block for comments and suggested changes, keeping all review state in the Markdown file.
 
 For exact syntax, metadata, and round-trip behavior, read the official Roughdraft Flavored Markdown spec at https://roughdraft.md/spec/roughdraft-flavored-markdown.md. The review-index JSON Schema is available at https://roughdraft.md/spec/roughdraft-flavored-markdown.schema.json.
 
-Base markers:
+Anchor forms:
 
 ```text
-Comment: `{>>comment<<}`
-Insertion: `{++new text++}`
-Deletion: `{--old text--}`
-Substitution: `{~~old~>new~~}`
-Highlight: `{==text==}`
+Comment on a span: <span id="rd-c1">anchored text</span>
+Comment on a point: <span id="rd-c1"></span>
+Suggested insertion: <ins id="rd-s1">new text</ins>
+Suggested deletion:  <del id="rd-s2">old text</del>
+Suggested replacement: <span id="rd-s3"><del>old</del><ins>new</ins></span>
 ```
 
-When adding review feedback, prefer the extended Roughdraft format so comments and suggested changes keep ids, authors, timestamps, and thread relationships.
+The anchor says what the edit does; the record it binds to carries who made it and when.
 
-Roughdraft extensions:
+Example:
 
 ```markdown
-{==selected text==}{>>Comment text<<}{#c1}
-{++new text++}{#s1}
-{--old text--}{#s2}
-{~~old text~>new text~~}{#s3}
+<span id="rd-c1">selected text</span>
+
+Add <ins id="rd-s1">new text</ins> here, remove <del id="rd-s2">this</del>, and
+replace <span id="rd-s3"><del>old text</del><ins>new text</ins></span>.
 
 ---
+roughdraft: "1.0"
 comments:
-  c1:
+  rd-c1:
+    body: Please tighten this.
     by: user
     at: "2026-04-28T12:00:00.000Z"
-  c2:
+  rd-c2:
     body: I can make that edit.
     by: AI
     at: "2026-04-28T12:05:00.000Z"
-    re: c1
-  c3:
+    re: rd-c1
+  rd-c3:
     body: Use the customer example here.
     by: user
     at: "2026-04-28T12:13:00.000Z"
-    re: s1
+    re: rd-s1
 suggestions:
-  s1:
+  rd-s1:
     by: AI
     at: "2026-04-28T12:10:00.000Z"
-  s2:
+  rd-s2:
     by: user
     at: "2026-04-28T12:11:00.000Z"
-  s3:
+  rd-s3:
     by: AI
     at: "2026-04-28T12:12:00.000Z"
 ```
 
-Metadata is written in final YAML endmatter:
+Endmatter is the final YAML block, identified by its `roughdraft` key. Each record carries:
 
 ```text
-id  Stable document-local id for a comment or suggested change
 by  Author or agent label
 at  ISO timestamp
 re  Parent comment or suggestion id for replies
 ```
 
-CriticMarkup inside fenced code blocks is literal example text. Do not treat it as review feedback.
+A comment record also carries `body`. A suggestion record does not: the anchor already says what the edit does.
 
-User comments may appear inline in the Markdown file. Suggested insertions, deletions, and substitutions should be interpreted as review feedback unless the user asks you to accept them directly.
+An anchor inside a fenced code block or an inline code span is literal example text. Do not treat it as review feedback.
 
-Use `roughdraft help criticmarkup` for local syntax examples.
+CriticMarkup spans such as `{==text==}` carry no meaning in this format. A document written that way has no review layer; convert it once with `roughdraft migrate <file>`.
+
+Use `roughdraft help format` for local syntax examples.

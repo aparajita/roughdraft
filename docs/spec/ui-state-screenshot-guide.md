@@ -60,37 +60,39 @@ Paragraph with **bold**, [link](https://example.com), `inline code`.
 ```
 ### Review Document
 ```markdown
-# Review document {==Select this sentence==}{>>Root comment<<}{#root} This sentence includes {++clearer wording++}{#s1}. Replace {~~old phrase~>new phrase~~}{#s2} and remove {--dead text--}{#s3}.
+# Review document <span id="rd-c1">Select this sentence</span> This sentence includes <ins id="rd-s1">clearer wording</ins>. Replace <span id="rd-s2"><del>old phrase</del><ins>new phrase</ins></span> and remove <del id="rd-s3">dead text</del>.
 
 ---
+roughdraft: "1.0"
 comments:
-  root:
+  rd-c1:
+    body: Root comment
     by: Nora
     at: "2026-04-28T12:00:00.000Z"
-  child:
+  rd-c2:
     body: Nested reply
     by: AI
     at: "2026-04-28T12:01:00.000Z"
-    re: root
-  c1:
+    re: rd-c1
+  rd-c3:
     body: Looks good.
     by: Nora
     at: "2026-04-28T12:03:00.000Z"
-    re: s1
+    re: rd-s1
 suggestions:
-  s1:
+  rd-s1:
     by: AI
     at: "2026-04-28T12:02:00.000Z"
-  s2:
+  rd-s2:
     by: AI
     at: "2026-04-28T12:04:00.000Z"
-  s3:
+  rd-s3:
     by: AI
     at: "2026-04-28T12:05:00.000Z"
 ```
-### Fenced CriticMarkup Document
+### Fenced Anchor Document
 ```markdown
-# Fenced examples This page should not show a review rail just because examples appear inside code fences. ```text {==example==}{>>comment<<}{#c1} {++inserted++} {--deleted--} {~~old~>new~~} ```
+# Fenced examples This page should not show a review rail just because examples appear inside code fences. ```text <span id="rd-c1">example</span> <ins id="rd-s1">inserted</ins> <del id="rd-s2">deleted</del> ```
 ```
 ## Capture Matrix
 | Area | State | How to reach it | Useful selectors | Notes |
@@ -133,6 +135,8 @@ suggestions:
 | Remote | Disconnected banner | Drop remote session connection | `role=alert`, `aria-label="Remote session disconnected"` | Best captured with backend mocking. |
 | Editor | Selection menu | Select text in rich editor | `selection-menu` | Capture formatting buttons and comment/suggestion actions. |
 | Editor | Selection menu on suggestion | Select existing suggestion text | `selection-menu-action-accept-suggestion`, `selection-menu-action-reject-suggestion` | Requires review fixture. |
+| Editor | Comment action blocked | Select text that crosses a block boundary, partially overlaps an existing comment anchor, or starts or ends inside inline code, then hover the disabled Comment action | `selection-menu-action-comment`, `blocked-action-tooltip` | Comment button is disabled; tooltip states the blocking reason. |
+| Editor | Context menu review actions blocked | Select text inside a fenced code block, then right-click inside the selection | `editor-context-menu-action-add-comment`, `editor-context-menu-action-suggest-insertion`, `editor-context-menu-action-suggest-deletion`, `editor-context-menu-action-suggest-replacement`, `blocked-action-tooltip` | All four review actions are disabled; each carries the same reason. Right-click outside the selection collapses it and changes why the actions are disabled. |
 | Editor | Link popover | Click a link or choose Link from selection menu | `link-popover`, `link-url-input`, `link-action-open`, `link-action-delete` | Use the plain fixture link. |
 | Editor | Context menu | Right-click in rich editor | `editor-context-menu` | Capture comment, suggestion, paste, and paste-markdown actions. |
 | Review rail | Comments | Open review fixture in rich mode | `document-review-rail`, `comment-thread-root` | Thread containers use `data-comment-thread-container="true"`. |
