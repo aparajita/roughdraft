@@ -24,7 +24,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `API_PORT=${apiPort} pnpm exec tsx e2e/start-api.ts`,
+      command: `API_PORT=${apiPort} pnpm exec tsx --conditions=development e2e/start-api.ts`,
       port: apiPort,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",

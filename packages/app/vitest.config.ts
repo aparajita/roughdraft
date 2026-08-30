@@ -5,16 +5,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
-      // The subpath comes first: an alias key is matched as a prefix, so the
-      // bare specifier below would otherwise capture it and resolve to
-      // `index.ts/migrate`.
-      "@roughdraft/rfm/migrate": fileURLToPath(
-        new URL("../rfm/src/migrate.ts", import.meta.url),
-      ),
-      "@roughdraft/rfm": fileURLToPath(
-        new URL("../rfm/src/index.ts", import.meta.url),
-      ),
     },
+    // `@roughdraft/rfm` resolves to its TypeScript source through the package's
+    // own "development" export condition, so no alias is needed here.
+    conditions: ["development"],
   },
   test: {
     coverage: {

@@ -6,15 +6,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
       "import": "./dist/index.js"
     },
     "./migrate": {
       "types": "./dist/migrate.d.ts",
+      "development": "./src/migrate.ts",
       "import": "./dist/migrate.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "test": "vitest run"
   },
   "devDependencies": {

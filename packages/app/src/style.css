@@ -714,21 +714,6 @@
   --code-block-foreground: oklch(0.985 0 0);
 }
 
-@keyframes document-save-status-saved-fade {
-  0%,
-  20% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-.document-save-status-saved {
-  animation: document-save-status-saved-fade 2s ease-out forwards;
-}
-
 /*
  * Review layout grid: a single document column that rests centered (no
  * comments) or shifted-left with a review rail (comments present).

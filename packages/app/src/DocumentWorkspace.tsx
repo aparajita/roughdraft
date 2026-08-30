@@ -261,28 +261,11 @@ function getSaveStatusViewModel(
   saveState: DocumentSaveState,
   diskChangeState: DiskChangeState,
 ) {
-  if (diskChangeState === "conflict") {
+  if (isDocumentSaveBlocked(diskChangeState)) {
+    // A blocked state is named once, by the banner that explains it, so the
+    // two controls cannot drift into calling the same state by two names.
     return {
-      label: "Save conflict",
-      ariaLabel: "Save conflict",
-      tone: "warning" as const,
-      Icon: AlertTriangle,
-    };
-  }
-
-  if (diskChangeState === "changed") {
-    return {
-      label: "File changed on disk",
-      ariaLabel: "File changed on disk",
-      tone: "warning" as const,
-      Icon: AlertTriangle,
-    };
-  }
-
-  if (diskChangeState === "paused") {
-    return {
-      label: "Autosave paused",
-      ariaLabel: "Autosave paused",
+      label: conflictNoticeCopy[diskChangeState].title,
       tone: "warning" as const,
       Icon: AlertTriangle,
     };
@@ -291,7 +274,6 @@ function getSaveStatusViewModel(
   if (saveState === "saving") {
     return {
       label: "Saving",
-      ariaLabel: "Saving",
       tone: "neutral" as const,
       Icon: Loader2,
     };
@@ -300,46 +282,69 @@ function getSaveStatusViewModel(
   if (saveState === "error") {
     return {
       label: "Save failed",
-      ariaLabel: "Save failed",
       tone: "danger" as const,
       Icon: AlertTriangle,
     };
   }
 
-  if (saveState === "unsaved") {
-    return {
-      label: "Unsaved changes",
-      ariaLabel: "Unsaved changes",
-      tone: "neutral" as const,
-      Icon: Loader2,
-    };
-  }
-
+  // PageCard emits "unsaved" only while saving is blocked, and every blocked
+  // disk state returned above, so this tail reports the saved document.
   return {
     label: "Saved",
-    ariaLabel: "Saved",
     tone: "success" as const,
     Icon: Check,
   };
 }
 
-export function DocumentSaveStatusIndicator({
+export function isDocumentSaveBlocked(
+  diskChangeState: DiskChangeState,
+): diskChangeState is Exclude<DiskChangeState, "clean"> {
+  // While the file on disk diverges, the conflict banner owns the resolution
+  // and nothing may write over it — autosave, the shortcut, and the button
+  // alike.
+  return diskChangeState !== "clean";
+}
+
+export function isManualSaveDisabled({
   saveState,
   diskChangeState,
 }: {
   saveState: DocumentSaveState;
   diskChangeState: DiskChangeState;
 }) {
+  // "saving" keeps the button live: that state means a debounced write is
+  // still pending, and flushing it now is the whole point of the control.
+  return isDocumentSaveBlocked(diskChangeState) || saveState === "saved";
+}
+
+export function DocumentSaveButton({
+  saveState,
+  diskChangeState,
+  onSave,
+}: {
+  saveState: DocumentSaveState;
+  diskChangeState: DiskChangeState;
+  onSave: () => void;
+}) {
   const saveStatus = getSaveStatusViewModel(saveState, diskChangeState);
   const SaveStatusIcon = saveStatus.Icon;
+  const disabled = isManualSaveDisabled({ saveState, diskChangeState });
+  // The conflict banner spells out every disk-blocked state in full, so the
+  // button shrinks to its icon there rather than repeating the banner beside
+  // the handoff control.
+  const showLabel = !isDocumentSaveBlocked(diskChangeState);
 
   return (
-    <span
-      data-testid="document-save-status"
-      role="status"
-      aria-label={saveStatus.ariaLabel}
+    <Button
+      type="button"
+      data-testid="document-save-button"
+      variant="outline"
+      size="lg"
+      disabled={disabled}
+      onClick={onSave}
       className={cn(
-        "inline-flex size-7 shrink-0 items-center justify-center text-stone-400 dark:text-stone-500",
+        "h-9 shrink-0 rounded-[7px] border-stone-300 bg-white text-sm font-bold text-stone-700 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:bg-stone-100 focus-visible:ring-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700",
+        showLabel ? "px-3" : "w-9 px-0",
         saveStatus.tone === "warning" && "text-amber-600 dark:text-amber-400",
         saveStatus.tone === "danger" && "text-red-600 dark:text-red-400",
       )}
@@ -348,14 +353,18 @@ export function DocumentSaveStatusIndicator({
         data-testid="document-save-status-icon"
         className={cn(
           "size-3.5 shrink-0",
-          (saveStatus.label === "Saving" ||
-            saveStatus.label === "Unsaved changes") &&
-            "animate-spin",
-          saveStatus.label === "Saved" && "document-save-status-saved",
+          saveStatus.label === "Saving" && "animate-spin",
         )}
         aria-hidden="true"
       />
-    </span>
+      <span
+        data-testid="document-save-status"
+        role="status"
+        aria-label={saveStatus.label}
+      >
+        {showLabel ? saveStatus.label : null}
+      </span>
+    </Button>
   );
 }
 
@@ -368,14 +377,14 @@ export function isReviewHandoffDisabled({
   documentDiskChangeState: DiskChangeState;
   reviewHandoffState: ReviewHandoffState;
 }) {
-  // Transient save states ("saving"/"unsaved") intentionally do NOT disable the
-  // button. Disabling on them dims the whole control on every keystroke while
+  // A pending debounced save ("saving") intentionally does NOT disable the
+  // button. Disabling on it dims the whole control on every keystroke while
   // autosave debounces. Instead the button stays enabled and flushes the
   // pending save on click, so the agent still receives the latest content.
   return (
     saveState === "error" ||
     reviewHandoffState !== "idle" ||
-    documentDiskChangeState !== "clean"
+    isDocumentSaveBlocked(documentDiskChangeState)
   );
 }
 
@@ -572,6 +581,12 @@ export function DocumentWorkspace({
     };
   }, []);
 
+  const handleManualSave = useCallback(() => {
+    if (isDocumentSaveBlocked(documentDiskChangeState)) return;
+
+    void saveControllerRef.current?.flushSave();
+  }, [documentDiskChangeState]);
+
   useEffect(() => {
     if (!documentPage) return;
 
@@ -583,19 +598,19 @@ export function DocumentWorkspace({
 
       if (!isSaveShortcut) return;
 
+      // The browser's Save Page dialog is always wrong inside the editor, so
+      // swallow the shortcut even when the save itself cannot proceed.
       event.preventDefault();
       event.stopPropagation();
 
-      if (documentDiskChangeState !== "clean") return;
-
-      void saveControllerRef.current?.flushSave();
+      handleManualSave();
     };
 
     window.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => {
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [documentDiskChangeState, documentPage]);
+  }, [documentPage, handleManualSave]);
 
   const handleCompleteReview = useCallback(
     async (options?: CompleteReviewOptions) => {
@@ -748,26 +763,22 @@ export function DocumentWorkspace({
       )}
     >
       <RemoteSessionBanner backend={backend} />
-      {documentPage ? (
-        <div
-          className="fixed top-3 left-3 z-[60]"
-          data-testid="document-save-status-corner"
-        >
-          <DocumentSaveStatusIndicator
-            saveState={saveState}
-            diskChangeState={documentDiskChangeState}
-          />
-        </div>
-      ) : null}
       <div
         className={cn(
-          "fixed right-3 z-[60] flex max-w-[min(16rem,calc(100vw-1rem))] flex-col items-end gap-1.5",
+          "fixed right-3 z-[60] flex max-w-[min(22rem,calc(100vw-1rem))] flex-col items-end gap-1.5",
           conflictNotice ? "top-[19rem] sm:top-[7rem]" : "top-3",
         )}
         data-testid="document-status-stack"
         data-document-status-stack="true"
       >
         <div className="flex max-w-full items-center justify-end gap-1.5">
+          {documentPage ? (
+            <DocumentSaveButton
+              saveState={saveState}
+              diskChangeState={documentDiskChangeState}
+              onSave={handleManualSave}
+            />
+          ) : null}
           {showReviewHandoffButton ? (
             <Popover
               open={reviewHandoffPopoverOpen}
@@ -1176,7 +1187,7 @@ export function DocumentWorkspace({
               onSaveControllerChange={(controller) => {
                 saveControllerRef.current = controller;
               }}
-              saveBlocked={documentDiskChangeState !== "clean"}
+              saveBlocked={isDocumentSaveBlocked(documentDiskChangeState)}
               forceResetKey={documentForceResetKey}
             />
           ) : null

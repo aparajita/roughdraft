@@ -7,9 +7,10 @@ import {
   getDocumentEditorViewModeFromLocation,
 } from "../src/app-navigation";
 import {
-  DocumentSaveStatusIndicator,
+  DocumentSaveButton,
   DocumentWorkspace,
   getReviewHandoffButtonLabel,
+  isManualSaveDisabled,
   isReviewHandoffDisabled,
   shouldLatchDocumentChangedSinceOpen,
 } from "../src/DocumentWorkspace";
@@ -269,18 +270,21 @@ describe("saving/saved status indicator (issue 2 fix)", () => {
     vi.restoreAllMocks();
   });
 
-  async function renderSaveStatus({
+  async function renderSaveButton({
     saveState = "saved",
     documentDiskChangeState = "clean",
+    onSave = () => {},
   }: {
     saveState?: DocumentSaveState;
     documentDiskChangeState?: "clean" | "changed" | "conflict" | "paused";
+    onSave?: () => void;
   } = {}) {
     await act(async () => {
       root.render(
-        <DocumentSaveStatusIndicator
+        <DocumentSaveButton
           saveState={saveState}
           diskChangeState={documentDiskChangeState}
+          onSave={onSave}
         />,
       );
       await Promise.resolve();
@@ -336,19 +340,18 @@ describe("saving/saved status indicator (issue 2 fix)", () => {
   }
 
   it.each([
-    ["saved", "Saved", "document-save-status-saved"],
+    ["saved", "Saved", ""],
     ["saving", "Saving", "animate-spin"],
-    ["unsaved", "Unsaved changes", "animate-spin"],
     ["error", "Save failed", ""],
   ] satisfies Array<
     [DocumentSaveState, string, string]
-  >)("shows icon-only %s save status", async (saveState, label, iconClass) => {
-    await renderSaveStatus({ saveState });
+  >)("labels the save button for %s", async (saveState, label, iconClass) => {
+    await renderSaveButton({ saveState });
 
     const status = getByTestId(container, "document-save-status");
     expect(status.getAttribute("aria-label")).toBe(label);
-    expect(status.textContent).toBe("");
-    const icon = getByTestId(status, "document-save-status-icon");
+    expect(status.textContent).toBe(label);
+    const icon = getByTestId(container, "document-save-status-icon");
     if (iconClass) {
       expect(icon.classList.contains(iconClass)).toBe(true);
     }
@@ -358,53 +361,110 @@ describe("saving/saved status indicator (issue 2 fix)", () => {
     ["changed", "File changed on disk"],
     ["conflict", "Save conflict"],
     ["paused", "Autosave paused"],
-  ] as const)("shows disk-blocked %s save status", async (state, label) => {
-    await renderSaveStatus({ documentDiskChangeState: state });
+  ] as const)("shows disk-blocked %s state as an icon the banner explains", async (state, label) => {
+    await renderSaveButton({ documentDiskChangeState: state });
 
     const status = getByTestId(container, "document-save-status");
     expect(status.getAttribute("aria-label")).toBe(label);
+    // The conflict banner carries this wording; the button must not repeat
+    // it beside the banner, so it keeps the name only for screen readers.
     expect(status.textContent).toBe("");
-    expect(getByTestId(status, "document-save-status-icon")).not.toBeNull();
+    expect(getByTestId(container, "document-save-status-icon")).not.toBeNull();
   });
 
-  it("renders save status in the fixed corner when handoff exists", async () => {
+  it("saves on click while a debounced write is still pending", async () => {
+    const onSave = vi.fn();
+    await renderSaveButton({ saveState: "saving", onSave });
+
+    await click(getByTestId(container, "document-save-button"));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries on click after a failed save", async () => {
+    const onSave = vi.fn();
+    await renderSaveButton({ saveState: "error", onSave });
+
+    await click(getByTestId(container, "document-save-button"));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["saved", "clean"],
+    ["saving", "conflict"],
+    ["saving", "changed"],
+    ["saving", "paused"],
+  ] satisfies Array<
+    [DocumentSaveState, "clean" | "changed" | "conflict" | "paused"]
+  >)("ignores clicks for save state %s and disk state %s", async (saveState, documentDiskChangeState) => {
+    const onSave = vi.fn();
+    await renderSaveButton({ saveState, documentDiskChangeState, onSave });
+
+    const button = getByTestId<HTMLButtonElement>(
+      container,
+      "document-save-button",
+    );
+    expect(button.disabled).toBe(true);
+
+    await click(button);
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["changed", true],
+    ["conflict", true],
+    ["paused", true],
+    ["clean", false],
+  ] as const)("blocks manual save for disk state %s", (documentDiskChangeState, expected) => {
+    expect(
+      isManualSaveDisabled({
+        saveState: "saving",
+        diskChangeState: documentDiskChangeState,
+      }),
+    ).toBe(expected);
+  });
+
+  it("offers nothing to save once the document is saved", () => {
+    expect(
+      isManualSaveDisabled({ saveState: "saved", diskChangeState: "clean" }),
+    ).toBe(true);
+    expect(
+      isManualSaveDisabled({ saveState: "error", diskChangeState: "clean" }),
+    ).toBe(false);
+  });
+
+  it("places the save button to the left of the handoff button", async () => {
     await renderWorkspace({ watcherCount: 1 });
 
-    const stack = queryByTestId(container, "document-status-stack");
-    const header = getByTestId(container, "document-page-header");
-    const corner = getByTestId(container, "document-save-status-corner");
-    const doneReviewingButton = queryByTestId(
-      container,
-      "review-handoff-button",
-    );
-    expect(stack).not.toBeNull();
-    expect(doneReviewingButton).toBeDefined();
-    expect(doneReviewingButton?.textContent).toContain("Approve");
-    expect(doneReviewingButton?.textContent).not.toContain("Saved");
-    expect(stack?.textContent).not.toContain("Saved");
-    expect(header.textContent).toContain("test.md");
-    expect(header.textContent).not.toContain("Saved");
-    expect(queryByTestId(header, "document-save-status")).toBeNull();
+    const stack = getByTestId(container, "document-status-stack");
+    const saveButton = getByTestId(stack, "document-save-button");
+    const handoff = getByTestId(stack, "review-handoff-split-button");
+
     expect(
-      getByTestId(corner, "document-save-status").getAttribute("aria-label"),
-    ).toBe("Saved");
+      saveButton.compareDocumentPosition(handoff) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(getByTestId(stack, "review-handoff-button").textContent).toContain(
+      "Approve",
+    );
+    expect(queryByTestId(container, "document-save-status-corner")).toBeNull();
   });
 
-  it("renders save status in the fixed corner without handoff", async () => {
+  it("shows the save button for a document with no agent watching", async () => {
     await renderWorkspace();
 
-    const stack = queryByTestId(container, "document-status-stack");
+    const stack = getByTestId(container, "document-status-stack");
     const header = getByTestId(container, "document-page-header");
-    const corner = getByTestId(container, "document-save-status-corner");
-    expect(stack).not.toBeNull();
-    expect(stack?.textContent).not.toContain("I'm done");
-    expect(stack?.textContent).not.toContain("Saved");
-    expect(header.textContent).toContain("test.md");
-    expect(header.textContent).not.toContain("Saved");
-    expect(queryByTestId(header, "document-save-status")).toBeNull();
+
+    expect(stack.textContent).not.toContain("I'm done");
     expect(
-      getByTestId(corner, "document-save-status").getAttribute("aria-label"),
+      getByTestId(stack, "document-save-status").getAttribute("aria-label"),
     ).toBe("Saved");
+    expect(header.textContent).toContain("test.md");
+    expect(queryByTestId(header, "document-save-status")).toBeNull();
+    expect(queryByTestId(container, "document-save-status-corner")).toBeNull();
   });
 
   it.each([
@@ -644,6 +704,25 @@ describe("saving/saved status indicator (issue 2 fix)", () => {
     expect(
       getByTestId(container, "document-save-status").getAttribute("aria-label"),
     ).toBe("Save conflict");
+  });
+
+  it("does not save from the button while a disk conflict blocks writes", async () => {
+    const onSaveDocument = vi.fn().mockResolvedValue(undefined);
+    await renderWorkspace({
+      documentDiskChangeState: "conflict",
+      onSaveDocument,
+    });
+
+    const button = getByTestId<HTMLButtonElement>(
+      container,
+      "document-save-button",
+    );
+    expect(button.disabled).toBe(true);
+
+    await click(button);
+
+    expect(onSaveDocument).not.toHaveBeenCalled();
+    expect(getByTestId(container, "file-conflict-notice")).not.toBeNull();
   });
 
   it.each([

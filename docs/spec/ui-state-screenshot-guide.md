@@ -118,10 +118,10 @@ suggestions:
 | Document | Editing mode | Open mode menu and choose Editing | `document-mode-trigger` | Normal edit behavior. |
 | Document | Suggesting mode | Open mode menu and choose Suggesting | `document-mode-trigger` | Selection actions should create suggestions instead of direct edits. |
 | Document | Viewing mode | Open mode menu and choose Viewing | `document-mode-trigger` | Editing controls should look non-editable. |
-| Document | Save status: saved | Any clean document after autosave | `document-save-status` | Checkmark should sit fixed in the top-left corner and fade out over 2 seconds; accessible label remains `Saved`. |
-| Document | Save status: unsaved | Type in a local document before save completes | `document-save-status` | Spinner-only pending state; accessible label is `Unsaved changes`. Transient; often easier with save throttling or network mocking. |
-| Document | Save status: saving | Type and capture during autosave | `document-save-status` | Spinner-only pending state; accessible label is `Saving`. Transient; easiest with mocked delayed save. |
-| Document | Save status: failed | Force save error | `document-save-status` | Icon-only error state; accessible label is `Save failed`. Use backend/API mocking or a component harness. |
+| Document | Save status: saved | Any clean document after autosave | `document-save-button`, `document-save-status` | Checkmark and `Saved` label on a disabled save button in the top-right status stack, left of the handoff control. |
+| Document | Save status: saving | Type and capture during autosave | `document-save-button`, `document-save-status` | Spinner and `Saving` label; the button stays enabled so a click flushes the pending write. Transient; easiest with mocked delayed save. |
+| Document | Save status: failed | Force save error | `document-save-button`, `document-save-status` | Warning icon and `Save failed` label; the button stays enabled to retry. Use backend/API mocking or a component harness. |
+| Document | Save button blocked | Any disk-blocked state (changed, conflict, paused) | `document-save-button` | Icon-only disabled button; the conflict banner carries the wording, and the accessible label matches the banner title. |
 | Document | Disk changed | Open local file, modify file externally while browser content is clean | `file-conflict-notice`, `file-conflict-action-reload`, `file-conflict-action-overwrite` | Banner title: `File changed on disk`. |
 | Document | Save conflict | Edit in browser, then modify file externally before autosave resolves | `file-conflict-notice`, `file-conflict-action-keep-editing` | Banner title: `Save conflict`; autosave pauses. |
 | Document | Autosave paused | Keep editing after conflict | `file-conflict-notice`, `file-conflict-action-overwrite` | Banner title: `Autosave paused`; no keep-editing action. |

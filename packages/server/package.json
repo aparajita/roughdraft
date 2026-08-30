@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @roughdraft/rfm build && tsc",
-    "dev": "tsx watch src/dev.ts",
+    "build": "pnpm --filter @roughdraft/rfm build && rm -rf dist && tsc",
+    "dev": "tsx watch --conditions=development src/dev.ts",
     "test": "vitest run"
   },
   "dependencies": {

@@ -50,6 +50,10 @@ export function documentSaveStatus(page: Page) {
   return page.getByTestId("document-save-status");
 }
 
+export function documentSaveButton(page: Page) {
+  return page.getByTestId("document-save-button");
+}
+
 export function fileConflictNotice(page: Page) {
   return page.getByTestId("file-conflict-notice");
 }
