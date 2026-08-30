@@ -39,6 +39,9 @@ export const WATCH_POLL_REISSUE_SECONDS = 1800;
 // Client-side safety bound added on top of an explicit --timeout so the command
 // cannot hang if the server never responds.
 const WATCH_EXPLICIT_TIMEOUT_GRACE_SECONDS = 5;
+// The baseline --replay counts from: no event has been consumed, so the poll
+// returns every event the server still retains.
+const REPLAY_FROM_FIRST_RETAINED_EVENT = 0;
 const USAGE_ERROR = 2;
 const KNOWN_COMMANDS = [
   "open",
@@ -91,7 +94,14 @@ interface ReviewWatchRequestBody {
   projectPath: string;
   path: string;
   batchWindowSeconds: number;
+  /**
+   * Let the server pick the baseline by snapshotting its own sequence as the
+   * poll arrives. Only for a server too old to report `latestSequence`:
+   * anything emitted while no poll is in flight is skipped, so a caller that
+   * knows its own baseline sends `afterSequence` instead.
+   */
   fromNow: boolean;
+  afterSequence?: number;
   timeoutSeconds?: number;
 }
 
@@ -202,6 +212,12 @@ interface ParsedCommandOptions {
 }
 
 interface ParsedWatchOptions {
+  /**
+   * The sequence to count review events from. `open` reads it before the
+   * browser opens, so nothing the reviewer does can land before the baseline
+   * exists. No command line flag sets it; a bare `watch` reads its own.
+   */
+  afterSequence?: number;
   batchWindowSeconds: number;
   help: boolean;
   json: boolean;
@@ -2398,19 +2414,34 @@ async function runWatch(
   }
   const relativePath = path.relative(target.projectDir, target.openPath);
   const watchUrl = new URL("/api/review-events/watch", serverUrl);
-  const baseBody: ReviewWatchRequestBody = {
+
+  // One baseline for the whole watch, advanced only by what the polls report.
+  // Asking the server to snapshot its own sequence per poll drops any event
+  // emitted while no poll is in flight: before the first poll registers, and
+  // between a bounded poll returning and its re-issue.
+  let afterSequence = options.replay
+    ? REPLAY_FROM_FIRST_RETAINED_EVENT
+    : (options.afterSequence ??
+      (await readLatestReviewSequence(deps, serverUrl, {
+        projectDir: target.projectDir,
+        relativePath,
+      })));
+
+  const pollBody = (timeoutSeconds: number): ReviewWatchRequestBody => ({
     projectPath: target.projectDir,
     path: relativePath,
     batchWindowSeconds: options.batchWindowSeconds,
-    fromNow: !options.replay,
-  };
+    fromNow: afterSequence === null,
+    ...(afterSequence === null ? {} : { afterSequence }),
+    timeoutSeconds,
+  });
 
   // Explicit --timeout: a single bounded poll, surfacing a timeout as a
   // non-zero exit. The client-side bound is a safety net on top of the server's.
   if (options.timeoutSeconds !== undefined) {
     const { ok, status, payload } = await deps.pollReviewEvents(
       watchUrl,
-      { ...baseBody, timeoutSeconds: options.timeoutSeconds },
+      pollBody(options.timeoutSeconds),
       {
         timeoutMs:
           (options.timeoutSeconds + WATCH_EXPLICIT_TIMEOUT_GRACE_SECONDS) *
@@ -2426,17 +2457,48 @@ async function runWatch(
   // No --timeout: wait until "Done Reviewing". Each poll is bounded server-side,
   // so re-issue cleanly whenever the server returns before a real event.
   for (;;) {
-    const { ok, status, payload } = await deps.pollReviewEvents(watchUrl, {
-      ...baseBody,
-      timeoutSeconds: WATCH_POLL_REISSUE_SECONDS,
-    });
+    const { ok, status, payload } = await deps.pollReviewEvents(
+      watchUrl,
+      pollBody(WATCH_POLL_REISSUE_SECONDS),
+    );
     if (!ok) {
       throw new Error(`Failed to watch review events: ${status}`);
     }
     if (payload.timedOut) {
+      if (typeof payload.nextSequence === "number") {
+        // `nextSequence` is what the next event will be issued; everything up
+        // to the one before it has been accounted for by this poll.
+        afterSequence = payload.nextSequence - 1;
+      }
       continue;
     }
     return reportWatchPayload(deps, target.openPath, payload, json);
+  }
+}
+
+/**
+ * The sequence of the last review event the server has issued for the document,
+ * or null when it does not report one — an older server, or one that cannot be
+ * reached, in which case the poll falls back to letting the server snapshot.
+ */
+async function readLatestReviewSequence(
+  deps: CliDependencies,
+  serverUrl: string,
+  target: { projectDir: string; relativePath: string },
+): Promise<number | null> {
+  const url = new URL("/api/review-events/status", serverUrl);
+  url.searchParams.set("projectPath", target.projectDir);
+  url.searchParams.set("path", target.relativePath);
+
+  try {
+    const response = await deps.fetchImpl(url);
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { latestSequence?: unknown };
+    return typeof payload.latestSequence === "number"
+      ? payload.latestSequence
+      : null;
+  } catch {
+    return null;
   }
 }
 
@@ -3042,13 +3104,29 @@ export async function runCli(
       const liveDevFrontend = await resolveLiveDevFrontendBaseUrl(deps);
       let result: EnsureRunningResult | null = null;
       let baseUrl: string;
+      // Null in a preview-web dev frontend, which serves no API of its own;
+      // the watch resolves a server for itself in that case.
+      let apiUrl: string | null;
 
       if (liveDevFrontend) {
         baseUrl = liveDevFrontend.frontendUrl;
+        apiUrl = liveDevFrontend.apiUrl;
       } else {
         result = await ensureServerRunning(deps, { projectDir });
         baseUrl = buildPublicBaseUrl(result.server.port);
+        apiUrl = result.server.url;
       }
+
+      const shouldWatch = !options.noWatch && !options.printUrl;
+      // Read before the window opens: the reviewer cannot act on a document
+      // they cannot see yet, so nothing they do lands ahead of this baseline.
+      const watchAfterSequence =
+        shouldWatch && apiUrl
+          ? await readLatestReviewSequence(deps, apiUrl, {
+              projectDir,
+              relativePath: path.relative(projectDir, openPath),
+            })
+          : null;
 
       const targetUrl = buildTargetUrl(baseUrl, openPath);
       let openMode: OpenMode = "disabled";
@@ -3077,8 +3155,6 @@ export async function runCli(
         return 0;
       }
 
-      const shouldWatch = !options.noWatch && !options.printUrl;
-
       if (shouldWatch) {
         if (!json) {
           if (openMode === "chrome-app") {
@@ -3094,12 +3170,15 @@ export async function runCli(
         }
 
         const watchOptions: ParsedWatchOptions = {
+          ...(watchAfterSequence === null
+            ? {}
+            : { afterSequence: watchAfterSequence }),
           batchWindowSeconds: options.batchWindowSeconds,
           help: false,
           json,
           positionals: [target],
           replay: options.replay,
-          serverUrl: liveDevFrontend?.apiUrl ?? undefined,
+          serverUrl: apiUrl ?? undefined,
           stateDir: options.stateDir,
           stateFile: options.stateFile,
           timeoutSeconds: options.timeoutSeconds,

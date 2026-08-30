@@ -44,11 +44,11 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-export function encodeRawMarkdownBlock(markdown: string): string {
+function encodeRawMarkdownBlock(markdown: string): string {
   return encodeURIComponent(markdown);
 }
 
-export function decodeRawMarkdownBlock(encoded: string): string {
+function decodeRawMarkdownBlock(encoded: string): string {
   try {
     return decodeURIComponent(encoded);
   } catch {

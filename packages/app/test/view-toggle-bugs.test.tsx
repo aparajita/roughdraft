@@ -1220,9 +1220,7 @@ describe("review handoff watcher affordance", () => {
     );
     expect(queryByTestId(document.body, "review-handoff-status")).toBeDefined();
     expect(
-      getByTestId(document.body, "review-handoff-status").querySelector(
-        ".h-\\[170px\\]",
-      ),
+      queryByTestId(document.body, "review-handoff-toy-frame"),
     ).not.toBeNull();
     expect(
       queryByTestId(document.body, "review-handoff-robots-toy"),

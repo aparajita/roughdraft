@@ -713,6 +713,10 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
     res.json({
       documentPath: target.absolutePath,
       projectPath: target.projectDir,
+      // The sequence of the last event issued, so a watcher can ask for
+      // everything after it rather than having the server snapshot its own
+      // sequence when each poll happens to arrive.
+      latestSequence: reviewEvents.latestSequence(),
       relativePath: target.relativePath,
       watching: watcherCount > 0,
       watcherCount,

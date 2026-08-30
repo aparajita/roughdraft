@@ -13,7 +13,7 @@ function normalizePathSeparators(value: string) {
   return value.replace(/\\/g, "/");
 }
 
-export function isReservedAppPath(pathname: string) {
+function isReservedAppPath(pathname: string) {
   const normalizedPathname = normalizePathSeparators(pathname);
   return [ROUGHDRAFT_FLAVORED_MARKDOWN_PATH, PREVIEW_PATH].includes(
     normalizedPathname,

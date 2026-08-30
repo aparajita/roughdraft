@@ -1,6 +1,46 @@
 import { expect, test } from "@playwright/test";
 import { logE2eEvent } from "./helpers";
 
+// The scene at which Roughdraft opens the plan, so the document preview inside
+// the popup is what the docked visual shows from here on.
+const DOCUMENT_PREVIEW_STAGE = 3;
+/** Scenes in the storyboard: one per step of the plan-review workflow. */
+const WORKFLOW_SCENE_COUNT = 6;
+/** Traffic lights on a window chrome mock: close, minimise, zoom. */
+const TRAFFIC_LIGHT_COUNT = 3;
+/** Review threads Nora leaves on the plan: one comment, one suggestion. */
+const REVIEW_THREAD_COUNT = 2;
+
+// Desktop layout.
+/** The document preview is shrunk to this fraction so a full page fits. */
+const DESKTOP_DOCUMENT_SCALE = 0.6;
+/** Decimal places the measured transform scale is compared to. */
+const DOCUMENT_SCALE_PRECISION = 2;
+/** A rail thread tracks its anchor: at most this far from the anchor's top. */
+const MAX_RAIL_ANCHOR_DRIFT_PX = 8;
+/** The comments shell leaves the rail this much of the popup's width. */
+const MAX_SHELL_SHARE_OF_POPUP_WIDTH = 0.85;
+/** Each scene is tall enough to hold the sticky visual beside it. */
+const MIN_DESKTOP_SCENE_HEIGHT_PX = 500;
+
+// Mobile dock: the visual pins to the bottom of the viewport as scenes scroll
+// past it, so every threshold below keeps the dock and the copy from colliding.
+/** A phone viewport narrow enough to put the layout in its docked mode. */
+const MOBILE_VIEWPORT = { width: 390, height: 844 };
+const MIN_DOCK_BOTTOM_GAP_PX = 8;
+const MAX_DOCK_BOTTOM_GAP_PX = 40;
+const MIN_DOCK_HEIGHT_PX = 200;
+/** Clearance between the bottom of a scene's copy and the top of the dock. */
+const MIN_COPY_TO_DOCK_GAP_PX = 8;
+/** Clearance between the document title and the bottom edge of the dock. */
+const MIN_TITLE_TO_DOCK_BOTTOM_GAP_PX = 8;
+/** The scaled document starts this close to the top of its workspace. */
+const MAX_DOCUMENT_SURFACE_GAP_PX = 72;
+/** Slack added below the dock when scrolling a scene to its activation line. */
+const DOCK_ACTIVATION_SLACK_PX = 32;
+/** The activation line sits no further than this fraction down the viewport. */
+const DOCK_ACTIVATION_VIEWPORT_FRACTION = 0.35;
+
 test.describe("homepage workflow storyboard", () => {
   test("renders the plan-review storyboard above the Markdown section @smoke", async ({
     page,
@@ -14,9 +54,9 @@ test.describe("homepage workflow storyboard", () => {
     );
 
     const scenes = storyboard.getByTestId("homepage-workflow-scene");
-    await expect(scenes).toHaveCount(6);
+    await expect(scenes).toHaveCount(WORKFLOW_SCENE_COUNT);
     const sceneTexts = await scenes.allTextContents();
-    expect(sceneTexts).toHaveLength(6);
+    expect(sceneTexts).toHaveLength(WORKFLOW_SCENE_COUNT);
     expect(sceneTexts[0]).toContain("Ask for a plan");
     expect(sceneTexts[1]).toContain("The agent works normally");
     expect(sceneTexts[2]).toContain("Roughdraft opens the plan");
@@ -125,7 +165,7 @@ test.describe("homepage workflow storyboard", () => {
       roughdraftPopup
         .getByTestId("homepage-workflow-popup-traffic-lights")
         .getByTestId("homepage-workflow-popup-traffic-light"),
-    ).toHaveCount(3);
+    ).toHaveCount(TRAFFIC_LIGHT_COUNT);
     await expect(
       roughdraftPopup.getByTestId("homepage-workflow-popup-header"),
     ).toHaveCSS("background-color", "oklch(0.129 0.042 264.695)");
@@ -166,7 +206,10 @@ test.describe("homepage workflow storyboard", () => {
     expect(previewLayout.popupWidth).toBeGreaterThan(
       previewLayout.terminalWidth,
     );
-    expect(previewLayout.documentScale).toBeCloseTo(0.6, 2);
+    expect(previewLayout.documentScale).toBeCloseTo(
+      DESKTOP_DOCUMENT_SCALE,
+      DOCUMENT_SCALE_PRECISION,
+    );
     await expect(
       roughdraftPopup.getByTestId("homepage-workflow-review-comment"),
     ).toHaveCount(0);
@@ -199,7 +242,7 @@ test.describe("homepage workflow storyboard", () => {
     ).toContainText('Replace: "agent\'s plan" with "homepage plan"');
     await expect
       .poll(async () =>
-        storyboard.evaluate((element) => {
+        storyboard.evaluate((element, threadCount) => {
           const highlight = element.querySelector(
             '[data-testid="homepage-workflow-comment-highlight"]',
           );
@@ -207,10 +250,10 @@ test.describe("homepage workflow storyboard", () => {
             '[data-testid="homepage-workflow-suggestion-old"]',
           );
           const threads = element.querySelectorAll(
-            ".homepage-workflow-review-thread",
+            '[data-testid="homepage-workflow-review-thread"]',
           );
 
-          if (!highlight || !suggestion || threads.length < 2) {
+          if (!highlight || !suggestion || threads.length < threadCount) {
             throw new Error("Expected review anchors and Nora review threads");
           }
 
@@ -224,9 +267,9 @@ test.describe("homepage workflow storyboard", () => {
                 suggestion.getBoundingClientRect().top,
             ),
           );
-        }),
+        }, REVIEW_THREAD_COUNT),
       )
-      .toBeLessThanOrEqual(8);
+      .toBeLessThanOrEqual(MAX_RAIL_ANCHOR_DRIFT_PX);
     await expect(
       storyboard.getByTestId("homepage-workflow-agent-resume"),
     ).toHaveAttribute("data-terminal-line-visible", "false");
@@ -256,7 +299,7 @@ test.describe("homepage workflow storyboard", () => {
       commentsLayout.viewportWidth,
     );
     expect(commentsLayout.shellWidth).toBeLessThan(
-      commentsLayout.popupWidth * 0.85,
+      commentsLayout.popupWidth * MAX_SHELL_SHARE_OF_POPUP_WIDTH,
     );
 
     await scenes.nth(4).evaluate((element) => {
@@ -330,14 +373,14 @@ test.describe("homepage workflow storyboard", () => {
         };
       }),
     );
-    expect(sceneLayout).toHaveLength(6);
+    expect(sceneLayout).toHaveLength(WORKFLOW_SCENE_COUNT);
     for (let index = 1; index < sceneLayout.length; index += 1) {
       expect(sceneLayout[index].top).toBeGreaterThan(
         sceneLayout[index - 1].top,
       );
     }
     for (const scene of sceneLayout) {
-      expect(scene.height).toBeGreaterThan(500);
+      expect(scene.height).toBeGreaterThan(MIN_DESKTOP_SCENE_HEIGHT_PX);
     }
 
     const storyboardTop = await storyboard.evaluate(
@@ -368,7 +411,7 @@ test.describe("homepage workflow storyboard", () => {
   test("docks the storyboard visual without mobile overlap", async ({
     page,
   }, testInfo) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize(MOBILE_VIEWPORT);
     await page.goto("/");
 
     const storyboard = page.getByTestId("homepage-workflow-storyboard");
@@ -380,7 +423,7 @@ test.describe("homepage workflow storyboard", () => {
     const mobileSceneTexts = await storyboard
       .getByTestId("homepage-workflow-scene")
       .allTextContents();
-    expect(mobileSceneTexts).toHaveLength(6);
+    expect(mobileSceneTexts).toHaveLength(WORKFLOW_SCENE_COUNT);
     expect(mobileSceneTexts[0]).toContain("Ask for a plan");
     expect(mobileSceneTexts[1]).toContain("The agent works normally");
     expect(mobileSceneTexts[2]).toContain("Roughdraft opens the plan");
@@ -451,9 +494,11 @@ test.describe("homepage workflow storyboard", () => {
     expect(layoutAtStart.stickyMobileVisible).toBe("false");
     expect(layoutAtStart.stickyOpacity).toBe("0");
     expect(layoutAtStart.stickyPointerEvents).toBe("none");
-    expect(layoutAtStart.stickyBottomGap).toBeGreaterThanOrEqual(8);
-    expect(layoutAtStart.stickyBottomGap).toBeLessThan(40);
-    expect(layoutAtStart.stickyHeight).toBeGreaterThan(200);
+    expect(layoutAtStart.stickyBottomGap).toBeGreaterThanOrEqual(
+      MIN_DOCK_BOTTOM_GAP_PX,
+    );
+    expect(layoutAtStart.stickyBottomGap).toBeLessThan(MAX_DOCK_BOTTOM_GAP_PX);
+    expect(layoutAtStart.stickyHeight).toBeGreaterThan(MIN_DOCK_HEIGHT_PX);
     expect(layoutAtStart.sceneListPaddingBottom).toBeGreaterThan(
       layoutAtStart.stickyHeight,
     );
@@ -478,29 +523,38 @@ test.describe("homepage workflow storyboard", () => {
     }> = [];
     for (const index of [1, 2, 3, 4, 5]) {
       const targetStage = String(index + 1);
-      await scenes.nth(index).evaluate((element) => {
-        const sticky = document.querySelector(
-          '[data-testid="homepage-workflow-sticky-visual"]',
-        );
-        if (!sticky) {
-          throw new Error("Expected sticky visual");
-        }
+      await scenes.nth(index).evaluate(
+        (element, { slackPx, viewportFraction }) => {
+          const sticky = document.querySelector(
+            '[data-testid="homepage-workflow-sticky-visual"]',
+          );
+          if (!sticky) {
+            throw new Error("Expected sticky visual");
+          }
 
-        const stickyRect = sticky.getBoundingClientRect();
-        const activationLine = Math.max(
-          0,
-          Math.ceil(
-            stickyRect.top -
-              Math.min(stickyRect.height + 32, window.innerHeight * 0.35),
-          ),
-        );
-        window.scrollTo({
-          top:
-            element.getBoundingClientRect().top +
-            window.scrollY -
-            activationLine,
-        });
-      });
+          const stickyRect = sticky.getBoundingClientRect();
+          const activationLine = Math.max(
+            0,
+            Math.ceil(
+              stickyRect.top -
+                Math.min(
+                  stickyRect.height + slackPx,
+                  window.innerHeight * viewportFraction,
+                ),
+            ),
+          );
+          window.scrollTo({
+            top:
+              element.getBoundingClientRect().top +
+              window.scrollY -
+              activationLine,
+          });
+        },
+        {
+          slackPx: DOCK_ACTIVATION_SLACK_PX,
+          viewportFraction: DOCK_ACTIVATION_VIEWPORT_FRACTION,
+        },
+      );
 
       await expect(
         storyboard.getByTestId("homepage-workflow-terminal"),
@@ -511,95 +565,112 @@ test.describe("homepage workflow storyboard", () => {
       );
 
       stageLayouts.push(
-        await scenes.nth(index).evaluate((element, stage) => {
-          const sticky = document.querySelector(
-            '[data-testid="homepage-workflow-sticky-visual"]',
-          );
-          const sceneCopy = element.querySelector(
-            ".homepage-workflow-scene-copy",
-          );
-          const documentTitle = document.querySelector(
-            '[data-testid="homepage-workflow-document-title"]',
-          );
-          const documentScale = document.querySelector(
-            '[data-testid="homepage-workflow-document-scale"]',
-          );
-          const documentWorkspace = document.querySelector(
-            '[data-testid="homepage-workflow-document-workspace"]',
-          );
-          const popupHeader = document.querySelector(
-            ".homepage-workflow-popup .homepage-workflow-panel-header",
-          );
-          if (
-            !sticky ||
-            !sceneCopy ||
-            !documentTitle ||
-            !documentScale ||
-            !documentWorkspace
-          ) {
-            throw new Error(
-              "Expected sticky visual, scene copy, and document preview",
+        await scenes.nth(index).evaluate(
+          (element, { documentPreviewStage, stage }) => {
+            const sticky = document.querySelector(
+              '[data-testid="homepage-workflow-sticky-visual"]',
             );
-          }
+            const sceneCopy = element.querySelector(
+              '[data-testid="homepage-workflow-scene-copy"]',
+            );
+            const documentTitle = document.querySelector(
+              '[data-testid="homepage-workflow-document-title"]',
+            );
+            const documentScale = document.querySelector(
+              '[data-testid="homepage-workflow-document-scale"]',
+            );
+            const documentWorkspace = document.querySelector(
+              '[data-testid="homepage-workflow-document-workspace"]',
+            );
+            const popupHeader = document.querySelector(
+              '[data-testid="homepage-workflow-popup-header"]',
+            );
+            if (
+              !sticky ||
+              !sceneCopy ||
+              !documentTitle ||
+              !documentScale ||
+              !documentWorkspace ||
+              !popupHeader
+            ) {
+              throw new Error(
+                "Expected sticky visual, scene copy, document preview, and popup header",
+              );
+            }
 
-          const stickyRect = sticky.getBoundingClientRect();
-          const copyRect = sceneCopy.getBoundingClientRect();
-          const scaleRect = documentScale.getBoundingClientRect();
-          const titleRect = documentTitle.getBoundingClientRect();
-          const workspaceRect = documentWorkspace.getBoundingClientRect();
-          const popupHeaderRect = popupHeader?.getBoundingClientRect() ?? null;
-          const headerHitTarget = popupHeaderRect
-            ? document.elementFromPoint(
-                popupHeaderRect.left + popupHeaderRect.width / 2,
-                popupHeaderRect.top + popupHeaderRect.height / 2,
-              )
-            : null;
-          return {
-            copyBottom: copyRect.bottom,
-            copyTop: copyRect.top,
-            documentSurfaceGap:
-              stage >= 3 ? scaleRect.top - workspaceRect.top : null,
-            documentTitleBottom: stage >= 3 ? titleRect.bottom : null,
-            documentTitleTop: stage >= 3 ? titleRect.top : null,
-            popupHeaderIsPaintedAboveDock:
-              stage >= 3 && popupHeaderRect
-                ? popupHeaderRect.top < stickyRect.top &&
-                  headerHitTarget?.closest(
-                    ".homepage-workflow-popup .homepage-workflow-panel-header",
-                  ) !== null
+            const stickyRect = sticky.getBoundingClientRect();
+            const copyRect = sceneCopy.getBoundingClientRect();
+            const scaleRect = documentScale.getBoundingClientRect();
+            const titleRect = documentTitle.getBoundingClientRect();
+            const workspaceRect = documentWorkspace.getBoundingClientRect();
+            const popupHeaderRect = popupHeader.getBoundingClientRect();
+            const headerHitTarget = document.elementFromPoint(
+              popupHeaderRect.left + popupHeaderRect.width / 2,
+              popupHeaderRect.top + popupHeaderRect.height / 2,
+            );
+            // Nothing is painted over the header: what the viewer would click at
+            // its centre is the header itself, not the dock behind it.
+            const headerIsTopmost =
+              headerHitTarget !== null &&
+              headerHitTarget.closest(
+                '[data-testid="homepage-workflow-popup-header"]',
+              ) !== null;
+            const showsDocument = stage >= documentPreviewStage;
+            return {
+              copyBottom: copyRect.bottom,
+              copyTop: copyRect.top,
+              documentSurfaceGap: showsDocument
+                ? scaleRect.top - workspaceRect.top
                 : null,
-            popupHeaderTop:
-              stage >= 3 && popupHeaderRect ? popupHeaderRect.top : null,
-            stage,
-            stickyBottom: stickyRect.bottom,
-            stickyTop: stickyRect.top,
-            viewportHeight: window.innerHeight,
-          };
-        }, index + 1),
+              documentTitleBottom: showsDocument ? titleRect.bottom : null,
+              documentTitleTop: showsDocument ? titleRect.top : null,
+              popupHeaderIsPaintedAboveDock: showsDocument
+                ? popupHeaderRect.top < stickyRect.top && headerIsTopmost
+                : null,
+              popupHeaderTop: showsDocument ? popupHeaderRect.top : null,
+              stage,
+              stickyBottom: stickyRect.bottom,
+              stickyTop: stickyRect.top,
+              viewportHeight: window.innerHeight,
+            };
+          },
+          { documentPreviewStage: DOCUMENT_PREVIEW_STAGE, stage: index + 1 },
+        ),
       );
     }
 
     for (const stageLayout of stageLayouts) {
       expect(stageLayout.copyTop).toBeGreaterThanOrEqual(0);
       expect(stageLayout.copyBottom).toBeLessThanOrEqual(
-        stageLayout.stickyTop - 8,
+        stageLayout.stickyTop - MIN_COPY_TO_DOCK_GAP_PX,
       );
       expect(stageLayout.stickyBottom).toBeLessThanOrEqual(
         stageLayout.viewportHeight,
       );
+      if (stageLayout.stage < DOCUMENT_PREVIEW_STAGE) continue;
+
+      const { documentSurfaceGap, documentTitleBottom, popupHeaderTop } =
+        stageLayout;
+      // A missing measurement is a failure, not a reason to skip the checks
+      // below: the document preview is on screen from this stage onward.
       if (
-        stageLayout.stage >= 3 &&
-        stageLayout.documentTitleTop !== null &&
-        stageLayout.documentTitleBottom !== null &&
-        stageLayout.documentSurfaceGap !== null
+        documentSurfaceGap === null ||
+        documentTitleBottom === null ||
+        popupHeaderTop === null
       ) {
-        expect(stageLayout.documentTitleBottom).toBeLessThanOrEqual(
-          stageLayout.stickyBottom - 8,
+        throw new Error(
+          `Stage ${stageLayout.stage} reported no document preview layout`,
         );
-        expect(stageLayout.documentSurfaceGap).toBeLessThanOrEqual(72);
-        expect(stageLayout.popupHeaderTop).toBeLessThan(stageLayout.stickyTop);
-        expect(stageLayout.popupHeaderIsPaintedAboveDock).toBe(true);
       }
+
+      expect(documentTitleBottom).toBeLessThanOrEqual(
+        stageLayout.stickyBottom - MIN_TITLE_TO_DOCK_BOTTOM_GAP_PX,
+      );
+      expect(documentSurfaceGap).toBeLessThanOrEqual(
+        MAX_DOCUMENT_SURFACE_GAP_PX,
+      );
+      expect(popupHeaderTop).toBeLessThan(stageLayout.stickyTop);
+      expect(stageLayout.popupHeaderIsPaintedAboveDock).toBe(true);
     }
 
     const dimensions = await page.evaluate(() => ({

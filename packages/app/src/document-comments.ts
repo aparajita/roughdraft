@@ -90,7 +90,7 @@ export function normalizeCommentMeasurement(
   return value / measurementScale;
 }
 
-export function parseCommentIds(value: string | null | undefined): string[] {
+function parseCommentIds(value: string | null | undefined): string[] {
   if (!value) return [];
 
   try {

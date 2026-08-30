@@ -296,7 +296,7 @@ function getSaveStatusViewModel(
   };
 }
 
-export function isDocumentSaveBlocked(
+function isDocumentSaveBlocked(
   diskChangeState: DiskChangeState,
 ): diskChangeState is Exclude<DiskChangeState, "clean"> {
   // While the file on disk diverges, the conflict banner owns the resolution
@@ -887,7 +887,10 @@ export function DocumentWorkspace({
                   </form>
                 ) : (
                   <div>
-                    <div className="mb-3 flex h-[170px] items-center justify-center overflow-hidden">
+                    <div
+                      className="mb-3 flex h-[170px] items-center justify-center overflow-hidden"
+                      data-testid="review-handoff-toy-frame"
+                    >
                       <RobotsHighFiveToy
                         onHighFive={() =>
                           setReviewCompleteTitle((currentTitle) =>

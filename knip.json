@@ -1,4 +1,15 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreDependencies": ["express"]
+  "ignore": [".codex/skills/**", "packages/server/defaults.d.mts"],
+  "ignoreDependencies": ["@roughdraft/rfm", "express"],
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  },
+  "workspaces": {
+    "packages/app": {
+      "entry": ["e2e/start-api.ts"],
+      "ignore": ["src/components/ui/**"]
+    }
+  }
 }

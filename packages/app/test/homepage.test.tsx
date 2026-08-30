@@ -250,16 +250,14 @@ describe("Homepage", () => {
     expect(getByTestId(container, "rfm-source-pane").className).toContain(
       "flex-col",
     );
-    expect(
-      getByTestId(container, "rfm-source-pane").querySelector(
-        ".rfm-source-editor",
-      )?.className,
-    ).toContain("pt-10");
-    expect(
-      getByTestId(container, "rfm-source-pane").querySelector(
-        ".rfm-source-editor",
-      )?.className,
-    ).toContain("[--cm-selection-bg:rgb(30_58_138_/_0.45)]");
+    const sourceEditorClassName = getByTestId(
+      container,
+      "rfm-source-editor",
+    ).className;
+    expect(sourceEditorClassName).toContain("pt-10");
+    expect(sourceEditorClassName).toContain(
+      "[--cm-selection-bg:rgb(30_58_138_/_0.45)]",
+    );
     expect(
       getByTestId(container, "rfm-result-editor").querySelector(
         '[data-testid="document-page-shell"]',
