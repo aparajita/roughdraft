@@ -10,7 +10,6 @@ sandbox
 !.codex/skills/
 !.codex/skills/**
 .conductor/
-.claude/
 .agents/
 .mcp.json
 .roughdraft-state
