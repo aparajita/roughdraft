@@ -216,70 +216,11 @@ describe("Homepage", () => {
     expect(container.textContent).toContain(
       "working with other major Markdown apps to rally support",
     );
-    expect(container.textContent).toContain("# Homepage Conversion Plan");
-    expect(container.textContent).toContain(
-      'This should go above "It\'s just Markdown."',
-    );
-    expect(container.textContent).toContain("Review a homepage plan");
-    expect(container.textContent).toContain("Review a spec");
-    expect(container.textContent).toContain("Review a plan");
-    expect(container.textContent).toContain("Edit writing");
     expect(getByTestId(container, "rfm-format-demo").className).toContain(
       "max-w-none",
     );
     expect(getByTestId(container, "rfm-format-demo-intro").className).toContain(
       "px-4",
-    );
-    expect(
-      getByTestId(container, "rfm-format-demo-examples").className,
-    ).toContain("px-4");
-    const formatDemoArrow = getByTestId(container, "rfm-format-demo-arrow");
-    expect(formatDemoArrow?.className).toContain("items-start");
-    expect(getByTestId(container, "rfm-source-pane").textContent).toContain(
-      "Source",
-    );
-    expect(getByTestId(container, "rfm-result-pane").textContent).toContain(
-      "Result",
-    );
-    expect(getByTestId(container, "rfm-source-pane").className).toContain(
-      "bg-transparent",
-    );
-    expect(getByTestId(container, "rfm-result-pane").className).toContain(
-      "overflow-visible",
-    );
-    expect(getByTestId(container, "rfm-source-pane").className).toContain(
-      "flex-col",
-    );
-    const sourceEditorClassName = getByTestId(
-      container,
-      "rfm-source-editor",
-    ).className;
-    expect(sourceEditorClassName).toContain("pt-10");
-    expect(sourceEditorClassName).toContain(
-      "[--cm-selection-bg:rgb(30_58_138_/_0.45)]",
-    );
-    expect(
-      getByTestId(container, "rfm-result-editor").querySelector(
-        '[data-testid="document-page-shell"]',
-      )?.className,
-    ).toContain(
-      "min-[900px]:grid-cols-[minmax(0,min(100%,42rem))_minmax(13rem,16rem)]",
-    );
-    const resultDocumentCard = getByTestId(
-      container,
-      "rfm-result-editor",
-    ).querySelector('[data-testid="document-content-card"]');
-    expect(resultDocumentCard?.className).toContain("bg-white");
-    expect(resultDocumentCard?.className).toContain("shadow-");
-    expect(queryByTestId(container, "rfm-token")).toBeNull();
-    expect(
-      container.querySelector('.comment-anchor[id^="rd-c"]'),
-    ).not.toBeNull();
-    expect(
-      container.querySelector('.suggestion[data-rd-replace^="rd-s"]'),
-    ).not.toBeNull();
-    expect(container.innerHTML).not.toContain(
-      'contenteditable="plaintext-only"',
     );
     expect(
       getByTestId(container, "homepage-sneak-peek-image").getAttribute("src"),
@@ -320,21 +261,6 @@ describe("Homepage", () => {
       container.querySelector('a[href="/roughdraft-flavored-markdown"]')
         ?.textContent,
     ).toContain("spec");
-
-    const planReviewButton = getByTestId<HTMLButtonElement>(
-      container,
-      "rfm-format-example-plan-review",
-    );
-
-    await click(planReviewButton);
-
-    expect(container.textContent).toContain("Homepage Conversion Plan");
-    expect(container.textContent).toContain(
-      "Keep the format section as proof that the review data is portable Markdown.",
-    );
-    expect(container.textContent).toContain(
-      'Replace: "Review an agent\'s plan" with "Review a homepage plan"',
-    );
 
     await click(cta);
 

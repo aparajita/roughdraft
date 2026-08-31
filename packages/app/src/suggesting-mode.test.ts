@@ -576,25 +576,24 @@ describe("word delete across a hard break", () => {
       direction: "forward" as const,
       expected: { from: 1, to: 4 },
     },
-  ])("selects the word and not the break, $name", ({
-    caret,
-    direction,
-    expected,
-  }) => {
-    const editor = createTestEditor("<p>foo<br>bar</p>");
+  ])(
+    "selects the word and not the break, $name",
+    ({ caret, direction, expected }) => {
+      const editor = createTestEditor("<p>foo<br>bar</p>");
 
-    editor.view.dispatch(
-      editor.state.tr.setSelection(
-        TextSelection.create(editor.state.doc, caret),
-      ),
-    );
+      editor.view.dispatch(
+        editor.state.tr.setSelection(
+          TextSelection.create(editor.state.doc, caret),
+        ),
+      );
 
-    expect(resolveRemovalRange(editor.view.state, direction, "word")).toEqual(
-      expected,
-    );
+      expect(resolveRemovalRange(editor.view.state, direction, "word")).toEqual(
+        expected,
+      );
 
-    editor.destroy();
-  });
+      editor.destroy();
+    },
+  );
 });
 
 describe("a node selection holding no inline content", () => {

@@ -857,7 +857,7 @@ function resolveReply(
     );
   }
 
-  if (!marker || marker.kind !== "comment" || marker.parentIndex === null) {
+  if (marker?.kind !== "comment" || marker.parentIndex === null) {
     return undefined;
   }
 

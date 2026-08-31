@@ -10,6 +10,7 @@ import {
   buildReviewEntries,
   COMMENT_ANCHOR_SELECTOR,
   DELETION_ANCHOR_SELECTOR,
+  EDITOR_REPLACEMENT_ANCHOR_SELECTOR,
   getRootThreadIdForCommentId,
   INSERTION_ANCHOR_SELECTOR,
   readCommentAnchorIds,
@@ -71,7 +72,6 @@ interface PageCardProps {
   page: Page;
   activeDocumentPath?: string | null;
   selected?: boolean;
-  layout?: "default" | "embedded-demo";
   focusRequestKey?: string | null;
   onSave: (id: string, content: string) => Promise<void>;
   onSaveStateChange?: (state: DocumentSaveState) => void;
@@ -91,7 +91,6 @@ interface PageCardEditorSurfaceProps {
   page: Page;
   activeDocumentPath: string | null;
   selected: boolean;
-  layout: "default" | "embedded-demo";
   focusRequestKey: string | null;
   onSave: (id: string, content: string) => Promise<void>;
   onSaveStateChange: (state: DocumentSaveState) => void;
@@ -111,7 +110,6 @@ interface RichTextEditorSurfaceProps {
   page: Page;
   activeDocumentPath: string | null;
   selected: boolean;
-  layout: "default" | "embedded-demo";
   focusRequestKey: string | null;
   sourceMarkdown: string;
   onMarkdownChange: (markdown: string) => void;
@@ -125,7 +123,6 @@ interface CodeEditorSurfaceProps {
   markdown: string;
   hasCommentRailSpace: boolean;
   interactionMode: DocumentInteractionMode;
-  layout: "default" | "embedded-demo";
   onMarkdownChange: (markdown: string) => void;
 }
 
@@ -292,15 +289,6 @@ function addCommentIdsToAnchor(
   editor.view.dispatch(tr);
   return nextCommentIds;
 }
-
-/**
- * A replacement's two halves share one id, and an element id must be unique, so
- * inside the editor they carry it here instead. The `<span>` that owns the real
- * id — the element `REPLACEMENT_ANCHOR_SELECTOR` matches — is wrapped around the
- * pair only when the document is serialized, so a document being edited has
- * none and this is the only way to reach a replacement's anchor.
- */
-const EDITOR_REPLACEMENT_ANCHOR_SELECTOR = "[data-rd-replace]";
 
 /** Every element in the editor that anchors a suggestion. */
 const SUGGESTION_ANCHOR_SELECTOR = [
@@ -611,6 +599,19 @@ function resolveThreadComments(
     );
 }
 
+/**
+ * The review layout grid: a document column, and a rail column when there is a
+ * rail to put in it. `.review-layout-grid` in `style.css` is the single
+ * definition of the grid; `document-page-shell` is a test hook carrying no CSS.
+ */
+function getReviewLayoutGridClass(hasReviewRail: boolean) {
+  return cn(
+    "review-layout-grid document-page-shell",
+    !hasReviewRail &&
+      "review-layout-grid--centered document-page-shell-no-comments",
+  );
+}
+
 /** The client rect of a document range: what the composer popover points at. */
 function getRangeClientRect(editor: Editor, from: number, to: number): DOMRect {
   const start = editor.view.coordsAtPos(from);
@@ -630,7 +631,6 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   page,
   activeDocumentPath,
   selected,
-  layout,
   focusRequestKey,
   sourceMarkdown,
   onMarkdownChange,
@@ -1760,37 +1760,20 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     showReview && (comments.size > 0 || suggestions.length > 0);
   const contentCardClass =
     "rounded-[0.75rem] border border-[#E9E9E8] dark:border-border bg-white dark:bg-card shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)]";
-  const documentShellClass = cn(
-    "document-page-shell",
-    layout === "embedded-demo"
-      ? "grid grid-cols-1 gap-3 p-4 min-[900px]:grid-cols-[minmax(0,min(100%,42rem))_minmax(13rem,16rem)] min-[900px]:items-start min-[900px]:justify-start"
-      : "flex flex-col gap-6 rail:grid rail:grid-cols-[minmax(0,var(--document-measure))_var(--review-rail-width)] rail:items-start rail:justify-between rail:gap-8",
-    !hasReviewRail && "document-page-shell-no-comments",
-    layout !== "embedded-demo" &&
-      !hasReviewRail &&
-      "rail:grid-cols-[minmax(0,var(--document-measure))] rail:justify-center",
-  );
+  const documentShellClass = getReviewLayoutGridClass(hasReviewRail);
   const documentMainClass = cn(
-    "document-page-main w-full min-w-0",
-    layout === "embedded-demo"
-      ? "max-w-none"
-      : "max-w-[var(--document-measure)]",
+    "review-layout-main document-page-main w-full min-w-0 max-w-[var(--document-measure)]",
   );
-  const showFooter = showReview && layout !== "embedded-demo";
   const contentInsetClass = cn(
-    layout === "embedded-demo" ? "pb-0" : "pb-24",
+    "pb-24",
     // The footer is fixed over the document below the rail breakpoint, so the
     // document ends above it rather than behind it.
-    showFooter &&
+    showReview &&
       entries.length > 0 &&
       "pb-[var(--review-footer-height)] rail:pb-24",
   );
-  const reviewRailClass = cn(
-    "document-comment-rail",
-    layout === "embedded-demo"
-      ? "block px-4 pb-4 min-[900px]:p-0"
-      : "hidden rail:block",
-  );
+  const reviewRailClass =
+    "review-layout-rail document-comment-rail hidden rail:block";
 
   return (
     <div
@@ -1844,7 +1827,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           />
         ) : null}
       </div>
-      {showFooter ? (
+      {showReview ? (
         <ReviewEntryFooter
           entries={entries}
           currentEntryId={currentEntryId}
@@ -1899,32 +1882,15 @@ const CodeEditorSurface = memo(function CodeEditorSurface({
   markdown,
   hasCommentRailSpace,
   interactionMode,
-  layout,
   onMarkdownChange,
 }: CodeEditorSurfaceProps) {
-  const documentShellClass = cn(
-    "document-page-shell",
-    layout === "embedded-demo"
-      ? "grid grid-cols-1 gap-3 p-4 min-[900px]:grid-cols-[minmax(0,min(100%,42rem))_minmax(13rem,16rem)] min-[900px]:items-start min-[900px]:justify-start"
-      : "flex flex-col gap-6 rail:grid rail:grid-cols-[minmax(0,var(--document-measure))_var(--review-rail-width)] rail:items-start rail:justify-between rail:gap-8",
-    !hasCommentRailSpace && "document-page-shell-no-comments",
-    layout !== "embedded-demo" &&
-      !hasCommentRailSpace &&
-      "rail:grid-cols-[minmax(0,var(--document-measure))] rail:justify-center",
-  );
+  const documentShellClass = getReviewLayoutGridClass(hasCommentRailSpace);
   const documentMainClass = cn(
-    "document-page-main w-full min-w-0",
-    layout === "embedded-demo"
-      ? "max-w-none"
-      : "max-w-[var(--document-measure)]",
+    "review-layout-main document-page-main w-full min-w-0 max-w-[var(--document-measure)]",
   );
-  const contentInsetClass = layout === "embedded-demo" ? "pb-0" : "pb-24";
-  const reviewRailClass = cn(
-    "document-comment-rail pointer-events-none invisible",
-    layout === "embedded-demo"
-      ? "block px-4 pb-4 min-[900px]:p-0"
-      : "hidden rail:block",
-  );
+  const contentInsetClass = "pb-24";
+  const reviewRailClass =
+    "review-layout-rail document-comment-rail pointer-events-none invisible hidden rail:block";
 
   return (
     <div className="cursor-text bg-transparent" data-testid="page-card-code">
@@ -1961,7 +1927,6 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
   page,
   activeDocumentPath,
   selected,
-  layout,
   focusRequestKey,
   onSave,
   onSaveStateChange,
@@ -2209,7 +2174,6 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
         markdown={markdown}
         hasCommentRailSpace={hasCommentRailSpace}
         interactionMode={interactionMode}
-        layout={layout}
         onMarkdownChange={handleMarkdownChange}
       />
     );
@@ -2228,7 +2192,6 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
       page={page}
       activeDocumentPath={activeDocumentPath}
       selected={selected}
-      layout={layout}
       focusRequestKey={focusRequestKey}
       sourceMarkdown={effectiveRichTextSourceMarkdown}
       onMarkdownChange={handleMarkdownChange}
@@ -2244,7 +2207,6 @@ export function PageCard({
   page,
   activeDocumentPath = null,
   selected = false,
-  layout = "default",
   focusRequestKey = null,
   onSave,
   onSaveStateChange,
@@ -2271,7 +2233,6 @@ export function PageCard({
         page={page}
         activeDocumentPath={activeDocumentPath}
         selected={selected}
-        layout={layout}
         focusRequestKey={focusRequestKey}
         onSave={onSave}
         onSaveStateChange={setSaveState}

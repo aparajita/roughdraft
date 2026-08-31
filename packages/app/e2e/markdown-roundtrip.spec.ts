@@ -4,7 +4,6 @@ import {
   appendInCodeEditor,
   codeEditor,
   createMarkdownProject,
-  documentSaveStatus,
   logE2eEvent,
   openMarkdownFile,
   readProjectFile,
@@ -93,25 +92,6 @@ test.describe("markdown round-trips", () => {
     });
   });
 
-  test("initial open shows persistent saved status", async ({ page }) => {
-    const filePath = writeProjectFile(
-      projectDir,
-      "initial-saved.md",
-      "# Initial Saved\n\nBody.\n",
-    );
-
-    await openMarkdownFile(page, filePath);
-
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Saved",
-    );
-
-    logE2eEvent("markdown-roundtrip.initial-saved", {
-      file: "initial-saved.md",
-    });
-  });
-
   test("manual save shortcut flushes code-mode edits to disk @smoke", async ({
     page,
   }) => {
@@ -128,10 +108,6 @@ test.describe("markdown round-trips", () => {
     await expect
       .poll(() => readProjectFile(projectDir, "manual-save.md"))
       .toContain("Saved by shortcut.");
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Saved",
-    );
 
     logE2eEvent("markdown-roundtrip.manual-save-shortcut", {
       file: "manual-save.md",
@@ -160,10 +136,6 @@ test.describe("markdown round-trips", () => {
     await expect
       .poll(() => readProjectFile(projectDir, "rich-save.md"))
       .toContain("Saved by shortcut.");
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Saved",
-    );
 
     logE2eEvent("markdown-roundtrip.rich-manual-save", {
       file: "rich-save.md",
@@ -213,10 +185,6 @@ test.describe("markdown round-trips", () => {
         { defaultPrevented: true, metaKey: true, ctrlKey: false },
         { defaultPrevented: true, metaKey: false, ctrlKey: true },
       ]);
-      await expect(documentSaveStatus(page)).toHaveAttribute(
-        "aria-label",
-        "Saved",
-      );
     }
 
     logE2eEvent("markdown-roundtrip.save-default-prevented", {

@@ -39,12 +39,11 @@ const allowedSelectorPatterns = [
   /^\.cm-(content|editor|gutters)$/,
   /^\.ProseMirror$/,
   // Review anchors are addressed by the `rd-` id the format puts on them and by
-  // the classes the marks and decorations render, neither of which is a testid.
+  // the class the marks render; decorations are addressed by `data-testid`.
   /^\.comment-anchor(?:\[id\^="rd-c"\])?$/,
-  /^\.suggestion(?:-[a-z-]+)*(?:\[data-rd-replace\^?="rd-s\d*"\])?$/,
+  /^\.suggestion\[data-rd-replace\^="rd-s"\]$/,
   /^\[id\^?="rd-[cs]\d*"\]$/,
   /^\[data-comment-thread-root-id\]/,
-  /^\[data-suggestion-thread-container="true"\]$/,
   /^\[data-comment-thread-container="true"\]$/,
 ];
 

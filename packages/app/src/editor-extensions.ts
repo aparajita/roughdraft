@@ -69,7 +69,7 @@ const SUGGESTION_ID_PATTERN = /^rd-s\d+$/;
  * document, so the halves carry the id here instead. The `<span>` that owns the
  * real `id` is added around the pair when the document is serialized.
  */
-const REPLACE_ATTRIBUTE = "data-rd-replace";
+export const REPLACE_ATTRIBUTE = "data-rd-replace";
 
 /**
  * A mark type appears at most once per text node, so several comments covering
@@ -193,7 +193,8 @@ const CommentAnchor = Mark.create({
     return [
       "span",
       mergeAttributes(HTMLAttributes, {
-        class: "comment-anchor",
+        class:
+          "comment-anchor text-inherit box-decoration-clone [&_code]:bg-transparent [&_code]:shadow-[inset_0_0_0_1px_rgb(15_23_42/0.12)] dark:[&_code]:shadow-[inset_0_0_0_1px_rgb(226_232_240/0.15)]",
       }),
       0,
     ];
@@ -440,6 +441,74 @@ function requireSuggestionAnchor(attrs: Record<string, unknown>) {
 const parseSuggestionAnchor = (element: HTMLElement | string) =>
   readSuggestionAttrs(element as HTMLElement) === null ? false : null;
 
+/**
+ * The two appearances a suggestion can have. A replacement's halves look like
+ * the single-sided kind they stand for: `replace-new` reads as an insertion and
+ * `replace-old` as a deletion.
+ */
+type SuggestionAppearance = "insert" | "delete";
+
+/**
+ * The one place a suggestion kind is mapped to an appearance, so the mark and
+ * the decoration cannot disagree about which colors a kind wears. The `switch`
+ * has no `default` branch: a kind added to `SuggestionKind` fails to compile
+ * here until it is given an appearance.
+ */
+function suggestionAppearance(kind: SuggestionKind): SuggestionAppearance {
+  switch (kind) {
+    case "insert":
+    case "replace-new":
+      return "insert";
+    case "delete":
+    case "replace-old":
+      return "delete";
+  }
+}
+
+/**
+ * The complete resting appearance of a suggestion of `kind`, as a single
+ * space-separated literal Tailwind class string. This is the only place a
+ * suggestion's resting color is decided, and it never encodes hover or
+ * selection state — that state belongs to the decoration, which the mark cannot
+ * know about. `insert` and `replace-new` share the insert appearance; `delete`
+ * and `replace-old` share the delete appearance.
+ *
+ * Callers pass the result to `Suggestion.renderHTML` and nowhere else: the mark
+ * element spans a suggestion's whole run exactly once, so it is the only
+ * element that can carry horizontal padding, a border radius, and the `code`
+ * styling that applies to a `code` element nested inside the run.
+ */
+function suggestionMarkClass(kind: SuggestionKind): string {
+  switch (suggestionAppearance(kind)) {
+    case "insert":
+      return "suggestion rounded-sm px-0.5 box-decoration-clone text-emerald-850 dark:text-emerald-300 bg-emerald-50/95 dark:bg-emerald-900/50 underline decoration-emerald-500/75 dark:decoration-emerald-400/60 underline-offset-[0.16em] [&_code]:bg-transparent [&_code]:shadow-[inset_0_0_0_1px_rgb(15_23_42/0.12)] dark:[&_code]:shadow-[inset_0_0_0_1px_rgb(226_232_240/0.15)]";
+    case "delete":
+      return "suggestion rounded-sm px-0.5 box-decoration-clone text-rose-950 dark:text-rose-300 bg-rose-50/95 dark:bg-rose-900/35 line-through decoration-rose-600/75 dark:decoration-rose-400/60 [&_code]:bg-transparent [&_code]:shadow-[inset_0_0_0_1px_rgb(15_23_42/0.12)] dark:[&_code]:shadow-[inset_0_0_0_1px_rgb(226_232_240/0.15)]";
+  }
+}
+
+/**
+ * Only the background override that distinguishes `state` from resting, as a
+ * single literal Tailwind class string. It never repeats padding, radius, text
+ * color, or text decoration: those sit on the ancestor mark element and are
+ * already in effect wherever a decoration is painted.
+ */
+function suggestionDecorationClass(
+  kind: SuggestionKind,
+  state: "hovered" | "active",
+): string {
+  switch (suggestionAppearance(kind)) {
+    case "insert":
+      return state === "hovered"
+        ? "rounded-[0.2rem] bg-emerald-100/95 dark:bg-emerald-900/65"
+        : "rounded-[0.2rem] bg-emerald-200/95 dark:bg-emerald-900/80";
+    case "delete":
+      return state === "hovered"
+        ? "rounded-[0.2rem] bg-rose-100/95 dark:bg-rose-900/50"
+        : "rounded-[0.2rem] bg-rose-200/95 dark:bg-rose-900/65";
+  }
+}
+
 const Suggestion = Mark.create({
   name: "suggestion",
   priority: 1090,
@@ -500,7 +569,7 @@ const Suggestion = Mark.create({
         isReplacement
           ? { [REPLACE_ATTRIBUTE]: suggestionId }
           : { id: suggestionId },
-        { class: `suggestion suggestion-${kind}` },
+        { class: suggestionMarkClass(kind) },
       ),
       0,
     ];
@@ -612,6 +681,29 @@ export const commentHighlightPluginKey =
 export const suggestionHighlightPluginKey =
   new PluginKey<SuggestionHighlightPluginState>("suggestionHighlight");
 
+/**
+ * Which background a comment decoration paints. The decoration owns the
+ * comment's resting background, unlike a suggestion's: whether a run sits on a
+ * suggestion mark is knowable only from the marks on that run, which is what
+ * this decoration pass walks.
+ */
+type CommentDecorationBackground = "resting" | "highlighted" | "on-suggestion";
+
+/**
+ * The complete appearance of a comment decoration, as a single space-separated
+ * Tailwind class string. Only the background differs between the three cases,
+ * so the rest is written once here.
+ */
+function commentDecorationClass(background: CommentDecorationBackground) {
+  const backgroundClasses = {
+    resting: "bg-[#fff5c7] dark:bg-yellow-800/35",
+    highlighted: "bg-[#ffd000] dark:bg-amber-700/55",
+    "on-suggestion": "bg-transparent dark:bg-transparent",
+  }[background];
+
+  return `comment-decoration px-0.5 text-inherit box-decoration-clone ${backgroundClasses} transition-colors duration-[140ms]`;
+}
+
 function createCommentHighlightDecorations(
   doc: ProseMirrorNode,
   selectedCommentId: string | null,
@@ -644,25 +736,20 @@ function createCommentHighlightDecorations(
       !!selectedCommentId && commentIds.includes(selectedCommentId);
     const isHovered =
       !!hoveredCommentId && commentIds.includes(hoveredCommentId);
-    const classNames = ["comment-decoration"];
-
-    if (isSelected) {
-      classNames.push("comment-decoration-active");
-    } else if (isHovered) {
-      classNames.push("comment-decoration-hovered");
-    }
-
-    if (
-      suggestionMarkType &&
-      node.marks.some((mark) => mark.type === suggestionMarkType)
-    ) {
-      classNames.push("comment-decoration-on-suggestion");
-    }
+    const isOnSuggestion =
+      !!suggestionMarkType &&
+      node.marks.some((mark) => mark.type === suggestionMarkType);
 
     decorations.push(
       Decoration.inline(pos, pos + node.nodeSize, {
-        class: classNames.join(" "),
-        "data-testid": classNames.includes("comment-decoration-on-suggestion")
+        class: commentDecorationClass(
+          isOnSuggestion
+            ? "on-suggestion"
+            : isSelected || isHovered
+              ? "highlighted"
+              : "resting",
+        ),
+        "data-testid": isOnSuggestion
           ? "comment-decoration-on-suggestion"
           : "comment-decoration",
       }),
@@ -762,26 +849,25 @@ function createSuggestionHighlightDecorations(
 
     if (!isSelected && !isHovered) return;
 
+    // `suggestionIds` came from this node's own marks, so the mark is there to
+    // be found, and `Suggestion.renderHTML` throws on a mark whose kind is
+    // missing, so the kind it carries is a `SuggestionKind`.
     const suggestionKind = node.marks.find(
       (mark) =>
         mark.type === suggestionMarkType &&
         typeof mark.attrs.suggestionId === "string" &&
-        suggestionIds.includes(mark.attrs.suggestionId) &&
-        isSuggestionKind(mark.attrs.kind),
-    )?.attrs.kind as SuggestionKind | undefined;
+        suggestionIds.includes(mark.attrs.suggestionId),
+    )?.attrs.kind as SuggestionKind;
+
     decorations.push(
       Decoration.inline(pos, pos + node.nodeSize, {
         "data-testid": isSelected
           ? "suggestion-decoration-active"
           : "suggestion-decoration-hovered",
-        class: [
-          isSelected
-            ? "suggestion-decoration-active"
-            : "suggestion-decoration-hovered",
-          suggestionKind ? `suggestion-decoration-${suggestionKind}` : null,
-        ]
-          .filter(Boolean)
-          .join(" "),
+        class: suggestionDecorationClass(
+          suggestionKind,
+          isSelected ? "active" : "hovered",
+        ),
       }),
     );
   });
@@ -981,6 +1067,15 @@ export function createEditorExtensions(placeholder: string) {
       autolink: true,
       openOnClick: false,
       linkOnPaste: true,
+      // Configuring `HTMLAttributes` replaces the extension's own defaults
+      // rather than merging with them, so `target` and `rel` are repeated here
+      // to keep the values a rendered link carries today.
+      HTMLAttributes: {
+        target: "_blank",
+        rel: "noopener noreferrer nofollow",
+        class:
+          "text-sky-700 dark:text-sky-400 underline decoration-sky-500/50 dark:decoration-sky-400/50 underline-offset-4",
+      },
     }),
     MarkdownCode,
     Table.configure({

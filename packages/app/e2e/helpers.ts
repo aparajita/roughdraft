@@ -46,12 +46,16 @@ export function richTextEditor(page: Page) {
   return page.getByTestId("rich-text-editor").locator(".ProseMirror");
 }
 
-export function documentSaveStatus(page: Page) {
-  return page.getByTestId("document-save-status");
+export function saveFailedAlert(page: Page) {
+  return page.getByTestId("save-failed-alert");
 }
 
-export function documentSaveButton(page: Page) {
-  return page.getByTestId("document-save-button");
+export function saveFailedAlertRetryButton(page: Page) {
+  return page.getByTestId("save-failed-alert-retry");
+}
+
+export function saveFailedAlertCancelButton(page: Page) {
+  return page.getByTestId("save-failed-alert-cancel");
 }
 
 export function fileConflictNotice(page: Page) {

@@ -51,22 +51,18 @@ describe("document comment layout helpers", () => {
       measurementScale: 1,
       commentIds: ["rd-c3", "rd-c4"],
     },
-  ])("$name", ({
-    id,
-    rdNested,
-    rect,
-    containerTop,
-    measurementScale,
-    commentIds,
-  }) => {
-    expect(
-      getCommentAnchorMeasurements(
-        [{ id, dataset: { rdNested }, getBoundingClientRect: () => rect }],
-        containerTop,
-        measurementScale,
-      ),
-    ).toEqual([{ commentIds, anchorTop: 60, anchorBottom: 92 }]);
-  });
+  ])(
+    "$name",
+    ({ id, rdNested, rect, containerTop, measurementScale, commentIds }) => {
+      expect(
+        getCommentAnchorMeasurements(
+          [{ id, dataset: { rdNested }, getBoundingClientRect: () => rect }],
+          containerTop,
+          measurementScale,
+        ),
+      ).toEqual([{ commentIds, anchorTop: 60, anchorBottom: 92 }]);
+    },
+  );
 
   it("scales a measurement up when the editor is zoomed out", () => {
     expect(normalizeCommentMeasurement(120, 0.5)).toBe(240);

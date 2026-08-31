@@ -1,4 +1,8 @@
-import type { SuggestionAttrs, SuggestionKind } from "./editor-extensions";
+import {
+  REPLACE_ATTRIBUTE,
+  type SuggestionAttrs,
+  type SuggestionKind,
+} from "./editor-extensions";
 import {
   buildCommentThreads,
   expandCommentThreadIds,
@@ -71,9 +75,7 @@ const SUGGESTION_OPERATIONS: Record<SuggestionKind, SuggestionOperation> = {
  * It is derived from the anchor markup and never read from an endmatter
  * record: the record has no operation field, so the two cannot disagree.
  */
-export function suggestionOperationOf(
-  kind: SuggestionKind,
-): SuggestionOperation {
+function suggestionOperationOf(kind: SuggestionKind): SuggestionOperation {
   return SUGGESTION_OPERATIONS[kind];
 }
 
@@ -113,6 +115,14 @@ export const DELETION_ANCHOR_SELECTOR = 'del[id^="rd-s"]';
  * `<span id="rd-sN"><del>old</del><ins>new</ins></span>`.
  */
 export const REPLACEMENT_ANCHOR_SELECTOR = 'span[id^="rd-s"]';
+
+/**
+ * A replacement's halves inside the editor. The `<span>` that owns the id —
+ * the element `REPLACEMENT_ANCHOR_SELECTOR` matches — is wrapped around the
+ * pair only when the document is serialized, so a document being edited has
+ * none and this is the only way to reach a replacement's anchor there.
+ */
+export const EDITOR_REPLACEMENT_ANCHOR_SELECTOR = `[${REPLACE_ATTRIBUTE}]`;
 
 interface CommentAnchorElementLike {
   id: string;
@@ -164,17 +174,6 @@ function parseCommentIds(value: string | null | undefined): string[] {
 
 function getCommentGroupKey(commentIds: string[]): string {
   return [...new Set(commentIds)].sort().join("::");
-}
-
-export function getPreferredCommentId(
-  commentIds: string[],
-  currentCommentId: string | null,
-): string | null {
-  if (currentCommentId && commentIds.includes(currentCommentId)) {
-    return currentCommentId;
-  }
-
-  return commentIds[0] ?? null;
 }
 
 /**

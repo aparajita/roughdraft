@@ -17,6 +17,7 @@ import { generateHTML, generateJSON, type JSONContent } from "@tiptap/core";
 import type TurndownService from "turndown";
 import {
   createEditorExtensions,
+  REPLACE_ATTRIBUTE,
   type SuggestionAttrs,
   type SuggestionKind,
 } from "../editor-extensions";
@@ -85,9 +86,6 @@ export type ReviewDiagnostic =
 export type ReviewDiagnosticHandler = (diagnostic: ReviewDiagnostic) => void;
 
 const extensions = createEditorExtensions("");
-
-/** Attribute the suggestion mark puts on both halves of a replacement pair. */
-const REPLACEMENT_ATTRIBUTE = "data-rd-replace";
 
 /**
  * Attribute the comment anchor mark uses to carry every id but the outermost,
@@ -443,7 +441,7 @@ interface ElementSuggestionAttrs {
 function getElementSuggestionAttrs(
   element: HTMLElement,
 ): ElementSuggestionAttrs | null {
-  const replacementId = element.getAttribute(REPLACEMENT_ATTRIBUTE);
+  const replacementId = element.getAttribute(REPLACE_ATTRIBUTE);
 
   if (replacementId) {
     const suggestionId = parseSuggestionId(replacementId);
@@ -574,8 +572,8 @@ function expandReplacementAnchors(container: ParentNode): void {
       continue;
     }
 
-    oldHalf.setAttribute(REPLACEMENT_ATTRIBUTE, suggestionId);
-    newHalf.setAttribute(REPLACEMENT_ATTRIBUTE, suggestionId);
+    oldHalf.setAttribute(REPLACE_ATTRIBUTE, suggestionId);
+    newHalf.setAttribute(REPLACE_ATTRIBUTE, suggestionId);
     element.replaceWith(oldHalf, newHalf);
   }
 }
@@ -656,7 +654,7 @@ function isReplacementHalf(
   return (
     element instanceof HTMLElement &&
     element.nodeName === nodeName &&
-    element.getAttribute(REPLACEMENT_ATTRIBUTE) === suggestionId
+    element.getAttribute(REPLACE_ATTRIBUTE) === suggestionId
   );
 }
 
@@ -676,7 +674,7 @@ function addReplacementPairRule(
   service.addRule("rfmReplacementPair", {
     filter: (node) =>
       (node.nodeName === "DEL" || node.nodeName === "INS") &&
-      (node as HTMLElement).hasAttribute(REPLACEMENT_ATTRIBUTE),
+      (node as HTMLElement).hasAttribute(REPLACE_ATTRIBUTE),
     replacement(content, node) {
       const element = node as HTMLElement;
       // Not trimmed, matching the comment-anchor rule above: the format
@@ -689,7 +687,7 @@ function addReplacementPairRule(
         reportDiagnostic(onDiagnostic, {
           code: "review-unpaired-replacement",
           message: `A <${element.nodeName.toLowerCase()}> replacement half carries "${element.getAttribute(
-            REPLACEMENT_ATTRIBUTE,
+            REPLACE_ATTRIBUTE,
           )}", which is not a suggestion id. Its text is kept and the suggestion is dropped.`,
           suggestionId: null,
         });

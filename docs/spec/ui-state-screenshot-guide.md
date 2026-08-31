@@ -113,20 +113,13 @@ suggestions:
 | Homepage | Workflow stage 5 | Scroll to fifth scene | `homepage-workflow-handoff-button` | Done handoff button is visible. |
 | Homepage | Workflow stage 6 | Scroll to final scene | `homepage-workflow-agent-resume` | Agent resume line and incorporated plan are visible; done button is hidden. |
 | Homepage | Update notice | Start app with backend status returning `updateStatus` | update notice component | Best captured with API mocking unless an update is actually available. |
-| RFM guide | Default page | `/roughdraft-flavored-markdown` | `rfm-source-editor` | Capture the source editor plus rendered output. |
-| RFM guide | Plan review example | Click `rfm-format-example-plan-review` | `rfm-format-example-plan-review` | Default example if already selected. |
-| RFM guide | Spec review example | Click `rfm-format-example-spec-review` | `rfm-format-example-spec-review` | Confirms comments/suggestions render in the embedded demo. |
-| RFM guide | Writing edit example | Click `rfm-format-example-writing-edit` | `rfm-format-example-writing-edit` | Useful for prose-focused review states. |
 | Preview | Rich text default | `/preview?editor=rich-text` | `page-card-rich-text`, `rich-text-editor` | Uses in-memory preview backend and includes a sample anchored comment. |
 | Preview | Code editor default | `/preview?editor=code` | `page-card-code`, `markdown-code-editor` | Capture line wrapping, code editor chrome, and rail behavior. |
 | Document | Rich/code toggle | Use `document-editor-view-toggle` | `document-editor-view-toggle` | URL changes to `?editor=code` or `?editor=rich-text`. |
 | Document | Editing mode | Open mode menu and choose Editing | `document-mode-trigger` | Normal edit behavior. |
 | Document | Suggesting mode | Open mode menu and choose Suggesting | `document-mode-trigger` | Selection actions should create suggestions instead of direct edits. |
 | Document | Viewing mode | Open mode menu and choose Viewing | `document-mode-trigger` | Editing controls should look non-editable; the review rail is not rendered and the document is centered at its normal measure. |
-| Document | Save status: saved | Any clean document after autosave | `document-save-button`, `document-save-status` | Checkmark and `Saved` label on a disabled save button in the top-right status stack, left of the handoff control. |
-| Document | Save status: saving | Type and capture during autosave | `document-save-button`, `document-save-status` | Spinner and `Saving` label; the button stays enabled so a click flushes the pending write. Transient; easiest with mocked delayed save. |
-| Document | Save status: failed | Force save error | `document-save-button`, `document-save-status` | Warning icon and `Save failed` label; the button stays enabled to retry. Use backend/API mocking or a component harness. |
-| Document | Save button blocked | Any disk-blocked state (changed, conflict, paused) | `document-save-button` | Icon-only disabled button; the conflict banner carries the wording, and the accessible label matches the banner title. |
+| Document | Save failed alert | Force a save error (e.g. mock the write endpoint to fail) | `save-failed-alert` | Modal alert: "Save failed" / "The document failed to save. Try again?" with OK and Cancel. OK retries the save and closes only on success; Cancel dismisses and leaves Cmd/Ctrl+S available to retry. |
 | Document | Disk changed | Open local file, modify file externally while browser content is clean | `file-conflict-notice`, `file-conflict-action-reload`, `file-conflict-action-overwrite` | Banner title: `File changed on disk`. |
 | Document | Save conflict | Edit in browser, then modify file externally before autosave resolves | `file-conflict-notice`, `file-conflict-action-keep-editing` | Banner title: `Save conflict`; autosave pauses. |
 | Document | Autosave paused | Keep editing after conflict | `file-conflict-notice`, `file-conflict-action-overwrite` | Banner title: `Autosave paused`; no keep-editing action. |

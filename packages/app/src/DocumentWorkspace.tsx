@@ -15,6 +15,16 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentEditorViewMode } from "./app-navigation";
 import { RemoteSessionBanner } from "./components/RemoteSessionBanner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./components/ui/alert-dialog";
 import { Button } from "./components/ui/button";
 import {
   Popover,
@@ -40,6 +50,14 @@ import {
   INSERTION_ANCHOR_SELECTOR,
   REPLACEMENT_ANCHOR_SELECTOR,
 } from "./document-comments";
+import type { DocumentDiskChangeState } from "./document-disk-change-state";
+import {
+  getReviewHandoffButtonLabel,
+  isDocumentSaveBlocked,
+  isReviewHandoffDisabled,
+  type ReviewHandoffState,
+  shouldLatchDocumentChangedSinceOpen,
+} from "./document-save-and-handoff";
 import { cn } from "./lib/utils";
 import {
   HEADING_BLANK_AFTER_ATTRIBUTE,
@@ -59,13 +77,6 @@ import {
 import type { CompleteReviewOptions, Page, StorageBackend } from "./storage";
 import { useReviewLayoutShiftAnimation } from "./useReviewLayoutShiftAnimation";
 
-type DiskChangeState = "clean" | "changed" | "conflict" | "paused";
-type ReviewHandoffState =
-  | "idle"
-  | "notifying"
-  | "notified"
-  | "undelivered"
-  | "error";
 type FileCopyAction = "path" | "filename" | "markdown" | "rich-text";
 const FILE_COPY_PREVIEW_MAX_LENGTH = 34;
 const reviewCompleteTitles = [
@@ -132,7 +143,7 @@ const documentInteractionModeOptions = [
 }[];
 
 const conflictNoticeCopy: Record<
-  Exclude<DiskChangeState, "clean">,
+  Exclude<DocumentDiskChangeState, "clean">,
   {
     title: string;
     body: string;
@@ -258,163 +269,38 @@ async function writeRichTextToClipboard(markdown: string) {
   await writePlainTextToClipboard(plainText);
 }
 
-function getSaveStatusViewModel(
-  saveState: DocumentSaveState,
-  diskChangeState: DiskChangeState,
-) {
-  if (isDocumentSaveBlocked(diskChangeState)) {
-    // A blocked state is named once, by the banner that explains it, so the
-    // two controls cannot drift into calling the same state by two names.
-    return {
-      label: conflictNoticeCopy[diskChangeState].title,
-      tone: "warning" as const,
-      Icon: AlertTriangle,
-    };
-  }
-
-  if (saveState === "saving") {
-    return {
-      label: "Saving",
-      tone: "neutral" as const,
-      Icon: Loader2,
-    };
-  }
-
-  if (saveState === "error") {
-    return {
-      label: "Save failed",
-      tone: "danger" as const,
-      Icon: AlertTriangle,
-    };
-  }
-
-  // PageCard emits "unsaved" only while saving is blocked, and every blocked
-  // disk state returned above, so this tail reports the saved document.
-  return {
-    label: "Saved",
-    tone: "success" as const,
-    Icon: Check,
-  };
-}
-
-function isDocumentSaveBlocked(
-  diskChangeState: DiskChangeState,
-): diskChangeState is Exclude<DiskChangeState, "clean"> {
-  // While the file on disk diverges, the conflict banner owns the resolution
-  // and nothing may write over it — autosave, the shortcut, and the button
-  // alike.
-  return diskChangeState !== "clean";
-}
-
-export function isManualSaveDisabled({
-  saveState,
-  diskChangeState,
+export function SaveFailedAlertDialog({
+  open,
+  onOpenChange,
+  onRetry,
 }: {
-  saveState: DocumentSaveState;
-  diskChangeState: DiskChangeState;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRetry: () => void;
 }) {
-  // "saving" keeps the button live: that state means a debounced write is
-  // still pending, and flushing it now is the whole point of the control.
-  return isDocumentSaveBlocked(diskChangeState) || saveState === "saved";
-}
-
-export function DocumentSaveButton({
-  saveState,
-  diskChangeState,
-  onSave,
-}: {
-  saveState: DocumentSaveState;
-  diskChangeState: DiskChangeState;
-  onSave: () => void;
-}) {
-  const saveStatus = getSaveStatusViewModel(saveState, diskChangeState);
-  const SaveStatusIcon = saveStatus.Icon;
-  const disabled = isManualSaveDisabled({ saveState, diskChangeState });
-  // The conflict banner spells out every disk-blocked state in full, so the
-  // button shrinks to its icon there rather than repeating the banner beside
-  // the handoff control.
-  const showLabel = !isDocumentSaveBlocked(diskChangeState);
-
   return (
-    <Button
-      type="button"
-      data-testid="document-save-button"
-      variant="outline"
-      size="lg"
-      disabled={disabled}
-      onClick={onSave}
-      className={cn(
-        "h-9 shrink-0 rounded-[7px] border-stone-300 bg-white text-sm font-bold text-stone-700 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:bg-stone-100 focus-visible:ring-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700",
-        showLabel ? "px-3" : "w-9 px-0",
-        saveStatus.tone === "warning" && "text-amber-600 dark:text-amber-400",
-        saveStatus.tone === "danger" && "text-red-600 dark:text-red-400",
-      )}
-    >
-      <SaveStatusIcon
-        data-testid="document-save-status-icon"
-        className={cn(
-          "size-3.5 shrink-0",
-          saveStatus.label === "Saving" && "animate-spin",
-        )}
-        aria-hidden="true"
-      />
-      <span
-        data-testid="document-save-status"
-        role="status"
-        aria-label={saveStatus.label}
-      >
-        {showLabel ? saveStatus.label : null}
-      </span>
-    </Button>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent data-testid="save-failed-alert">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Save failed</AlertDialogTitle>
+          <AlertDialogDescription>
+            The document failed to save. Try again?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="save-failed-alert-cancel">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            data-testid="save-failed-alert-retry"
+            onClick={onRetry}
+          >
+            OK
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
-}
-
-export function isReviewHandoffDisabled({
-  saveState,
-  documentDiskChangeState,
-  reviewHandoffState,
-}: {
-  saveState: DocumentSaveState;
-  documentDiskChangeState: DiskChangeState;
-  reviewHandoffState: ReviewHandoffState;
-}) {
-  // A pending debounced save ("saving") intentionally does NOT disable the
-  // button. Disabling on it dims the whole control on every keystroke while
-  // autosave debounces. Instead the button stays enabled and flushes the
-  // pending save on click, so the agent still receives the latest content.
-  return (
-    saveState === "error" ||
-    reviewHandoffState !== "idle" ||
-    isDocumentSaveBlocked(documentDiskChangeState)
-  );
-}
-
-export function getReviewHandoffButtonLabel({
-  reviewHandoffState,
-  documentChangedSinceOpen,
-}: {
-  reviewHandoffState: ReviewHandoffState;
-  documentChangedSinceOpen: boolean;
-}) {
-  return reviewHandoffState === "notifying"
-    ? "Sending"
-    : reviewHandoffState === "notified"
-      ? "Sent"
-      : reviewHandoffState === "error" || reviewHandoffState === "undelivered"
-        ? "Not sent"
-        : documentChangedSinceOpen
-          ? "I'm done"
-          : "Approve";
-}
-
-export function shouldLatchDocumentChangedSinceOpen({
-  isDirty,
-  documentChangeTrackingReady,
-}: {
-  isDirty: boolean;
-  documentChangeTrackingReady: boolean;
-}) {
-  return isDirty && documentChangeTrackingReady;
 }
 
 interface DocumentWorkspaceProps {
@@ -428,7 +314,7 @@ interface DocumentWorkspaceProps {
   onDocumentSaveStateChange: (state: DocumentSaveState) => void;
   onDocumentDirtyStateChange: (isDirty: boolean) => void;
   onDocumentLocalContentChange: (markdown: string) => void;
-  documentDiskChangeState: DiskChangeState;
+  documentDiskChangeState: DocumentDiskChangeState;
   documentForceResetKey: string | null;
   onReloadDocumentFromDisk: () => void | Promise<void>;
   onKeepEditingWithoutAutosave: () => void;
@@ -461,6 +347,7 @@ export function DocumentWorkspace({
   const [documentInteractionMode, setDocumentInteractionMode] =
     useState<DocumentInteractionMode>("suggesting");
   const [saveState, setSaveState] = useState<DocumentSaveState>("saved");
+  const [saveErrorAlertOpen, setSaveErrorAlertOpen] = useState(false);
   const [reviewHandoffState, setReviewHandoffState] =
     useState<ReviewHandoffState>("idle");
   const [reviewWatcherCount, setReviewWatcherCount] = useState(0);
@@ -613,6 +500,23 @@ export function DocumentWorkspace({
     };
   }, [documentPage, handleManualSave]);
 
+  useEffect(() => {
+    // A disk conflict rejects the save too, but the conflict banner already
+    // names and resolves that state; this alert is only for a write that
+    // failed for its own reasons.
+    if (isDocumentSaveBlocked(documentDiskChangeState)) {
+      setSaveErrorAlertOpen(false);
+      return;
+    }
+    if (saveState === "error") setSaveErrorAlertOpen(true);
+  }, [saveState, documentDiskChangeState]);
+
+  const handleRetrySaveAfterError = useCallback(() => {
+    void saveControllerRef.current?.flushSave().then((result) => {
+      if (result && result.status !== "error") setSaveErrorAlertOpen(false);
+    });
+  }, []);
+
   const handleCompleteReview = useCallback(
     async (options?: CompleteReviewOptions) => {
       if (!activeDocumentPath || reviewHandoffState === "notifying") return;
@@ -759,11 +663,16 @@ export function DocumentWorkspace({
   return (
     <div
       className={cn(
-        "min-h-0 flex-1 overflow-y-auto px-8 pb-8 sm:px-12",
-        conflictNotice ? "pt-40 sm:pt-28" : "pt-10",
+        "min-h-0 flex-1 overflow-y-auto px-6 pb-4 sm:px-6",
+        conflictNotice ? "pt-40 sm:pt-28" : "pt-6",
       )}
     >
       <RemoteSessionBanner backend={backend} />
+      <SaveFailedAlertDialog
+        open={saveErrorAlertOpen}
+        onOpenChange={setSaveErrorAlertOpen}
+        onRetry={handleRetrySaveAfterError}
+      />
       <div
         className={cn(
           "fixed right-3 z-[60] flex max-w-[min(22rem,calc(100vw-1rem))] flex-col items-end gap-1.5",
@@ -773,13 +682,6 @@ export function DocumentWorkspace({
         data-document-status-stack="true"
       >
         <div className="flex max-w-full items-center justify-end gap-1.5">
-          {documentPage ? (
-            <DocumentSaveButton
-              saveState={saveState}
-              diskChangeState={documentDiskChangeState}
-              onSave={handleManualSave}
-            />
-          ) : null}
           {showReviewHandoffButton ? (
             <Popover
               open={reviewHandoffPopoverOpen}

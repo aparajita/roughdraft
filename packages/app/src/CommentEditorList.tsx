@@ -61,7 +61,7 @@ const absoluteTimeFormat = new Intl.DateTimeFormat(undefined, {
  * `absolute` is the local time its `title` carries. An unparseable timestamp is
  * shown as written rather than as "Invalid Date".
  */
-export function formatCommentTime(
+function formatCommentTime(
   at: string,
   now: Date,
 ): { relative: string; absolute: string } {

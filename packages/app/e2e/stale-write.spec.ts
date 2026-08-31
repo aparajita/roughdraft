@@ -4,7 +4,6 @@ import {
   appendInCodeEditor,
   codeEditor,
   createMarkdownProject,
-  documentSaveStatus,
   fileConflictNotice,
   logE2eEvent,
   openMarkdownFile,
@@ -41,10 +40,7 @@ test.describe("stale writes", () => {
     fs.writeFileSync(filePath, "# Conflict\n\nExternal body.\n");
     await appendInCodeEditor(page, "\nLocal body.\n");
 
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Save conflict",
-    );
+    await expect(fileConflictNotice(page)).toContainText("Save conflict");
     await expect(page.getByTestId("file-conflict-action-reload")).toBeVisible();
     await expect(
       page.getByTestId("file-conflict-action-keep-editing"),
@@ -54,10 +50,7 @@ test.describe("stale writes", () => {
     );
 
     await page.getByTestId("file-conflict-action-keep-editing").click();
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Autosave paused",
-    );
+    await expect(fileConflictNotice(page)).toContainText("Autosave paused");
     await appendInCodeEditor(page, "\nStill local.\n");
     await expect(codeEditor(page)).toContainText("Local body.");
     await expect(codeEditor(page)).toContainText("Still local.");
@@ -87,27 +80,13 @@ test.describe("stale writes", () => {
     fs.writeFileSync(filePath, "# Conflict\n\nExternal body.\n");
     await appendInCodeEditor(page, "\nLocal overwrite body.\n");
 
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Save conflict",
-    );
+    await expect(fileConflictNotice(page)).toContainText("Save conflict");
     await page.getByTestId("file-conflict-action-overwrite").click();
 
     await expect
       .poll(() => readProjectFile(projectDir, "overwrite-conflict.md"))
       .toContain("Local overwrite body.");
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Saved",
-    );
-    await expect(documentSaveStatus(page)).not.toHaveAttribute(
-      "aria-label",
-      "Save failed",
-    );
-    await expect(documentSaveStatus(page)).not.toHaveAttribute(
-      "aria-label",
-      "Unsaved changes",
-    );
+    await expect(fileConflictNotice(page)).toBeHidden();
 
     logE2eEvent("stale-write.overwrite-saved", {
       file: "overwrite-conflict.md",
@@ -135,10 +114,7 @@ test.describe("stale writes", () => {
       process.platform === "darwin" ? "Meta+S" : "Control+S",
     );
 
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Save conflict",
-    );
+    await expect(fileConflictNotice(page)).toContainText("Save conflict");
     await expect(fileConflictNotice(page)).toContainText(
       "This file changed on disk while you have unsaved edits.",
     );
@@ -169,10 +145,7 @@ test.describe("stale writes", () => {
     fs.utimesSync(filePath, fixedTimestamp, fixedTimestamp);
     await appendInCodeEditor(page, "\nLocal body.\n");
 
-    await expect(documentSaveStatus(page)).toHaveAttribute(
-      "aria-label",
-      "Save conflict",
-    );
+    await expect(fileConflictNotice(page)).toContainText("Save conflict");
     expect(readProjectFile(projectDir, "metadata-conflict.md")).toBe(
       "# External\n",
     );
@@ -226,54 +199,5 @@ test.describe("stale writes", () => {
     await expect(
       page.getByTestId("file-conflict-action-overwrite"),
     ).toBeVisible();
-  });
-
-  test("keeps conflict banner and save status stack from overlapping", async ({
-    page,
-  }) => {
-    await page.route("**/api/markdown-file/events**", (route) => route.abort());
-
-    const filePath = writeProjectFile(
-      projectDir,
-      "layout-conflict.md",
-      "# Layout conflict\n\nOriginal body.\n",
-    );
-
-    for (const viewport of [
-      { width: 1280, height: 720 },
-      { width: 390, height: 844 },
-    ]) {
-      fs.writeFileSync(filePath, "# Layout conflict\n\nOriginal body.\n");
-      await page.setViewportSize(viewport);
-      await openMarkdownFile(page, filePath, "code");
-      await expect(codeEditor(page)).toContainText("Original body.");
-
-      fs.writeFileSync(filePath, "# Layout conflict\n\nExternal body.\n");
-      await appendInCodeEditor(page, `\nLocal body ${viewport.width}.\n`);
-
-      const conflictNotice = fileConflictNotice(page);
-      const statusStack = page.getByTestId("document-status-stack");
-      await expect(conflictNotice).toBeVisible();
-      await expect(statusStack).toBeVisible();
-
-      const conflictBox = await conflictNotice.boundingBox();
-      const stackBox = await statusStack.boundingBox();
-      expect(conflictBox).not.toBeNull();
-      expect(stackBox).not.toBeNull();
-
-      if (!conflictBox || !stackBox) {
-        throw new Error("Expected conflict and status stack bounds");
-      }
-
-      const intersects =
-        conflictBox.x < stackBox.x + stackBox.width &&
-        conflictBox.x + conflictBox.width > stackBox.x &&
-        conflictBox.y < stackBox.y + stackBox.height &&
-        conflictBox.y + conflictBox.height > stackBox.y;
-
-      expect(intersects).toBe(false);
-      await page.getByTestId("file-conflict-action-reload").click();
-      await expect(conflictNotice).toBeHidden();
-    }
   });
 });

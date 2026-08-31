@@ -180,16 +180,15 @@ describe("id allocation", () => {
       comment: "rd-c6",
       suggestion: "rd-s1",
     },
-  ])("takes the highest number when $name", ({
-    markdown,
-    comment,
-    suggestion,
-  }) => {
-    const ids = new RecordIdAllocator(parseDocument(markdown));
+  ])(
+    "takes the highest number when $name",
+    ({ markdown, comment, suggestion }) => {
+      const ids = new RecordIdAllocator(parseDocument(markdown));
 
-    expect(ids.allocateCommentId()).toBe(comment);
-    expect(ids.allocateSuggestionId()).toBe(suggestion);
-  });
+      expect(ids.allocateCommentId()).toBe(comment);
+      expect(ids.allocateSuggestionId()).toBe(suggestion);
+    },
+  );
 
   it("advances without the document changing", () => {
     const ids = new RecordIdAllocator(parseDocument(anchoredOnly));
@@ -242,18 +241,18 @@ describe("collectOrphanedRecords", () => {
       suggestions: [],
       dropped: ["rd-c1", "rd-c2", "rd-c3", "rd-s1"],
     },
-  ])("keeps the document comment and the anchored reply chain when $name", ({
-    body,
-    comments,
-    suggestions,
-    dropped,
-  }) => {
-    const collected = collectOrphanedRecords(parseDocument(withRecords(body)));
+  ])(
+    "keeps the document comment and the anchored reply chain when $name",
+    ({ body, comments, suggestions, dropped }) => {
+      const collected = collectOrphanedRecords(
+        parseDocument(withRecords(body)),
+      );
 
-    expect([...collected.document.comments.keys()]).toEqual(comments);
-    expect([...collected.document.suggestions.keys()]).toEqual(suggestions);
-    expect(collected.dropped).toEqual(dropped);
-  });
+      expect([...collected.document.comments.keys()]).toEqual(comments);
+      expect([...collected.document.suggestions.keys()]).toEqual(suggestions);
+      expect(collected.dropped).toEqual(dropped);
+    },
+  );
 });
 
 describe("parse and serialize", () => {

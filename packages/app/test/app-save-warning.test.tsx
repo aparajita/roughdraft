@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldWarnBeforeUnload } from "../src/App";
+import { shouldWarnBeforeUnload } from "../src/document-disk-change-state";
 
 describe("beforeunload save warning", () => {
   it.each([

@@ -316,6 +316,86 @@ function getToolbarButton(container: HTMLElement, label: string) {
   );
 }
 
+/**
+ * The chip an entry has in the rail. The footer renders a chip for the current
+ * entry under the same test id, so the lookup is scoped to the rail.
+ */
+function getRailChip(container: HTMLElement, entryId: string) {
+  const rail = getByTestId(container, "document-review-rail");
+  return getByTestId(rail, `review-entry-chip-${entryId}`);
+}
+
+async function clickElement(element: Element) {
+  await act(async () => {
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+  });
+  await flushReact();
+}
+
+/** The dialog renders in a portal, so it is found on `document`, not the card. */
+function getThreadDialog() {
+  return getByTestId(document, "review-thread-dialog");
+}
+
+async function openThreadDialog(container: HTMLElement, entryId: string) {
+  await clickElement(
+    getByTestId<HTMLButtonElement>(
+      getRailChip(container, entryId),
+      `review-entry-chip-${entryId}-action-open`,
+    ),
+  );
+
+  return getThreadDialog();
+}
+
+/**
+ * Types into a textarea the way a browser does, so React sees the change
+ * through its own value tracker rather than a silently ignored assignment.
+ */
+async function typeIntoTextarea(textarea: HTMLTextAreaElement, value: string) {
+  await act(async () => {
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )?.set;
+    valueSetter?.call(textarea, value);
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await Promise.resolve();
+  });
+  await flushReact();
+}
+
+async function submitThreadDialogReply(dialog: HTMLElement, body: string) {
+  await typeIntoTextarea(
+    getByTestId<HTMLTextAreaElement>(dialog, "review-thread-dialog-composer"),
+    body,
+  );
+  await clickElement(
+    getByTestId<HTMLButtonElement>(
+      dialog,
+      "review-thread-dialog-action-submit",
+    ),
+  );
+}
+
+async function openCommentRowMenu(dialog: HTMLElement, commentId: string) {
+  const trigger = getByTestId<HTMLButtonElement>(
+    dialog,
+    `comment-row-${commentId}-menu`,
+  );
+
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+  });
+  await flushReact();
+  await flushReact();
+}
+
 type PageCardTestOptions = Partial<{
   page: Page;
   activeDocumentPath: string | null;
@@ -746,35 +826,35 @@ describe("PageCard editor integration", () => {
         "| Body table | This table follows a heading. |",
       ],
     },
-  ])("rich-text edits preserve table headers after frontmatter $label", async ({
-    label,
-    bodyLines,
-  }) => {
-    const frontmatter = ["---", "title: Table body", "---", ""].join("\n");
-    const body = [...bodyLines, ""].join("\n");
-    const rendered = await renderPageCard({
-      page: {
-        id: `doc-frontmatter-table-autosave-${label.replaceAll(" ", "-")}`,
-        title: "Doc Frontmatter Table Autosave",
-        content: `${frontmatter}${body}`,
-      },
-      selected: true,
-    });
+  ])(
+    "rich-text edits preserve table headers after frontmatter $label",
+    async ({ label, bodyLines }) => {
+      const frontmatter = ["---", "title: Table body", "---", ""].join("\n");
+      const body = [...bodyLines, ""].join("\n");
+      const rendered = await renderPageCard({
+        page: {
+          id: `doc-frontmatter-table-autosave-${label.replaceAll(" ", "-")}`,
+          title: "Doc Frontmatter Table Autosave",
+          content: `${frontmatter}${body}`,
+        },
+        selected: true,
+      });
 
-    vi.useFakeTimers();
+      vi.useFakeTimers();
 
-    await insertTextAtEnd(rendered.getEditor(), " updated");
+      await insertTextAtEnd(rendered.getEditor(), " updated");
 
-    await act(async () => {
-      vi.advanceTimersByTime(500);
-      await Promise.resolve();
-    });
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+        await Promise.resolve();
+      });
 
-    expect(rendered.onSave).toHaveBeenCalledTimes(1);
-    expect(rendered.onSave.mock.calls[0]?.[1]).toBe(
-      `${frontmatter}${[...bodyLines, "", "updated", ""].join("\n")}`,
-    );
-  });
+      expect(rendered.onSave).toHaveBeenCalledTimes(1);
+      expect(rendered.onSave.mock.calls[0]?.[1]).toBe(
+        `${frontmatter}${[...bodyLines, "", "updated", ""].join("\n")}`,
+      );
+    },
+  );
 
   it("viewing mode disables rich-text editing", async () => {
     const rendered = await renderPageCard({
@@ -1128,7 +1208,9 @@ describe("PageCard editor integration", () => {
       await Promise.resolve();
     });
 
-    expect(rendered.container.textContent).toContain("Inserted paragraph");
+    expect(getRailChip(rendered.container, "rd-s1").textContent).toContain(
+      "Insert",
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(500);
@@ -1478,10 +1560,9 @@ describe("PageCard editor integration", () => {
     expect(typeof savedMarkdown).toBe("string");
 
     await selectText(editor, "alpha");
-    expect(
-      queryByTestId(rendered.container, "document-comment-fallback")
-        ?.textContent,
-    ).toContain("Comment body");
+    expect(getRailChip(rendered.container, "rd-c1").textContent).toContain(
+      "1 comment",
+    );
 
     await act(async () => {
       editor.commands.blur();
@@ -1495,10 +1576,12 @@ describe("PageCard editor integration", () => {
       },
     });
 
-    expect(
-      queryByTestId(rendered.container, "document-comment-fallback")
-        ?.textContent,
-    ).toContain("Comment body");
+    expect(rendered.getEditor().getText()).toContain("Tail updated");
+
+    const dialog = await openThreadDialog(rendered.container, "rd-c1");
+    expect(getByTestId(dialog, "comment-row-rd-c1").textContent).toContain(
+      "Comment body",
+    );
   });
 
   it("same-content disk echoes do not recreate the rich text editor", async () => {
@@ -1547,25 +1630,6 @@ describe("PageCard editor integration", () => {
     expect(rendered.getEditor().getText()).toContain("Start updated");
   });
 
-  it("comment selection still updates fallback UI", async () => {
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-5",
-        title: "Doc 5",
-        content: alphaCommentDocument("Paragraph"),
-      },
-      selected: true,
-    });
-
-    await selectText(rendered.getEditor(), "alpha");
-
-    expect(
-      queryByTestId(rendered.container, "document-comment-fallback")
-        ?.textContent,
-    ).toContain("Comment body");
-    expect(rendered.container.textContent).toContain("Me");
-  });
-
   it("does not autosave a newly-created empty comment before it is submitted", async () => {
     const rendered = await renderPageCard({
       page: {
@@ -1579,13 +1643,12 @@ describe("PageCard editor integration", () => {
     await selectText(rendered.getEditor(), "target");
     await addCommentWithShortcut();
 
-    vi.useFakeTimers();
+    const dialog = getThreadDialog();
+    expect(
+      getByTestId(dialog, "review-thread-dialog-excerpt").textContent,
+    ).toBe("target");
 
-    const commentEditor = queryByTestId<HTMLTextAreaElement>(
-      rendered.container,
-      "comment-banner-rd-c1-editor",
-    );
-    expect(commentEditor).not.toBeNull();
+    vi.useFakeTimers();
 
     await act(async () => {
       vi.advanceTimersByTime(1000);
@@ -1593,26 +1656,9 @@ describe("PageCard editor integration", () => {
     });
 
     expect(rendered.onSave).not.toHaveBeenCalled();
+    expect(queryByTestId(dialog, "comment-row-rd-c1")).toBeNull();
 
-    await act(async () => {
-      if (!commentEditor) return;
-      const valueSetter = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      )?.set;
-      valueSetter?.call(commentEditor, "Draft comment");
-      commentEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    });
-
-    const saveButton = queryByTestId<HTMLButtonElement>(
-      rendered.container,
-      "comment-banner-rd-c1-action-save",
-    );
-    expect(saveButton).not.toBeNull();
-
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await submitThreadDialogReply(dialog, "Draft comment");
 
     await act(async () => {
       vi.advanceTimersByTime(500);
@@ -1625,57 +1671,6 @@ describe("PageCard editor integration", () => {
         /<span id="rd-c1">target<\/span>[\s\S]*\n {2}rd-c1:\n {4}body: Draft comment\n/,
       ),
     );
-  });
-
-  it("opens a reply to the root comment when r is pressed in a focused thread", async () => {
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-comment-reply-shortcut-1",
-        title: "Doc Comment Reply Shortcut 1",
-        content: reviewDocument(
-          '<span id="rd-c1">alpha</span>\n\nParagraph',
-          commentRecords(
-            { id: "rd-c1", body: "Root comment" },
-            { id: "rd-c2", body: "Nested reply", re: "rd-c1" },
-          ),
-        ),
-      },
-      selected: true,
-    });
-
-    await selectText(rendered.getEditor(), "alpha");
-
-    const nestedEditButton = getByTestId<HTMLButtonElement>(
-      rendered.container,
-      "comment-banner-rd-c2-action-edit",
-    );
-
-    vi.useFakeTimers();
-    await act(async () => {
-      nestedEditButton.focus();
-      nestedEditButton.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "r",
-          bubbles: true,
-        }),
-      );
-      await Promise.resolve();
-    });
-    await flushReact();
-    await flushReact();
-
-    const replyEditor = queryByTestId<HTMLTextAreaElement>(
-      rendered.container,
-      "comment-banner-rd-c3-editor",
-    );
-    expect(replyEditor).not.toBeNull();
-
-    await act(async () => {
-      vi.advanceTimersByTime(500);
-      await Promise.resolve();
-    });
-
-    expect(rendered.onSave).not.toHaveBeenCalled();
   });
 
   it("deletes a whole root comment thread from the thread action", async () => {
@@ -1694,21 +1689,18 @@ describe("PageCard editor integration", () => {
       selected: true,
     });
 
-    await selectText(rendered.getEditor(), "alpha");
+    await flushAnimationFrame();
 
-    const deleteThreadButton = queryByTestId<HTMLButtonElement>(
-      rendered.container,
-      "comment-banner-rd-c1-action-delete-thread",
-    );
-    expect(deleteThreadButton).not.toBeNull();
+    const dialog = await openThreadDialog(rendered.container, "rd-c1");
+    await openCommentRowMenu(dialog, "rd-c1");
 
     vi.useFakeTimers();
-    await act(async () => {
-      deleteThreadButton?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true }),
-      );
-      await Promise.resolve();
-    });
+    await clickElement(
+      getByTestId<HTMLButtonElement>(
+        document,
+        "comment-row-rd-c1-action-delete-thread",
+      ),
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(500);
@@ -1721,120 +1713,6 @@ describe("PageCard editor integration", () => {
     expect(savedMarkdown).not.toContain("Nested reply");
     expect(savedMarkdown).not.toContain("rd-c1");
     expect(savedMarkdown).not.toContain("rd-c2");
-  });
-
-  it("renders suggestion replies only inside the suggestion card", async () => {
-    const commentText = "Looks good as an inserted phrase.";
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-suggestion-reply-1",
-        title: "Doc Suggestion Reply 1",
-        content: reviewDocument(
-          'This sentence includes an insertion: <ins id="rd-s1">clearer wording</ins>',
-          [
-            ...commentRecords({ id: "rd-c1", body: commentText, re: "rd-s1" }),
-            ...suggestionRecords({ id: "rd-s1" }),
-          ],
-        ),
-      },
-      selected: true,
-    });
-
-    await flushAnimationFrame();
-
-    const railText =
-      queryByTestId(rendered.container, "document-review-rail")?.textContent ??
-      "";
-
-    expect(railText.split(commentText).length - 1).toBe(1);
-  });
-
-  it("renders suggestions as comment-style author bubbles", async () => {
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-suggestion-bubble-1",
-        title: "Doc Suggestion Bubble 1",
-        content: reviewDocument(
-          'This sentence removes <del id="rd-s1">conversation</del>',
-          suggestionRecords({ id: "rd-s1", by: "AI" }),
-        ),
-      },
-      selected: true,
-    });
-
-    await flushAnimationFrame();
-
-    const suggestionThread = rendered.container.querySelector<HTMLElement>(
-      '[data-suggestion-thread-container="true"]',
-    );
-    const suggestionText = suggestionThread?.textContent ?? "";
-
-    expect(suggestionText).toContain("AI");
-    expect(suggestionText).toContain('Delete: "conversation"');
-    expect(suggestionText).not.toContain("Deletion");
-  });
-
-  it("renders suggestion replies through the regular comment tree", async () => {
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-suggestion-tree-1",
-        title: "Doc Suggestion Tree 1",
-        content: reviewDocument(
-          'This sentence includes <ins id="rd-s1">clearer wording</ins>',
-          [
-            ...commentRecords({
-              id: "rd-c1",
-              body: "Looks good.",
-              re: "rd-s1",
-            }),
-            ...suggestionRecords({ id: "rd-s1" }),
-          ],
-        ),
-      },
-      selected: true,
-    });
-
-    await flushAnimationFrame();
-
-    const suggestionThread = rendered.container.querySelector<HTMLElement>(
-      '[data-suggestion-thread-container="true"]',
-    );
-
-    expect(suggestionThread?.textContent).toContain(
-      'Insert: "clearer wording"',
-    );
-    expect(suggestionThread?.textContent).toContain("Looks good.");
-    expect(
-      suggestionThread?.querySelector('[data-testid="comment-tree-line"]'),
-    ).not.toBeNull();
-  });
-
-  it("truncates long suggestion summaries in the review rail", async () => {
-    const longInsertedText =
-      "I do really like typing this way. It feels natural. It's a great way to collaborate with AI. What happens if this goes on super long. Will it just keep going? This is too much.";
-    const expectedPreview = `${longInsertedText.slice(0, 140)}...`;
-
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-long-suggestion-summary-1",
-        title: "Doc Long Suggestion Summary 1",
-        content: reviewDocument(
-          `This sentence includes <ins id="rd-s1">${longInsertedText}</ins>`,
-          suggestionRecords({ id: "rd-s1", by: "AI" }),
-        ),
-      },
-      selected: true,
-    });
-
-    await flushAnimationFrame();
-
-    const suggestionThread = rendered.container.querySelector<HTMLElement>(
-      '[data-suggestion-thread-container="true"]',
-    );
-    const suggestionText = suggestionThread?.textContent ?? "";
-
-    expect(suggestionText).toContain(`Insert: "${expectedPreview}"`);
-    expect(suggestionText).not.toContain(`Insert: "${longInsertedText}"`);
   });
 
   it("saving a reply to a YAML endmatter-backed suggestion preserves split endmatter", async () => {
@@ -1851,47 +1729,12 @@ describe("PageCard editor integration", () => {
     });
 
     await flushAnimationFrame();
-    rendered.getEditor();
-    const replyButton = queryByTestId<HTMLButtonElement>(
-      rendered.container,
-      "comment-rail-rd-s1-action-reply",
-    );
-    expect(replyButton).not.toBeNull();
 
-    await act(async () => {
-      replyButton?.click();
-      await Promise.resolve();
-    });
-    await flushReact();
-    await flushAnimationFrame();
-
-    const replyEditor = queryByTestId<HTMLTextAreaElement>(
-      rendered.container,
-      "comment-rail-rd-c1-editor",
-    );
-    expect(replyEditor).not.toBeNull();
-
-    await act(async () => {
-      const valueSetter = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      )?.set;
-      valueSetter?.call(replyEditor, "Looks good.");
-      replyEditor?.dispatchEvent(new Event("input", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    const saveButton = queryByTestId<HTMLButtonElement>(
-      rendered.container,
-      "comment-rail-rd-c1-action-save",
-    );
-    expect(saveButton).not.toBeNull();
+    const dialog = await openThreadDialog(rendered.container, "rd-s1");
 
     vi.useFakeTimers();
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
+    await submitThreadDialogReply(dialog, "Looks good.");
+
     await act(async () => {
       vi.advanceTimersByTime(500);
       await Promise.resolve();
@@ -1905,6 +1748,32 @@ describe("PageCard editor integration", () => {
     expect(savedMarkdown).toContain("re: rd-s1");
     expect(savedMarkdown).toContain("suggestions:");
     expect(savedMarkdown).toContain("rd-s1:");
+  });
+
+  it("renders a comment anchor and a replacement suggestion", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-comment-anchor-and-replacement-1",
+        title: "Doc Comment Anchor And Replacement 1",
+        content: reviewDocument(
+          '<span id="rd-c1">alpha</span> and <span id="rd-s1"><del>old</del><ins>new</ins></span> text',
+          [
+            ...commentRecords({ id: "rd-c1", body: "Comment body" }),
+            ...suggestionRecords({ id: "rd-s1" }),
+          ],
+        ),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    expect(
+      rendered.container.querySelector('.comment-anchor[id^="rd-c"]'),
+    ).not.toBeNull();
+    expect(
+      rendered.container.querySelector('.suggestion[data-rd-replace^="rd-s"]'),
+    ).not.toBeNull();
   });
 
   it("preserves suggestion color when comments are attached to suggestion text", async () => {
@@ -1964,12 +1833,8 @@ describe("PageCard editor integration", () => {
     await flushReact();
     await flushReact();
 
-    const suggestionThread = rendered.container.querySelector<HTMLElement>(
-      '[data-suggestion-thread-container="true"]',
-    );
-    expect(suggestionThread?.classList.contains("-translate-x-2")).toBe(true);
     expect(
-      rendered.container.querySelector(".suggestion-decoration-active"),
+      queryByTestId(rendered.container, "suggestion-decoration-active"),
     ).not.toBeNull();
   });
 

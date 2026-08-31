@@ -105,34 +105,37 @@ describe("blockAt", () => {
     expect(fixtures.length).toBeGreaterThan(0);
   });
 
-  it.each(fixtures)("reports the containing block at every offset of $name", ({
-    markdown,
-  }) => {
-    const index = createLiteralSpanIndex(markdown);
-    const answers = Array.from({ length: markdown.length }, (_, offset) =>
-      index.blockAt(offset),
-    );
-    const blocks = distinctBlocks(answers);
-
-    expect(blocks.length).toBeGreaterThan(0);
-
-    // Every answer contains the offset that asked for it.
-    expect(
-      answers.flatMap((block, offset) =>
-        block && (offset < block.start || block.end <= offset) ? [offset] : [],
-      ),
-    ).toEqual([]);
-
-    // Every offset a block covers answers that same block, so no two blocks
-    // overlap and no offset within one falls through to nothing.
-    for (const block of blocks) {
-      const covered = answers
-        .slice(block.start, block.end)
-        .map((answer) => (answer ? blockKey(answer) : null));
-
-      expect(covered).toEqual(
-        new Array(block.end - block.start).fill(blockKey(block)),
+  it.each(fixtures)(
+    "reports the containing block at every offset of $name",
+    ({ markdown }) => {
+      const index = createLiteralSpanIndex(markdown);
+      const answers = Array.from({ length: markdown.length }, (_, offset) =>
+        index.blockAt(offset),
       );
-    }
-  });
+      const blocks = distinctBlocks(answers);
+
+      expect(blocks.length).toBeGreaterThan(0);
+
+      // Every answer contains the offset that asked for it.
+      expect(
+        answers.flatMap((block, offset) =>
+          block && (offset < block.start || block.end <= offset)
+            ? [offset]
+            : [],
+        ),
+      ).toEqual([]);
+
+      // Every offset a block covers answers that same block, so no two blocks
+      // overlap and no offset within one falls through to nothing.
+      for (const block of blocks) {
+        const covered = answers
+          .slice(block.start, block.end)
+          .map((answer) => (answer ? blockKey(answer) : null));
+
+        expect(covered).toEqual(
+          new Array(block.end - block.start).fill(blockKey(block)),
+        );
+      }
+    },
+  );
 });

@@ -97,7 +97,9 @@ A submitted reply parents to the thread root. `re` therefore records thread memb
 
 ### Resolve
 
-A resolve control sits beside the composer, on comment threads only. It writes `status: resolved` and `resolved` on the thread root.
+A resolve control sits beside the composer, on comment threads only. It writes `status: resolved` on the thread root, and reopening clears it.
+
+The control writes no `resolved` summary. The interface offers no field for one, and a fabricated summary carries less than an absent one. The key remains available to an agent writing the record directly, and a summary already present on a record is preserved on round trip.
 
 A resolved thread remains fully editable: it accepts replies, edits and deletes, and replying does not clear the resolved status. Only the resolve control changes it.
 

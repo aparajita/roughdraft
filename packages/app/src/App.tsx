@@ -51,10 +51,13 @@ import {
   normalizeCommentMeasurement,
   resolveAnchoredRailLayouts,
 } from "./document-comments";
+import {
+  type DocumentDiskChangeState,
+  shouldWarnBeforeUnload,
+} from "./document-disk-change-state";
 import { cn } from "./lib/utils";
 import type { DocumentSaveState } from "./PageCard";
 import { PreviewBackend } from "./preview-backend";
-import { RoughdraftFormatDemo } from "./RoughdraftFormatDemo";
 import {
   type CompleteReviewOptions,
   MarkdownFileConflictError,
@@ -63,33 +66,6 @@ import {
 } from "./storage";
 import { UpdateNotice } from "./UpdateNotice";
 import { fetchUpdateStatus, type UpdateStatus } from "./update-status";
-
-export type DocumentDiskChangeState =
-  | "clean"
-  | "changed"
-  | "conflict"
-  | "paused";
-
-export function shouldWarnBeforeUnload({
-  activeDocumentPath,
-  isDirty,
-  saveState,
-  diskChangeState,
-}: {
-  activeDocumentPath: string | null;
-  isDirty: boolean;
-  saveState: DocumentSaveState;
-  diskChangeState: DocumentDiskChangeState;
-}) {
-  return (
-    !!activeDocumentPath &&
-    (isDirty ||
-      saveState === "saving" ||
-      saveState === "unsaved" ||
-      saveState === "error" ||
-      diskChangeState !== "clean")
-  );
-}
 
 const AGENT_SETUP_PROMPT =
   "Install Roughdraft for me using `npm i -g roughdraft`, then read https://roughdraft.md/setup.md and set yourself up to use it.";
@@ -553,7 +529,41 @@ export function Homepage({
           </div>
         </section>
 
-        <RoughdraftFormatDemo />
+        <section
+          aria-labelledby="roughdraft-markdown-heading"
+          data-testid="rfm-format-demo"
+          className="rfm-format-demo mx-auto mt-20 w-full max-w-none border-t border-slate-200 pt-10 text-left dark:border-slate-700 sm:mt-24"
+        >
+          <div
+            className="rfm-format-demo-intro font-die-grotesk-a mx-auto w-full px-4 font-bold"
+            data-testid="rfm-format-demo-intro"
+          >
+            <div className="max-w-3xl">
+              <p className="text-xs font-bold tracking-[0.16em] text-stone-500 uppercase dark:text-stone-400">
+                Roughdraft flavored Markdown
+              </p>
+              <h2
+                className="font-die-grotesk-b mt-3 text-3xl leading-tight font-bold text-balance text-slate-950 dark:text-slate-50 sm:text-4xl"
+                id="roughdraft-markdown-heading"
+              >
+                It's just Markdown
+              </h2>
+              <p className="mt-4 text-base leading-7 text-stone-600 dark:text-stone-400">
+                We extended the markdown format with ordinary HTML anchors and a
+                YAML endmatter block, to support full comment threads, and
+                suggesting changes. Read the{" "}
+                <a
+                  className="font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-950 dark:text-slate-50 dark:decoration-slate-600 dark:hover:decoration-slate-50"
+                  href="/roughdraft-flavored-markdown"
+                >
+                  spec
+                </a>
+                . We are working with other major Markdown apps to rally support
+                for this initiative.
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -1152,7 +1162,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
 
 export function RoughdraftFlavoredMarkdownPage() {
   return (
-    <main className="min-h-screen bg-[#FCFCFC] dark:bg-background px-6 py-8 text-slate-950 dark:text-slate-50">
+    <main className="min-h-screen bg-[#FCFCFC] dark:bg-background px-4 py-4 text-slate-950 dark:text-slate-50">
       <div className="mx-auto max-w-5xl">
         <Button
           className="h-9 gap-2 px-3 text-sm"
