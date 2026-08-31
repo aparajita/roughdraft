@@ -34,6 +34,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tooltip";
+import {
+  COMMENT_ANCHOR_SELECTOR,
+  DELETION_ANCHOR_SELECTOR,
+  INSERTION_ANCHOR_SELECTOR,
+  REPLACEMENT_ANCHOR_SELECTOR,
+} from "./document-comments";
 import { cn } from "./lib/utils";
 import {
   HEADING_BLANK_AFTER_ATTRIBUTE,
@@ -171,11 +177,6 @@ function markdownToPlainText(markdown: string) {
   template.innerHTML = markdownToCleanRichHtml(markdown);
   return (template.content.textContent ?? "").trimEnd();
 }
-
-const COMMENT_ANCHOR_SELECTOR = 'span[id^="rd-c"]';
-const INSERTION_ANCHOR_SELECTOR = 'ins[id^="rd-s"]';
-const DELETION_ANCHOR_SELECTOR = 'del[id^="rd-s"]';
-const REPLACEMENT_ANCHOR_SELECTOR = 'span[id^="rd-s"]';
 
 function unwrapElement(element: HTMLElement) {
   element.replaceWith(...element.childNodes);
@@ -1031,7 +1032,7 @@ export function DocumentWorkspace({
                 "review-layout-grid--centered document-page-shell-no-comments",
             )}
           >
-            <div className="review-layout-main document-page-main w-full max-w-[60rem] min-w-0">
+            <div className="review-layout-main document-page-main w-full max-w-[var(--document-measure)] min-w-0">
               <div className="flex w-full flex-wrap items-center gap-1.5 px-1">
                 <Tooltip>
                   <TooltipTrigger

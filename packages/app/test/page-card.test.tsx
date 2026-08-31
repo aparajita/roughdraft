@@ -6,7 +6,6 @@ import {
   type DocumentSaveController,
   type ManualSaveResult,
   PageCard,
-  shouldDismissCommentThread,
 } from "../src/PageCard";
 import type { Page, StorageBackend } from "../src/storage";
 
@@ -419,34 +418,6 @@ async function renderPageCard(
     unmount,
   };
 }
-
-describe("PageCard comment thread dismissal", () => {
-  it("keeps the thread open for clicks inside the thread container", () => {
-    const container = document.createElement("div");
-    container.dataset.commentThreadContainer = "true";
-    const child = document.createElement("button");
-    container.appendChild(child);
-
-    expect(shouldDismissCommentThread(child)).toBe(false);
-  });
-
-  it.each([
-    { name: "a comment anchor", tag: "span", id: "rd-c1" },
-    { name: "an insertion anchor", tag: "ins", id: "rd-s1" },
-    { name: "a deletion anchor", tag: "del", id: "rd-s2" },
-  ])("keeps the thread open for clicks on $name", ({ tag, id }) => {
-    const anchor = document.createElement(tag);
-    anchor.id = id;
-
-    expect(shouldDismissCommentThread(anchor)).toBe(false);
-  });
-
-  it("dismisses the thread for background clicks", () => {
-    const background = document.createElement("div");
-
-    expect(shouldDismissCommentThread(background)).toBe(true);
-  });
-});
 
 describe("PageCard editor integration", () => {
   beforeEach(() => {

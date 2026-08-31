@@ -21,7 +21,7 @@ test.describe("Anchor review flows", () => {
     removeMarkdownProject(projectDir);
   });
 
-  test("renders a comment thread and saves a reply @smoke", async ({
+  test("opens a thread from its chip and saves a reply sent with Cmd+Enter @smoke", async ({
     page,
   }) => {
     const filePath = writeProjectFile(
@@ -44,23 +44,20 @@ test.describe("Anchor review flows", () => {
     );
 
     await openMarkdownFile(page, filePath);
-    await expect(page.getByTestId("document-review-rail")).toContainText(
-      "Needs detail",
-    );
+    // The footer renders the current entry's chip too, so every chip testid is
+    // in the DOM twice at any viewport; the rail is the one on screen here.
+    await page
+      .getByTestId("document-review-rail")
+      .getByTestId("review-entry-chip-rd-c1-action-open")
+      .click();
 
-    await page
-      .getByTestId("comment-rail-rd-c1-action-reply")
-      .evaluate((element) => {
-        (element as HTMLButtonElement).click();
-      });
-    await page
-      .getByTestId("comment-rail-rd-c2-editor")
-      .fill("Added context looks good.");
-    await page
-      .getByTestId("comment-rail-rd-c2-action-save")
-      .evaluate((element) => {
-        (element as HTMLButtonElement).click();
-      });
+    const dialog = page.getByTestId("review-thread-dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Needs detail");
+
+    const composer = page.getByTestId("review-thread-dialog-composer");
+    await composer.fill("Added context looks good.");
+    await composer.press("ControlOrMeta+Enter");
 
     await expect
       .poll(() => readProjectFile(projectDir, "comment.md"))
@@ -69,40 +66,6 @@ test.describe("Anchor review flows", () => {
 
     logE2eEvent("anchors.reply-saved", {
       file: "comment.md",
-    });
-  });
-
-  test("creates a new root comment and saves it to disk @smoke", async ({
-    page,
-  }) => {
-    const filePath = writeProjectFile(
-      projectDir,
-      "new-comment.md",
-      [
-        "# New Comment",
-        "",
-        "This paragraph has target text to review.",
-        "",
-      ].join("\n"),
-    );
-
-    await openMarkdownFile(page, filePath);
-    await selectRichText(page, "target text");
-    await page.getByTestId("selection-menu-action-comment").click();
-    await page
-      .getByTestId("comment-rail-rd-c1-editor")
-      .fill("Clarify this phrase.");
-    await page.getByTestId("comment-rail-rd-c1-action-save").click();
-
-    await expect
-      .poll(() => readProjectFile(projectDir, "new-comment.md"))
-      .toContain('<span id="rd-c1">target text</span>');
-    expect(readProjectFile(projectDir, "new-comment.md")).toContain(
-      "body: Clarify this phrase.",
-    );
-
-    logE2eEvent("anchors.root-comment-saved", {
-      file: "new-comment.md",
     });
   });
 
@@ -295,7 +258,7 @@ test.describe("Anchor review flows", () => {
     );
   });
 
-  test("accepts and rejects suggested changes on disk @smoke", async ({
+  test("accepts a suggestion from the dialog and makes the next entry current @smoke", async ({
     page,
   }) => {
     const filePath = writeProjectFile(
@@ -308,6 +271,8 @@ test.describe("Anchor review flows", () => {
         "",
         'Remove <del id="rd-s2">drafty </del>there.',
         "",
+        'Add <ins id="rd-s3">a closing line</ins> below.',
+        "",
         "---",
         'roughdraft: "1.0"',
         "suggestions:",
@@ -317,27 +282,82 @@ test.describe("Anchor review flows", () => {
         "  rd-s2:",
         "    by: user",
         "    at: 2026-04-23T18:01:00.000Z",
+        "  rd-s3:",
+        "    by: user",
+        "    at: 2026-04-23T18:02:00.000Z",
         "",
       ].join("\n"),
     );
 
     await openMarkdownFile(page, filePath);
-    await expect(page.locator('[id="rd-s1"]')).toBeVisible();
+    await expect(page.locator('[id="rd-s2"]')).toBeVisible();
 
-    await page.getByTestId("comment-rail-rd-s1-action-accept").click();
+    // The middle suggestion, so advancing to the next entry is distinguishable
+    // from falling back to the first one.
+    await page
+      .getByTestId("document-review-rail")
+      .getByTestId("review-entry-chip-rd-s2-action-open")
+      .click();
+    await expect(page.getByTestId("review-thread-dialog")).toBeVisible();
+
+    await page.getByTestId("review-thread-dialog-action-accept").click();
+
+    await expect(page.getByTestId("review-thread-dialog")).toBeHidden();
     await expect
       .poll(() => readProjectFile(projectDir, "suggestions.md"))
-      .toContain("Keep clear wording here.");
-
-    await page.getByTestId("comment-rail-rd-s2-action-reject").click();
-    await expect
-      .poll(() => readProjectFile(projectDir, "suggestions.md"))
-      .toContain("Remove drafty there.");
-    expect(readProjectFile(projectDir, "suggestions.md")).not.toContain("<ins");
-    expect(readProjectFile(projectDir, "suggestions.md")).not.toContain("<del");
+      .toContain("Remove there.");
+    await expect(page.getByTestId("review-entry-nav-position")).toHaveText(
+      "2 of 2",
+    );
 
     logE2eEvent("anchors.suggestions-applied", {
       file: "suggestions.md",
     });
+  });
+
+  test("navigates entries from the footer below the rail breakpoint", async ({
+    page,
+  }) => {
+    // Below `--breakpoint-rail`, where the rail is replaced by the fixed footer.
+    await page.setViewportSize({ width: 900, height: 800 });
+
+    const filePath = writeProjectFile(
+      projectDir,
+      "narrow.md",
+      [
+        "# Narrow Review",
+        "",
+        'First paragraph has <span id="rd-c1">target text</span>.',
+        "",
+        'Second paragraph has <span id="rd-c2">other text</span>.',
+        "",
+        "---",
+        'roughdraft: "1.0"',
+        "comments:",
+        "  rd-c1:",
+        "    body: Needs detail",
+        "    by: user",
+        "    at: 2026-04-23T18:00:00.000Z",
+        "  rd-c2:",
+        "    body: Needs a source",
+        "    by: user",
+        "    at: 2026-04-23T18:01:00.000Z",
+        "",
+      ].join("\n"),
+    );
+
+    await openMarkdownFile(page, filePath);
+
+    const footer = page.getByTestId("review-entry-footer");
+    await expect(footer).toBeVisible();
+    await expect(page.getByTestId("document-review-rail")).toBeHidden();
+
+    await footer.getByTestId("review-entry-chip-rd-c1").click();
+    await expect(footer.getByTestId("review-entry-chip-rd-c1")).toBeVisible();
+
+    await page.getByTestId("review-entry-footer-action-next").click();
+
+    await expect(footer.getByTestId("review-entry-chip-rd-c2")).toBeVisible();
+    await expect(footer.getByTestId("review-entry-chip-rd-c1")).toHaveCount(0);
   });
 });

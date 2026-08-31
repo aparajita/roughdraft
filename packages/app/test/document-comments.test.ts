@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
+import type { SuggestionKind } from "../src/editor-extensions";
 import {
   buildCommentThreadRailItems,
+  buildReviewEntries,
+  type CommentGroupAnchor,
   getCommentAnchorMeasurements,
   getRootThreadIdForCommentId,
   groupCommentAnchorMeasurements,
   normalizeCommentMeasurement,
+  resolveAnchorScroll,
   resolveAnchoredRailLayouts,
   resolveCommentRailLayouts,
   resolveCommentThreadRailLayouts,
+  type ReviewEntry,
+  resolveNextCurrentEntry,
+  type SuggestionAnchorItem,
 } from "../src/document-comments";
 import type { ReviewComment } from "../src/review";
 
@@ -464,5 +471,209 @@ describe("document comment layout helpers", () => {
         railBottom: 236,
       },
     ]);
+  });
+});
+
+/** The height every anchor in these tests occupies, so a top implies a bottom. */
+const ANCHOR_HEIGHT = 14;
+
+const SUGGESTION_TIMESTAMP = "2026-08-30T09:00:00.000Z";
+
+function commentAnchorGroup(
+  commentIds: string[],
+  anchorTop: number,
+): CommentGroupAnchor {
+  return {
+    key: commentIds.join("::"),
+    commentIds,
+    anchorTop,
+    anchorBottom: anchorTop + ANCHOR_HEIGHT,
+  };
+}
+
+function suggestionAnchor(
+  suggestionId: string,
+  kind: SuggestionKind,
+  anchorTop: number,
+  commentIds: string[] = [],
+): SuggestionAnchorItem {
+  return {
+    suggestionId,
+    attrs: { kind, suggestionId, createdAt: SUGGESTION_TIMESTAMP },
+    kind,
+    oldText: "",
+    newText: "clear wording",
+    commentIds,
+    anchorTop,
+    anchorBottom: anchorTop + ANCHOR_HEIGHT,
+  };
+}
+
+function threadEntry(id: string, anchorTop: number): ReviewEntry {
+  return {
+    kind: "comment-thread",
+    id,
+    commentIds: [id],
+    anchorGroupKey: id,
+    anchorTop,
+    anchorBottom: anchorTop + ANCHOR_HEIGHT,
+  };
+}
+
+function suggestionEntry(id: string, anchorTop: number): ReviewEntry {
+  return {
+    kind: "suggestion",
+    id,
+    operation: "insert",
+    oldText: "",
+    newText: "clear wording",
+    commentIds: [],
+    anchorTop,
+    anchorBottom: anchorTop + ANCHOR_HEIGHT,
+  };
+}
+
+describe("review entry sequence", () => {
+  it("puts document comments first by creation time, then anchors interleaved by position", () => {
+    // Inserted out of both orders, so a pass-through of the input order fails.
+    const comments = createCommentsMap([
+      {
+        id: "rd-c9",
+        content: "Second document note",
+        createdAt: "2026-08-30T12:02:00.000Z",
+        scope: "document",
+      },
+      {
+        id: "rd-c8",
+        content: "First document note",
+        createdAt: "2026-08-30T12:01:00.000Z",
+        scope: "document",
+      },
+      {
+        id: "rd-c2",
+        content: "Lower anchored thread",
+        createdAt: "2026-08-30T12:00:00.000Z",
+      },
+      {
+        id: "rd-c1",
+        content: "Upper anchored thread",
+        createdAt: "2026-08-30T12:03:00.000Z",
+      },
+    ]);
+
+    const entries = buildReviewEntries(
+      [commentAnchorGroup(["rd-c2"], 300), commentAnchorGroup(["rd-c1"], 100)],
+      [suggestionAnchor("rd-s1", "insert", 200)],
+      comments,
+    );
+
+    expect(
+      entries.map((entry) => ({ kind: entry.kind, id: entry.id })),
+    ).toEqual([
+      { kind: "document-comment", id: "rd-c8" },
+      { kind: "document-comment", id: "rd-c9" },
+      { kind: "comment-thread", id: "rd-c1" },
+      { kind: "suggestion", id: "rd-s1" },
+      { kind: "comment-thread", id: "rd-c2" },
+    ]);
+  });
+
+  it("claims a comment filed against a suggestion for that suggestion's entry", () => {
+    const comments = createCommentsMap([
+      {
+        id: "rd-c1",
+        content: "Wording is still vague.",
+        createdAt: "2026-08-30T12:00:00.000Z",
+      },
+      {
+        id: "rd-c2",
+        content: "Tightened it.",
+        createdAt: "2026-08-30T12:01:00.000Z",
+        parentCommentId: "rd-c1",
+      },
+      {
+        id: "rd-c3",
+        content: "Unrelated thread.",
+        createdAt: "2026-08-30T12:02:00.000Z",
+      },
+    ]);
+
+    const entries = buildReviewEntries(
+      [commentAnchorGroup(["rd-c1"], 100), commentAnchorGroup(["rd-c3"], 200)],
+      [suggestionAnchor("rd-s1", "insert", 100, ["rd-c1"])],
+      comments,
+    );
+
+    const ids = entries.map((entry) => entry.id);
+
+    expect(ids).toEqual(["rd-s1", "rd-c3"]);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(entries[0]).toMatchObject({
+      kind: "suggestion",
+      commentIds: ["rd-c1", "rd-c2"],
+    });
+  });
+
+  it.each([
+    {
+      name: "returns the entry that took the removed one's place",
+      previousEntries: [
+        threadEntry("rd-c1", 100),
+        suggestionEntry("rd-s1", 200),
+        threadEntry("rd-c2", 300),
+      ],
+      nextEntries: [threadEntry("rd-c1", 100), threadEntry("rd-c2", 300)],
+      removedEntryId: "rd-s1",
+      expected: "rd-c2",
+    },
+    {
+      name: "returns the last entry when the removed one was last",
+      previousEntries: [
+        threadEntry("rd-c1", 100),
+        suggestionEntry("rd-s1", 200),
+        threadEntry("rd-c2", 300),
+      ],
+      nextEntries: [threadEntry("rd-c1", 100), suggestionEntry("rd-s1", 200)],
+      removedEntryId: "rd-c2",
+      expected: "rd-s1",
+    },
+    {
+      name: "returns null when the sequence empties",
+      previousEntries: [suggestionEntry("rd-s1", 200)],
+      nextEntries: [],
+      removedEntryId: "rd-s1",
+      expected: null,
+    },
+  ])("$name", ({ previousEntries, nextEntries, removedEntryId, expected }) => {
+    expect(
+      resolveNextCurrentEntry(previousEntries, nextEntries, removedEntryId),
+    ).toBe(expected);
+  });
+
+  it.each([
+    {
+      name: "leaves a fully visible anchor where it is",
+      anchor: { top: 100, bottom: 400 },
+      expected: null,
+    },
+    {
+      name: "pulls an anchor above the viewport into the upper third",
+      anchor: { top: -120, bottom: -20 },
+      expected: -420,
+    },
+    {
+      name: "pulls an anchor below the viewport into the upper third",
+      anchor: { top: 950, bottom: 1010 },
+      expected: 650,
+    },
+    {
+      name: "puts the top of an anchor taller than the viewport in the upper third",
+      anchor: { top: 20, bottom: 1500 },
+      expected: -280,
+    },
+  ])("$name", ({ anchor, expected }) => {
+    const VIEWPORT_HEIGHT = 900;
+
+    expect(resolveAnchorScroll(anchor, VIEWPORT_HEIGHT)).toBe(expected);
   });
 });

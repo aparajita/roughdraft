@@ -34,6 +34,10 @@ import {
  * `CommentRecord` plus the id it is filed under. `content` is the record's
  * `body`, `authorType`/`authorId` are the two readings of the record's `by`,
  * and `parentCommentId` is the record's `re`.
+ *
+ * `status` and `resolved` are the record's own fields, set on a thread root
+ * alone: `status` marks the thread addressed and `resolved` is the short
+ * resolution summary.
  */
 export interface ReviewComment {
   id: string;
@@ -43,6 +47,8 @@ export interface ReviewComment {
   authorId?: string | null;
   parentCommentId?: string | null;
   scope?: "document";
+  status?: "resolved";
+  resolved?: string;
 }
 
 export interface ReviewCommentThread {
@@ -145,6 +151,8 @@ function reviewCommentFromRecord(
     ...attribution(record.by),
     parentCommentId: record.re ?? null,
     scope: record.scope,
+    status: record.status,
+    resolved: record.resolved,
   };
 }
 
@@ -185,6 +193,18 @@ function commentRecordFrom(
     } else {
       delete record.scope;
     }
+  }
+
+  if (comment.status === "resolved") {
+    record.status = "resolved";
+  } else {
+    delete record.status;
+  }
+
+  if (comment.resolved) {
+    record.resolved = comment.resolved;
+  } else {
+    delete record.resolved;
   }
 
   return record;
@@ -867,9 +887,11 @@ function collectSuggestionsFromDoc(
  *   with the outermost id first.
  * - The frontmatter block, byte for byte.
  * - Endmatter keys this module has no field for: unrecognized top-level keys,
- *   and unrecognized keys inside a comment or suggestion record, including
- *   `status` and `resolved`. They survive because `options.endmatter` is
- *   reparsed and each record is rewritten onto the one already there.
+ *   and unrecognized keys inside a comment or suggestion record, including a
+ *   suggestion's `status` and `resolved`. They survive because
+ *   `options.endmatter` is reparsed and each record is rewritten onto the one
+ *   already there. A comment's `status` and `resolved` are fields of
+ *   {@link ReviewComment} and are written from it.
  * - A trailing YAML block with no `roughdraft` key, which is document content
  *   and stays in the body.
  *

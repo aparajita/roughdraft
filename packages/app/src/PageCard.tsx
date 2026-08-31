@@ -2,18 +2,22 @@ import { RecordIdAllocator } from "@roughdraft/rfm";
 import type { JSONContent } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
+import { EditorContent, useEditor } from "@tiptap/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildLocationForLinkedMarkdownDocument } from "./app-navigation";
-import { CommentEditorList } from "./CommentEditorList";
+import { DocumentReviewRail } from "./DocumentReviewRail";
 import {
-  DocumentReviewRail,
-  type SuggestionRailItem,
-} from "./DocumentReviewRail";
-import {
+  buildReviewEntries,
   COMMENT_ANCHOR_SELECTOR,
-  getPreferredCommentId,
+  DELETION_ANCHOR_SELECTOR,
+  getRootThreadIdForCommentId,
+  INSERTION_ANCHOR_SELECTOR,
   readCommentAnchorIds,
+  REPLACEMENT_ANCHOR_SELECTOR,
+  resolveAnchorScroll,
+  resolveNextCurrentEntry,
+  type ReviewEntry,
+  type SuggestionAnchorItem,
 } from "./document-comments";
 import { EditorContextMenu } from "./EditorContextMenu";
 import {
@@ -30,13 +34,15 @@ import {
   createSuggestion,
   editorStateToReviewMarkdown,
   getCommentDescendantIds,
-  getOrderedAnchorComments,
   type ReviewComment,
   reviewMarkdownHasReviewRail,
   reviewMarkdownToEditorState,
   type SuggestionAttrs,
 } from "./review";
 import { getReviewMarkupBlockedReason } from "./review-markup-selection";
+import { ReviewEntryFooter } from "./ReviewEntryFooter";
+import { ReviewThreadDialog } from "./ReviewThreadDialog";
+import { SuggestionComposerPopover } from "./SuggestionComposerPopover";
 import type { Page, StorageBackend } from "./storage";
 import {
   applySuggestedInput,
@@ -123,104 +129,49 @@ interface CodeEditorSurfaceProps {
   onMarkdownChange: (markdown: string) => void;
 }
 
-export interface DraftSuggestionState {
+interface DraftSuggestionState {
   type: "insertion" | "replacement";
   from: number;
   to: number;
   sourceText: string;
   text: string;
+  /** Where the popover sits: the client rect of the text under change. */
+  anchorRect: DOMRect;
 }
 
-function areCommentIdListsEqual(
-  current: string[] | null | undefined,
-  next: string[] | null | undefined,
-) {
-  if (!current || !next) return current === next;
-  if (current.length !== next.length) return false;
-  return current.every((commentId, index) => commentId === next[index]);
+/**
+ * A comment whose id is spoken for but whose record and anchor do not exist
+ * yet. Commenting on a selection holds its range here and opens the dialog;
+ * nothing reaches the document until a body is submitted.
+ */
+interface PendingCommentState {
+  commentId: string;
+  from: number;
+  to: number;
+  excerpt: string;
 }
 
-function getSelectionCommentIds(editor: Editor | null): string[] {
-  if (!editor) return [];
+/** Why the dialog closed itself: the document no longer holds its entry. */
+const ENTRY_REMOVED_REASON =
+  "This entry is no longer in the document. It was changed outside the editor.";
 
-  const directAttributes = editor.getAttributes("commentAnchor").commentIds;
-
-  if (Array.isArray(directAttributes) && directAttributes.length > 0) {
-    return directAttributes;
-  }
-
-  const { from, to, empty, $from } = editor.state.selection;
+/** Every comment anchored anywhere in the given range. */
+function getRangeCommentIds(editor: Editor, from: number, to: number) {
   const commentIds = new Set<string>();
 
-  if (empty) {
-    for (const mark of $from.marks()) {
+  editor.state.doc.nodesBetween(from, to, (node) => {
+    if (!node.isText) return;
+
+    for (const mark of node.marks) {
       if (mark.type.name !== "commentAnchor") continue;
 
       for (const commentId of mark.attrs.commentIds ?? []) {
         commentIds.add(commentId);
       }
     }
-  } else {
-    editor.state.doc.nodesBetween(from, to, (node) => {
-      if (!node.isText) return;
-
-      for (const mark of node.marks) {
-        if (mark.type.name !== "commentAnchor") continue;
-
-        for (const commentId of mark.attrs.commentIds ?? []) {
-          commentIds.add(commentId);
-        }
-      }
-    });
-  }
+  });
 
   return [...commentIds];
-}
-
-function getSelectionSuggestionIds(editor: Editor | null): string[] {
-  if (!editor) return [];
-
-  const directSuggestionId = editor.getAttributes("suggestion").suggestionId;
-
-  if (typeof directSuggestionId === "string" && directSuggestionId.length > 0) {
-    return [directSuggestionId];
-  }
-
-  const { from, to, empty, $from } = editor.state.selection;
-  const suggestionIds = new Set<string>();
-
-  if (empty) {
-    for (const mark of $from.marks()) {
-      if (mark.type.name !== "suggestion") continue;
-      if (typeof mark.attrs.suggestionId === "string") {
-        suggestionIds.add(mark.attrs.suggestionId);
-      }
-    }
-  } else {
-    editor.state.doc.nodesBetween(from, to, (node) => {
-      if (!node.isText) return;
-
-      for (const mark of node.marks) {
-        if (mark.type.name !== "suggestion") continue;
-        if (typeof mark.attrs.suggestionId === "string") {
-          suggestionIds.add(mark.attrs.suggestionId);
-        }
-      }
-    });
-  }
-
-  return [...suggestionIds];
-}
-
-function getPreferredSuggestionId(
-  suggestionIds: string[],
-  currentSuggestionId: string | null,
-): string | null {
-  if (currentSuggestionId && suggestionIds.includes(currentSuggestionId)) {
-    return currentSuggestionId;
-  }
-
-  return suggestionIds[0] ?? null;
 }
 
 function findCommentRange(editor: Editor | null, commentId: string) {
@@ -234,7 +185,10 @@ function findCommentRange(editor: Editor | null, commentId: string) {
   let closed = false;
 
   editor.state.doc.descendants((node, pos) => {
-    if (closed || !node.isText) return false;
+    // A text node is a leaf of a block, so a block is descended into rather
+    // than skipped; only a closed range ends the walk.
+    if (closed) return false;
+    if (!node.isText) return;
 
     const hasCommentId = node.marks.some(
       (mark) =>
@@ -340,24 +294,33 @@ function addCommentIdsToAnchor(
 }
 
 /**
- * A suggestion in the rendered document is an `<ins>` or `<del>` carrying the
- * suggestion id as its element id, or one half of a replacement pair, which
- * carries the shared id in `data-rd-replace` because an id must be unique.
+ * A replacement's two halves share one id, and an element id must be unique, so
+ * inside the editor they carry it here instead. The `<span>` that owns the real
+ * id — the element `REPLACEMENT_ANCHOR_SELECTOR` matches — is wrapped around the
+ * pair only when the document is serialized, so a document being edited has
+ * none and this is the only way to reach a replacement's anchor.
  */
-const SUGGESTION_ANCHOR_SELECTOR =
-  'ins[id^="rd-s"], del[id^="rd-s"], [data-rd-replace]';
+const EDITOR_REPLACEMENT_ANCHOR_SELECTOR = "[data-rd-replace]";
+
+/** Every element in the editor that anchors a suggestion. */
+const SUGGESTION_ANCHOR_SELECTOR = [
+  INSERTION_ANCHOR_SELECTOR,
+  DELETION_ANCHOR_SELECTOR,
+  REPLACEMENT_ANCHOR_SELECTOR,
+  EDITOR_REPLACEMENT_ANCHOR_SELECTOR,
+].join(", ");
 
 function readSuggestionAnchorId(element: HTMLElement): string | null {
   return element.dataset.rdReplace ?? (element.id || null);
 }
 
-function getDocumentSuggestionRailItems(
+function getDocumentSuggestionAnchorItems(
   editor: Editor | null,
   comments: ReadonlyMap<string, ReviewComment>,
-): SuggestionRailItem[] {
+): SuggestionAnchorItem[] {
   if (!editor) return [];
 
-  const suggestions = new Map<string, SuggestionRailItem>();
+  const suggestions = new Map<string, SuggestionAnchorItem>();
   const anchors = new Map<
     string,
     {
@@ -425,7 +388,7 @@ function getDocumentSuggestionRailItems(
         commentIds: [],
         anchorTop: anchors.get(suggestionId)?.anchorTop ?? 0,
         anchorBottom: anchors.get(suggestionId)?.anchorBottom ?? 24,
-      } satisfies SuggestionRailItem);
+      } satisfies SuggestionAnchorItem);
 
     existing.attrs = {
       ...attrs,
@@ -550,11 +513,116 @@ function addCommentIdsToSuggestion(
   return true;
 }
 
-export function shouldDismissCommentThread(target: EventTarget | null) {
-  if (!(target instanceof Element)) return true;
+function findSuggestionAnchorElement(
+  editor: Editor | null,
+  suggestionId: string,
+) {
+  if (!editor) return null;
 
-  return !target.closest(
-    `[data-comment-thread-container="true"], [data-suggestion-thread-container="true"], ${COMMENT_ANCHOR_SELECTOR}, ${SUGGESTION_ANCHOR_SELECTOR}`,
+  const anchors = editor.view.dom.querySelectorAll<HTMLElement>(
+    SUGGESTION_ANCHOR_SELECTOR,
+  );
+
+  return (
+    [...anchors].find(
+      (anchor) => readSuggestionAnchorId(anchor) === suggestionId,
+    ) ?? null
+  );
+}
+
+/** The element an entry is anchored to, or null when it has no anchor. */
+function findEntryAnchorElement(editor: Editor | null, entry: ReviewEntry) {
+  switch (entry.kind) {
+    case "document-comment":
+      return null;
+    case "comment-thread":
+      return findCommentAnchorElement(editor, entry.id);
+    case "suggestion":
+      return findSuggestionAnchorElement(editor, entry.id);
+  }
+}
+
+/**
+ * What the anchor scrolls in. The document sits in a scrollable pane rather
+ * than scrolling the page itself, so the delta has to be applied to that pane;
+ * the window is the fallback for a layout that has no such pane.
+ */
+function findScrollContainer(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      return node;
+    }
+  }
+
+  return null;
+}
+
+function scrollAnchorIntoView(anchor: HTMLElement) {
+  const rect = anchor.getBoundingClientRect();
+  const container = findScrollContainer(anchor);
+
+  if (!container) {
+    const delta = resolveAnchorScroll(rect, window.innerHeight);
+    if (delta != null) window.scrollBy({ top: delta });
+    return;
+  }
+
+  const bounds = container.getBoundingClientRect();
+  const delta = resolveAnchorScroll(
+    { top: rect.top - bounds.top, bottom: rect.bottom - bounds.top },
+    container.clientHeight,
+  );
+  if (delta != null) container.scrollBy({ top: delta });
+}
+
+/** The document text an entry is anchored to, or null when it has no anchor. */
+function resolveEntryExcerpt(
+  editor: Editor | null,
+  entry: ReviewEntry,
+): string | null {
+  if (!editor || entry.kind === "document-comment") return null;
+
+  const range =
+    entry.kind === "comment-thread"
+      ? findCommentRange(editor, entry.id)
+      : getSuggestionRange(editor, entry.id);
+  if (!range) return null;
+
+  return editor.state.doc.textBetween(range.from, range.to, "\n");
+}
+
+/** An entry's comments, oldest first: the order the dialog's thread reads in. */
+function resolveThreadComments(
+  commentIds: string[],
+  comments: ReadonlyMap<string, ReviewComment>,
+): ReviewComment[] {
+  return commentIds
+    .map((commentId) => comments.get(commentId))
+    .filter((comment): comment is ReviewComment => Boolean(comment))
+    .sort(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.id.localeCompare(right.id),
+    );
+}
+
+/** The client rect of a document range: what the composer popover points at. */
+function getRangeClientRect(editor: Editor, from: number, to: number): DOMRect {
+  const start = editor.view.coordsAtPos(from);
+  const end = editor.view.coordsAtPos(to);
+  const left = Math.min(start.left, end.left);
+  const top = Math.min(start.top, end.top);
+
+  return new DOMRect(
+    left,
+    top,
+    Math.max(start.right, end.right) - left,
+    Math.max(start.bottom, end.bottom) - top,
   );
 }
 
@@ -577,20 +645,23 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   const commentsRef = useRef<Map<string, ReviewComment>>(new Map());
   const suppressNextMarkdownUpdateRef = useRef(false);
   const lastFocusRequestKeyRef = useRef<string | null>(null);
-  const selectedCommentIdRef = useRef<string | null>(null);
-  const selectedChangeIdRef = useRef<string | null>(null);
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
-    null,
-  );
-  const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null);
-  const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
-  const [hoveredChangeId, setHoveredChangeId] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<SuggestionRailItem[]>([]);
+  /**
+   * Exactly one entry is current at a time, and one variable is what makes that
+   * true — no rule two setters have to remember.
+   */
+  const currentEntryIdRef = useRef<string | null>(null);
+  const entriesRef = useRef<ReviewEntry[]>([]);
+  const [currentEntryId, setCurrentEntryId] = useState<string | null>(null);
+  const [hoveredEntryId, setHoveredEntryId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionAnchorItem[]>([]);
   const [draftSuggestion, setDraftSuggestion] =
     useState<DraftSuggestionState | null>(null);
-  const [pendingFocusCommentId, setPendingFocusCommentId] = useState<
-    string | null
-  >(null);
+  const [pendingComment, setPendingComment] =
+    useState<PendingCommentState | null>(null);
+  const [dialogEntryId, setDialogEntryId] = useState<string | null>(null);
+  const [dialogClosedReason, setDialogClosedReason] = useState<string | null>(
+    null,
+  );
 
   const resolveFileUrl = useCallback(
     (path: string) => backend.resolveFileUrl(path),
@@ -627,10 +698,6 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   const idsRef = useRef<RecordIdAllocator>(
     new RecordIdAllocator(parsedContent.document),
   );
-
-  useEffect(() => {
-    commentsRef.current = comments;
-  }, [comments]);
 
   useEffect(() => {
     interactionModeRef.current = interactionMode;
@@ -706,7 +773,10 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     suggestionFrameRef.current = requestAnimationFrame(() => {
       suggestionFrameRef.current = null;
       setSuggestions(
-        getDocumentSuggestionRailItems(editorRef.current, commentsRef.current),
+        getDocumentSuggestionAnchorItems(
+          editorRef.current,
+          commentsRef.current,
+        ),
       );
     });
   }, []);
@@ -901,30 +971,32 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   );
 
   editorRef.current = editor;
-  selectedCommentIdRef.current = selectedCommentId;
-  selectedChangeIdRef.current = selectedChangeId;
+  currentEntryIdRef.current = currentEntryId;
 
   useEffect(() => {
     editor?.setEditable(interactionMode !== "viewing", false);
   }, [editor, interactionMode]);
 
-  const activeCommentIds =
-    useEditorState({
-      editor,
-      selector: ({ editor: currentEditor }) =>
-        getSelectionCommentIds(currentEditor),
-      equalityFn: areCommentIdListsEqual,
-    }) ?? [];
-  const activeChangeIds =
-    useEditorState({
-      editor,
-      selector: ({ editor: currentEditor }) =>
-        getSelectionSuggestionIds(currentEditor),
-      equalityFn: areCommentIdListsEqual,
-    }) ?? [];
+  // Viewing mode offers neither the dialog nor a way to create a record, so
+  // switching into it takes both away rather than leaving them open behind it.
+  useEffect(() => {
+    if (interactionMode !== "viewing") return;
+
+    setDialogEntryId(null);
+    setDialogClosedReason(null);
+    setPendingComment(null);
+    setDraftSuggestion(null);
+  }, [interactionMode]);
 
   const { commentGroups, contentHeight, measureLayout } =
     useCommentAnchorLayout(editor, comments.size > 0);
+
+  const entries = useMemo(
+    () => buildReviewEntries(commentGroups, suggestions, comments),
+    [commentGroups, comments, suggestions],
+  );
+
+  entriesRef.current = entries;
 
   useEffect(() => {
     onEditorReady?.(editor);
@@ -934,17 +1006,41 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     };
   }, [editor, onEditorReady]);
 
+  /**
+   * A non-empty sequence always has a current entry. A pending comment's id
+   * survives the frames between its record being written and its anchor being
+   * measured, so writing a comment leaves that comment current.
+   */
   useEffect(() => {
-    setSelectedCommentId((current) =>
-      getPreferredCommentId(activeCommentIds, current),
-    );
-  }, [activeCommentIds]);
+    setCurrentEntryId((current) => {
+      if (current && entries.some((entry) => entry.id === current)) {
+        return current;
+      }
+      if (current && pendingComment?.commentId === current) return current;
 
-  useEffect(() => {
-    setSelectedChangeId((current) =>
-      getPreferredSuggestionId(activeChangeIds, current),
+      return entries[0]?.id ?? null;
+    });
+  }, [entries, pendingComment]);
+
+  /**
+   * The one way an entry becomes current, so the scroll rule cannot be reached
+   * from one path and skipped on another.
+   */
+  const setCurrentEntry = useCallback((entryId: string) => {
+    setCurrentEntryId(entryId);
+
+    const entry = entriesRef.current.find(
+      (candidate) => candidate.id === entryId,
     );
-  }, [activeChangeIds]);
+    if (!entry) return;
+
+    // The anchor is read after the document has drawn the change that made this
+    // entry current — accepting a suggestion moves every anchor below it.
+    requestAnimationFrame(() => {
+      const anchor = findEntryAnchorElement(editorRef.current, entry);
+      if (anchor) scrollAnchorIntoView(anchor);
+    });
+  }, []);
 
   useEffect(() => {
     if (!editor) return;
@@ -954,12 +1050,10 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     commentsRef.current = parsedContent.comments;
     idsRef.current.reserve(parsedContent.document);
     setComments(parsedContent.comments);
-    setSelectedCommentId(null);
-    setHoveredCommentId(null);
-    setSelectedChangeId(null);
-    setHoveredChangeId(null);
+    setCurrentEntryId(null);
+    setHoveredEntryId(null);
     setDraftSuggestion(null);
-    setPendingFocusCommentId(null);
+    setPendingComment(null);
 
     const nextDoc = parsedContent.doc;
     if (JSON.stringify(editor.getJSON()) !== JSON.stringify(nextDoc)) {
@@ -980,165 +1074,159 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   }, [editor, focusRequestKey, selected]);
 
   useEffect(() => {
-    if (selectedCommentId && !comments.has(selectedCommentId)) {
-      setSelectedCommentId(null);
-    }
-
-    if (hoveredCommentId && !comments.has(hoveredCommentId)) {
-      setHoveredCommentId(null);
-    }
+    commentsRef.current = comments;
+    // A suggestion entry carries the comments filed against it, so the read of
+    // the document that builds those entries is redone whenever a comment
+    // changes.
     refreshSuggestions();
-  }, [comments, hoveredCommentId, refreshSuggestions, selectedCommentId]);
+  }, [comments, refreshSuggestions]);
+
+  // Which plugin an entry addresses is decided by what the entry is, not by
+  // what its id looks like.
+  const entryOf = useCallback(
+    (entryId: string | null) =>
+      entryId ? (entries.find((entry) => entry.id === entryId) ?? null) : null,
+    [entries],
+  );
+  const currentEntry = entryOf(currentEntryId);
+  const hoveredEntry = entryOf(hoveredEntryId);
+  const highlightedCommentId =
+    currentEntry && currentEntry.kind !== "suggestion" ? currentEntry.id : null;
+  const highlightedHoverCommentId =
+    hoveredEntry && hoveredEntry.kind !== "suggestion" ? hoveredEntry.id : null;
+  const highlightedSuggestionId =
+    currentEntry?.kind === "suggestion" ? currentEntry.id : null;
+  const highlightedHoverSuggestionId =
+    hoveredEntry?.kind === "suggestion" ? hoveredEntry.id : null;
 
   useEffect(() => {
     if (!editor) return;
-
-    const effectiveHoveredCommentId = selectedCommentId
-      ? hoveredCommentId
-      : null;
 
     editor.view.dispatch(
       editor.state.tr.setMeta(commentHighlightPluginKey, {
-        selectedCommentId,
-        hoveredCommentId: effectiveHoveredCommentId,
+        selectedCommentId: highlightedCommentId,
+        hoveredCommentId: highlightedHoverCommentId,
       }),
     );
-  }, [editor, hoveredCommentId, selectedCommentId]);
+  }, [editor, highlightedCommentId, highlightedHoverCommentId]);
 
   useEffect(() => {
     if (!editor) return;
-
-    const effectiveHoveredChangeId = selectedChangeId ? hoveredChangeId : null;
 
     editor.view.dispatch(
       editor.state.tr.setMeta(suggestionHighlightPluginKey, {
-        selectedChangeId,
-        hoveredChangeId: effectiveHoveredChangeId,
+        selectedChangeId: highlightedSuggestionId,
+        hoveredChangeId: highlightedHoverSuggestionId,
       }),
     );
-  }, [editor, hoveredChangeId, selectedChangeId]);
+  }, [editor, highlightedHoverSuggestionId, highlightedSuggestionId]);
 
+  /**
+   * Hovering and clicking an anchor in the document, read from the editor's
+   * root rather than from each anchor. ProseMirror replaces the elements it
+   * draws as the document changes, so a listener bound to an anchor is lost the
+   * moment an edit redraws it, while the root outlives every anchor.
+   */
   useEffect(() => {
     if (!editor) return;
 
-    const anchorElements = editor.view.dom.querySelectorAll<HTMLElement>(
-      COMMENT_ANCHOR_SELECTOR,
-    );
-    const cleanupCallbacks: Array<() => void> = [];
+    const root = editor.view.dom;
 
-    for (const anchor of anchorElements) {
-      const commentIds = readCommentAnchorIds(anchor);
-      if (commentIds.length === 0) continue;
+    const entryIdAt = (target: EventTarget | null): string | null => {
+      if (!(target instanceof Element)) return null;
 
-      const handleMouseEnter = () => {
-        const nextCommentId = getPreferredCommentId(
-          commentIds,
-          selectedCommentIdRef.current,
-        );
-        if (nextCommentId) {
-          setHoveredCommentId(nextCommentId);
-        }
-      };
+      const entryIdOf = (entryId: string | null) =>
+        entryId && entriesRef.current.some((entry) => entry.id === entryId)
+          ? entryId
+          : null;
 
-      const handleMouseLeave = () => {
-        setHoveredCommentId((current) =>
-          current && commentIds.includes(current) ? null : current,
-        );
-      };
-
-      const handleClick = () => {
-        const nextCommentId = getPreferredCommentId(
-          commentIds,
-          selectedCommentIdRef.current,
-        );
-        if (nextCommentId) {
-          setSelectedCommentId(nextCommentId);
-        }
-      };
-
-      anchor.addEventListener("mouseenter", handleMouseEnter);
-      anchor.addEventListener("mouseleave", handleMouseLeave);
-      anchor.addEventListener("click", handleClick);
-      cleanupCallbacks.push(() => {
-        anchor.removeEventListener("mouseenter", handleMouseEnter);
-        anchor.removeEventListener("mouseleave", handleMouseLeave);
-        anchor.removeEventListener("click", handleClick);
-      });
-    }
-
-    return () => {
-      for (const cleanup of cleanupCallbacks) {
-        cleanup();
+      // A comment filed against a suggestion belongs to that suggestion's
+      // entry, so an anchor inside a suggestion is read as the suggestion.
+      const suggestionAnchor = target.closest<HTMLElement>(
+        SUGGESTION_ANCHOR_SELECTOR,
+      );
+      if (suggestionAnchor) {
+        return entryIdOf(readSuggestionAnchorId(suggestionAnchor));
       }
-    };
-  }, [editor]);
 
-  useEffect(() => {
-    if (!editor) return;
+      const commentAnchor = target.closest<HTMLElement>(
+        COMMENT_ANCHOR_SELECTOR,
+      );
+      if (!commentAnchor) return null;
 
-    const suggestionElements = editor.view.dom.querySelectorAll<HTMLElement>(
-      SUGGESTION_ANCHOR_SELECTOR,
-    );
-    const cleanupCallbacks: Array<() => void> = [];
+      // An anchor names comments; the entry is the thread each belongs to, and
+      // an anchor shared by several threads keeps the current one.
+      const entryIds = readCommentAnchorIds(commentAnchor)
+        .map((commentId) =>
+          getRootThreadIdForCommentId(commentId, commentsRef.current),
+        )
+        .filter((entryId): entryId is string => Boolean(entryId));
+      const current = currentEntryIdRef.current;
 
-    for (const element of suggestionElements) {
-      const suggestionId = readSuggestionAnchorId(element);
-      if (!suggestionId) continue;
-
-      const handleMouseEnter = () => {
-        setHoveredChangeId(suggestionId);
-      };
-
-      const handleMouseLeave = () => {
-        setHoveredChangeId((current) =>
-          current === suggestionId ? null : current,
-        );
-      };
-
-      const handleClick = () => {
-        setSelectedChangeId(suggestionId);
-      };
-
-      element.addEventListener("mouseenter", handleMouseEnter);
-      element.addEventListener("mouseleave", handleMouseLeave);
-      element.addEventListener("click", handleClick);
-      cleanupCallbacks.push(() => {
-        element.removeEventListener("mouseenter", handleMouseEnter);
-        element.removeEventListener("mouseleave", handleMouseLeave);
-        element.removeEventListener("click", handleClick);
-      });
-    }
-
-    return () => {
-      for (const cleanup of cleanupCallbacks) {
-        cleanup();
-      }
-    };
-  }, [editor]);
-
-  useEffect(() => {
-    const handleDocumentPointerDown = (event: PointerEvent) => {
-      if (!selectedCommentIdRef.current && !selectedChangeIdRef.current) return;
-      if (!shouldDismissCommentThread(event.target)) return;
-
-      setSelectedCommentId(null);
-      setHoveredCommentId(null);
-      setSelectedChangeId(null);
-      setHoveredChangeId(null);
-      setPendingFocusCommentId(null);
-    };
-
-    document.addEventListener("pointerdown", handleDocumentPointerDown, true);
-
-    return () => {
-      document.removeEventListener(
-        "pointerdown",
-        handleDocumentPointerDown,
-        true,
+      return entryIdOf(
+        (current && entryIds.includes(current) ? current : entryIds[0]) ?? null,
       );
     };
+
+    const handleMouseOver = (event: MouseEvent) => {
+      setHoveredEntryId(entryIdAt(event.target));
+    };
+
+    const handleMouseLeave = () => {
+      setHoveredEntryId(null);
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      const entryId = entryIdAt(event.target);
+      if (entryId) setCurrentEntry(entryId);
+    };
+
+    root.addEventListener("mouseover", handleMouseOver);
+    root.addEventListener("mouseleave", handleMouseLeave);
+    root.addEventListener("click", handleClick);
+
+    return () => {
+      root.removeEventListener("mouseover", handleMouseOver);
+      root.removeEventListener("mouseleave", handleMouseLeave);
+      root.removeEventListener("click", handleClick);
+    };
+  }, [editor, setCurrentEntry]);
+
+  /**
+   * Runs a document mutation whose Markdown this file emits itself, so the
+   * editor's own update does not emit a half-written state.
+   */
+  const withoutMarkdownEmit = useCallback(<T,>(mutate: () => T): T => {
+    suppressNextMarkdownUpdateRef.current = true;
+    const result = mutate();
+    if (suppressNextMarkdownUpdateRef.current) {
+      suppressNextMarkdownUpdateRef.current = false;
+    }
+
+    return result;
   }, []);
 
+  const closeDialog = useCallback(() => {
+    setDialogEntryId(null);
+    setDialogClosedReason(null);
+    setPendingComment(null);
+  }, []);
+
+  const openDialog = useCallback(
+    (entryId: string) => {
+      setCurrentEntry(entryId);
+      setDialogEntryId(entryId);
+      setDialogClosedReason(null);
+    },
+    [setCurrentEntry],
+  );
+
+  /**
+   * Commenting writes nothing: it holds the range the comment will be anchored
+   * to and opens the dialog on it. The id is spoken for from here so that the
+   * dialog, the current entry and the record all name the same comment, but the
+   * record and its anchor are written only when a body is submitted.
+   */
   const handleAddComment = useCallback(() => {
     const currentEditor = editorRef.current;
     if (!currentEditor || currentEditor.state.selection.empty) return;
@@ -1146,31 +1234,19 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     // it happens, so the two cannot disagree about which selections are legal.
     if (getReviewMarkupBlockedReason(currentEditor, "comment")) return;
 
-    const existingIds = getSelectionCommentIds(currentEditor);
-    const comment = createReviewComment(undefined, {
-      ids: idsRef.current,
-    });
-    const nextComments = new Map(commentsRef.current);
-    nextComments.set(comment.id, comment);
-    commentsRef.current = nextComments;
-    setComments(nextComments);
+    const { from, to } = currentEditor.state.selection;
+    const commentId = idsRef.current.allocateCommentId();
 
-    suppressNextMarkdownUpdateRef.current = true;
-    currentEditor
-      .chain()
-      .focus()
-      .setCommentAnchor({ commentIds: [...existingIds, comment.id] })
-      .run();
-    if (suppressNextMarkdownUpdateRef.current) {
-      suppressNextMarkdownUpdateRef.current = false;
-    }
-
-    setSelectedCommentId(comment.id);
-    setPendingFocusCommentId(comment.id);
-    requestAnimationFrame(() => {
-      measureLayout();
+    setPendingComment({
+      commentId,
+      from,
+      to,
+      excerpt: currentEditor.state.doc.textBetween(from, to, "\n"),
     });
-  }, [measureLayout]);
+    setCurrentEntryId(commentId);
+    setDialogEntryId(commentId);
+    setDialogClosedReason(null);
+  }, []);
 
   const handleSuggestDeletion = useCallback(() => {
     const currentEditor = editorRef.current;
@@ -1211,6 +1287,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       to,
       sourceText: currentEditor.state.doc.textBetween(from, to, "\n"),
       text: "",
+      anchorRect: getRangeClientRect(currentEditor, from, to),
     });
   }, []);
 
@@ -1243,7 +1320,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           ],
         })
         .run();
-      setSelectedChangeId(suggestion.suggestionId);
+      setCurrentEntryId(suggestion.suggestionId);
       setDraftSuggestion(null);
       emitMarkdownChange(currentEditor.getJSON());
       refreshSuggestions();
@@ -1274,7 +1351,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
         ],
       })
       .run();
-    setSelectedChangeId(suggestion.suggestionId);
+    setCurrentEntryId(suggestion.suggestionId);
     setDraftSuggestion(null);
     emitMarkdownChange(currentEditor.getJSON());
     refreshSuggestions();
@@ -1303,6 +1380,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       to: from,
       sourceText: `${before}▮${after}`.trim(),
       text: "",
+      anchorRect: getRangeClientRect(currentEditor, from, from),
     });
   }, []);
 
@@ -1320,42 +1398,111 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     [emitMarkdownChange],
   );
 
-  const replyToComment = useCallback(
-    (commentId: string) => {
+  /** Records a comment and writes the document that now carries its anchor. */
+  const commitComment = useCallback(
+    (comment: ReviewComment) => {
       const currentEditor = editorRef.current;
       if (!currentEditor) return;
-
-      const comment = createReviewComment(
-        {
-          parentCommentId: commentId,
-        },
-        {
-          ids: idsRef.current,
-        },
-      );
-      suppressNextMarkdownUpdateRef.current = true;
-      const nextAnchorCommentIds = addCommentIdsToAnchor(
-        currentEditor,
-        commentId,
-        [comment.id],
-      );
-      if (suppressNextMarkdownUpdateRef.current) {
-        suppressNextMarkdownUpdateRef.current = false;
-      }
-      if (!nextAnchorCommentIds) return;
 
       const nextComments = new Map(commentsRef.current);
       nextComments.set(comment.id, comment);
       commentsRef.current = nextComments;
       setComments(nextComments);
-      setSelectedCommentId(comment.id);
-      setHoveredCommentId(null);
-      setPendingFocusCommentId(comment.id);
+      emitMarkdownChange(currentEditor.getJSON(), nextComments);
+      refreshSuggestions();
       requestAnimationFrame(() => {
         measureLayout();
       });
     },
-    [measureLayout],
+    [emitMarkdownChange, measureLayout, refreshSuggestions],
+  );
+
+  /**
+   * The dialog's composer, and the only place a comment record is created.
+   *
+   * The first submit on a pending comment writes the root and its anchor; every
+   * later one is a reply, and a reply parents to the entry's root — the thread
+   * root, or the suggestion — so `re` records thread membership rather than
+   * conversational nesting.
+   */
+  const submitThreadComment = useCallback(
+    (body: string) => {
+      const currentEditor = editorRef.current;
+      const trimmedBody = body.trim();
+      if (!currentEditor || !trimmedBody) return;
+
+      if (
+        pendingComment &&
+        !commentsRef.current.has(pendingComment.commentId)
+      ) {
+        const { commentId, from, to } = pendingComment;
+        const comment = createReviewComment(
+          { id: commentId, content: trimmedBody },
+          { ids: idsRef.current },
+        );
+        const anchoredCommentIds = getRangeCommentIds(currentEditor, from, to);
+
+        withoutMarkdownEmit(() =>
+          currentEditor
+            .chain()
+            .setTextSelection({ from, to })
+            .setCommentAnchor({
+              commentIds: [...anchoredCommentIds, comment.id],
+            })
+            .run(),
+        );
+        commitComment(comment);
+        return;
+      }
+
+      // A comment written moments ago is a thread the rail has not measured
+      // yet, and a reply to it lands on the same anchor all the same.
+      const entry =
+        entriesRef.current.find(
+          (candidate) => candidate.id === dialogEntryId,
+        ) ??
+        (dialogEntryId && pendingComment?.commentId === dialogEntryId
+          ? ({ kind: "comment-thread", id: dialogEntryId } as const)
+          : null);
+      if (!entry) return;
+
+      const comment = createReviewComment(
+        { content: trimmedBody, parentCommentId: entry.id },
+        { ids: idsRef.current },
+      );
+
+      // A document comment has no anchor to name it; every other entry's reply
+      // joins the anchor its entry is written on.
+      if (entry.kind !== "document-comment") {
+        const anchored = withoutMarkdownEmit(() =>
+          entry.kind === "suggestion"
+            ? addCommentIdsToSuggestion(currentEditor, entry.id, [comment.id])
+            : addCommentIdsToAnchor(currentEditor, entry.id, [comment.id]) !==
+              null,
+        );
+        if (!anchored) return;
+      }
+
+      commitComment(comment);
+    },
+    [commitComment, dialogEntryId, pendingComment, withoutMarkdownEmit],
+  );
+
+  /**
+   * Resolution is written by this handler alone: replying to, editing or
+   * deleting a comment leaves `status` and `resolved` as they are.
+   */
+  const toggleResolved = useCallback(
+    (rootCommentId: string, nextResolved: boolean) => {
+      updateComment(rootCommentId, (current) => ({
+        ...current,
+        status: nextResolved ? "resolved" : undefined,
+        // The interface offers no field for a resolution summary, so it writes
+        // none; one a document arrived with survives being resolved again.
+        resolved: nextResolved ? current.resolved : undefined,
+      }));
+    },
+    [updateComment],
   );
 
   const removeSuggestionComments = useCallback(
@@ -1390,90 +1537,82 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     [],
   );
 
-  const acceptSuggestion = useCallback(
-    (suggestionId: string) => {
+  /**
+   * The entry after the one just removed becomes current.
+   *
+   * The sequence after the removal is the sequence without that entry:
+   * accepting or rejecting takes one entry out and shifts the rest up, leaving
+   * their order intact, and the rail's measurement of the new anchor positions
+   * arrives a frame later.
+   */
+  const advancePastEntry = useCallback(
+    (removedEntryId: string) => {
+      const previousEntries = entriesRef.current;
+      const nextEntries = previousEntries.filter(
+        (entry) => entry.id !== removedEntryId,
+      );
+      const nextEntryId = resolveNextCurrentEntry(
+        previousEntries,
+        nextEntries,
+        removedEntryId,
+      );
+
+      if (!nextEntryId) {
+        setCurrentEntryId(null);
+        return;
+      }
+
+      setCurrentEntry(nextEntryId);
+    },
+    [setCurrentEntry],
+  );
+
+  const applySuggestion = useCallback(
+    (suggestionId: string, outcome: "accept" | "reject") => {
       const currentEditor = editorRef.current;
       if (!currentEditor) return;
 
-      currentEditor.chain().focus().acceptSuggestion(suggestionId).run();
+      const chain = currentEditor.chain().focus();
+      if (outcome === "accept") {
+        chain.acceptSuggestion(suggestionId);
+      } else {
+        chain.rejectSuggestion(suggestionId);
+      }
+      chain.run();
+
       const nextComments = removeSuggestionComments(
         suggestionId,
         currentEditor,
       );
-      setSelectedChangeId((current) =>
+      setHoveredEntryId((current) =>
         current === suggestionId ? null : current,
       );
-      setHoveredChangeId((current) =>
-        current === suggestionId ? null : current,
-      );
+      closeDialog();
+      advancePastEntry(suggestionId);
       emitMarkdownChange(currentEditor.getJSON(), nextComments);
       refreshSuggestions();
     },
-    [emitMarkdownChange, refreshSuggestions, removeSuggestionComments],
+    [
+      advancePastEntry,
+      closeDialog,
+      emitMarkdownChange,
+      refreshSuggestions,
+      removeSuggestionComments,
+    ],
+  );
+
+  const acceptSuggestion = useCallback(
+    (suggestionId: string) => {
+      applySuggestion(suggestionId, "accept");
+    },
+    [applySuggestion],
   );
 
   const rejectSuggestion = useCallback(
     (suggestionId: string) => {
-      const currentEditor = editorRef.current;
-      if (!currentEditor) return;
-
-      currentEditor.chain().focus().rejectSuggestion(suggestionId).run();
-      const nextComments = removeSuggestionComments(
-        suggestionId,
-        currentEditor,
-      );
-      setSelectedChangeId((current) =>
-        current === suggestionId ? null : current,
-      );
-      setHoveredChangeId((current) =>
-        current === suggestionId ? null : current,
-      );
-      emitMarkdownChange(currentEditor.getJSON(), nextComments);
-      refreshSuggestions();
+      applySuggestion(suggestionId, "reject");
     },
-    [emitMarkdownChange, refreshSuggestions, removeSuggestionComments],
-  );
-
-  const replyToSuggestion = useCallback(
-    (suggestionId: string) => {
-      const currentEditor = editorRef.current;
-      if (!currentEditor) return;
-
-      const comment = createReviewComment(
-        {
-          parentCommentId: suggestionId,
-        },
-        {
-          ids: idsRef.current,
-        },
-      );
-      suppressNextMarkdownUpdateRef.current = true;
-      const didAddCommentId = addCommentIdsToSuggestion(
-        currentEditor,
-        suggestionId,
-        [comment.id],
-      );
-      if (suppressNextMarkdownUpdateRef.current) {
-        suppressNextMarkdownUpdateRef.current = false;
-      }
-      if (!didAddCommentId) {
-        return;
-      }
-
-      const nextComments = new Map(commentsRef.current);
-      nextComments.set(comment.id, comment);
-      commentsRef.current = nextComments;
-      setComments(nextComments);
-      setSelectedChangeId(suggestionId);
-      setSelectedCommentId(comment.id);
-      setHoveredCommentId(null);
-      setPendingFocusCommentId(comment.id);
-      refreshSuggestions();
-      requestAnimationFrame(() => {
-        measureLayout();
-      });
-    },
-    [measureLayout, refreshSuggestions],
+    [applySuggestion],
   );
 
   const deleteComment = useCallback(
@@ -1499,100 +1638,158 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
         chain.removeCommentId(id);
       }
       chain.run();
-      setSelectedCommentId((current) =>
+      setHoveredEntryId((current) =>
         current && deletedIds.has(current) ? null : current,
       );
-      setHoveredCommentId((current) =>
-        current && deletedIds.has(current) ? null : current,
-      );
-      setPendingFocusCommentId((current) =>
-        current && deletedIds.has(current) ? null : current,
-      );
+      // Deleting the entry the dialog is open on closes it, and closes it as
+      // the reviewer's own act rather than as a document that changed underfoot.
+      if (dialogEntryId && deletedIds.has(dialogEntryId)) {
+        closeDialog();
+      }
       emitMarkdownChange(currentEditor.getJSON(), nextComments);
       requestAnimationFrame(() => {
         measureLayout();
       });
     },
-    [emitMarkdownChange, measureLayout],
+    [closeDialog, dialogEntryId, emitMarkdownChange, measureLayout],
   );
 
-  const selectComment = useCallback((commentId: string) => {
-    setSelectedCommentId(commentId);
-  }, []);
+  const goToAdjacentEntry = useCallback(
+    (offset: number) => {
+      // Navigation is unavailable while the dialog is open.
+      if (dialogEntryId || dialogClosedReason) return;
 
-  const selectSuggestion = useCallback((suggestionId: string) => {
-    setSelectedChangeId(suggestionId);
-    setSelectedCommentId(null);
-  }, []);
+      const index = entries.findIndex((entry) => entry.id === currentEntryId);
+      if (index < 0) return;
 
-  const focusComment = useCallback((commentId: string) => {
-    const currentEditor = editorRef.current;
-    if (!currentEditor) return;
+      // The sequence does not wrap: both ends are clamped.
+      const nextEntry = entries[index + offset];
+      if (!nextEntry) return;
 
-    setSelectedCommentId(commentId);
+      setCurrentEntry(nextEntry.id);
+    },
+    [
+      currentEntryId,
+      dialogClosedReason,
+      dialogEntryId,
+      entries,
+      setCurrentEntry,
+    ],
+  );
 
-    const range = findCommentRange(currentEditor, commentId);
-    if (range) {
-      currentEditor.commands.focus(undefined, { scrollIntoView: false });
-      currentEditor.view.dispatch(
-        currentEditor.state.tr.setSelection(
-          TextSelection.create(currentEditor.state.doc, range.from, range.to),
-        ),
-      );
-      return;
-    }
+  const goToPreviousEntry = useCallback(() => {
+    goToAdjacentEntry(-1);
+  }, [goToAdjacentEntry]);
 
-    if (!findCommentAnchorElement(currentEditor, commentId)) return;
+  const goToNextEntry = useCallback(() => {
+    goToAdjacentEntry(1);
+  }, [goToAdjacentEntry]);
 
-    currentEditor.commands.focus(undefined, { scrollIntoView: false });
-  }, []);
+  /**
+   * The entry the dialog shows for a comment that has no anchor yet: the
+   * pending selection before a body is submitted, and the comment just written
+   * in the frames before the rail has measured its anchor.
+   */
+  const pendingCommentEntry = useMemo<ReviewEntry | null>(() => {
+    if (!pendingComment) return null;
 
-  const focusSuggestion = useCallback((suggestionId: string) => {
-    const currentEditor = editorRef.current;
-    if (!currentEditor) return;
+    const { commentId } = pendingComment;
 
-    setSelectedChangeId(suggestionId);
-    setSelectedCommentId(null);
+    return {
+      kind: "comment-thread",
+      id: commentId,
+      commentIds: comments.has(commentId)
+        ? [commentId, ...getCommentDescendantIds(commentId, comments)]
+        : [],
+      anchorGroupKey: commentId,
+      anchorTop: 0,
+      anchorBottom: 0,
+    };
+  }, [comments, pendingComment]);
 
-    const range = getSuggestionRange(currentEditor, suggestionId);
-    if (!range) return;
+  const dialogEntry = useMemo(() => {
+    if (!dialogEntryId) return null;
 
-    currentEditor.commands.focus(undefined, { scrollIntoView: false });
-    currentEditor.view.dispatch(
-      currentEditor.state.tr.setSelection(
-        TextSelection.create(currentEditor.state.doc, range.from, range.to),
-      ),
+    return (
+      entries.find((entry) => entry.id === dialogEntryId) ??
+      (pendingCommentEntry?.id === dialogEntryId ? pendingCommentEntry : null)
     );
-  }, []);
+  }, [dialogEntryId, entries, pendingCommentEntry]);
 
-  const hasReviewRail = comments.size > 0 || suggestions.length > 0;
-  const activeComments = getOrderedAnchorComments(activeCommentIds, comments);
+  const dialogComments = useMemo(
+    () =>
+      dialogEntry
+        ? resolveThreadComments(dialogEntry.commentIds, comments)
+        : [],
+    [comments, dialogEntry],
+  );
+
+  const dialogExcerpt = dialogEntry
+    ? (resolveEntryExcerpt(editor, dialogEntry) ??
+      (pendingComment?.commentId === dialogEntry.id
+        ? pendingComment.excerpt
+        : null))
+    : null;
+
+  /**
+   * A document reloaded from disk can drop the entry the dialog is open on. Its
+   * thread is gone, so the dialog says so rather than showing an empty one.
+   */
+  useEffect(() => {
+    if (!dialogEntryId) return;
+    if (entries.some((entry) => entry.id === dialogEntryId)) return;
+    if (pendingComment?.commentId === dialogEntryId) return;
+
+    setDialogEntryId(null);
+    setPendingComment(null);
+    setDialogClosedReason(ENTRY_REMOVED_REASON);
+  }, [dialogEntryId, entries, pendingComment]);
+
+  const resolvedEntryIds = useMemo(
+    () =>
+      new Set(
+        entries
+          .filter((entry) => comments.get(entry.id)?.status === "resolved")
+          .map((entry) => entry.id),
+      ),
+    [comments, entries],
+  );
+
+  const showReview = interactionMode !== "viewing";
+  const hasReviewRail =
+    showReview && (comments.size > 0 || suggestions.length > 0);
   const contentCardClass =
     "rounded-[0.75rem] border border-[#E9E9E8] dark:border-border bg-white dark:bg-card shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)]";
   const documentShellClass = cn(
     "document-page-shell",
     layout === "embedded-demo"
       ? "grid grid-cols-1 gap-3 p-4 min-[900px]:grid-cols-[minmax(0,min(100%,42rem))_minmax(13rem,16rem)] min-[900px]:items-start min-[900px]:justify-start"
-      : "flex flex-col gap-6 min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,60rem)_minmax(24rem,1fr)] min-[1100px]:items-start min-[1100px]:justify-between min-[1100px]:gap-8",
+      : "flex flex-col gap-6 rail:grid rail:grid-cols-[minmax(0,var(--document-measure))_var(--review-rail-width)] rail:items-start rail:justify-between rail:gap-8",
     !hasReviewRail && "document-page-shell-no-comments",
     layout !== "embedded-demo" &&
       !hasReviewRail &&
-      "min-[1100px]:grid-cols-[minmax(0,60rem)] min-[1100px]:justify-center",
+      "rail:grid-cols-[minmax(0,var(--document-measure))] rail:justify-center",
   );
   const documentMainClass = cn(
     "document-page-main w-full min-w-0",
-    layout === "embedded-demo" ? "max-w-none" : "max-w-[60rem]",
+    layout === "embedded-demo"
+      ? "max-w-none"
+      : "max-w-[var(--document-measure)]",
   );
-  const contentInsetClass = layout === "embedded-demo" ? "pb-0" : "pb-24";
-  const fallbackClass = cn(
-    "document-comment-fallback mb-4",
-    layout === "embedded-demo" ? "hidden" : "min-[1100px]:hidden",
+  const showFooter = showReview && layout !== "embedded-demo";
+  const contentInsetClass = cn(
+    layout === "embedded-demo" ? "pb-0" : "pb-24",
+    // The footer is fixed over the document below the rail breakpoint, so the
+    // document ends above it rather than behind it.
+    showFooter &&
+      entries.length > 0 &&
+      "pb-[var(--review-footer-height)] rail:pb-24",
   );
   const reviewRailClass = cn(
     "document-comment-rail",
     layout === "embedded-demo"
       ? "block px-4 pb-4 min-[900px]:p-0"
-      : "hidden min-[1100px]:block",
+      : "hidden rail:block",
   );
 
   return (
@@ -1602,31 +1799,6 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     >
       <div data-testid="document-page-shell" className={documentShellClass}>
         <div className={documentMainClass}>
-          {activeComments.length > 0 ? (
-            <CommentEditorList
-              comments={activeComments}
-              className={fallbackClass}
-              testId="document-comment-fallback"
-              selectedCommentId={selectedCommentId}
-              hoveredCommentId={hoveredCommentId}
-              onDeleteComment={deleteComment}
-              onUpdateComment={(commentId, nextContent) => {
-                updateComment(commentId, (current) => ({
-                  ...current,
-                  content: nextContent,
-                }));
-              }}
-              onReplyComment={replyToComment}
-              onSelectComment={selectComment}
-              onHoverComment={setHoveredCommentId}
-              pendingFocusCommentId={pendingFocusCommentId}
-              onAutoFocusComment={(commentId) => {
-                setPendingFocusCommentId((current) =>
-                  current === commentId ? null : current,
-                );
-              }}
-            />
-          ) : null}
           <div className={contentInsetClass}>
             <div
               data-testid="document-content-card"
@@ -1636,24 +1808,16 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
                 editor={editor}
                 backend={backend}
                 resolveLinkUrl={resolveLinkUrl}
-                onAddComment={
-                  interactionMode === "viewing" ? undefined : handleAddComment
-                }
+                onAddComment={showReview ? handleAddComment : undefined}
                 getBlockedReason={getReviewMarkupBlockedReason}
                 onSuggestDeletion={
-                  interactionMode === "viewing"
-                    ? undefined
-                    : handleSuggestDeletion
+                  showReview ? handleSuggestDeletion : undefined
                 }
                 onSuggestReplacement={
-                  interactionMode === "viewing"
-                    ? undefined
-                    : handleSuggestReplacement
+                  showReview ? handleSuggestReplacement : undefined
                 }
                 onSuggestInsertion={
-                  interactionMode === "viewing"
-                    ? undefined
-                    : handleSuggestInsertion
+                  showReview ? handleSuggestInsertion : undefined
                 }
               >
                 <div data-testid="rich-text-editor">
@@ -1663,52 +1827,70 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
             </div>
           </div>
         </div>
-        <DocumentReviewRail
-          className={reviewRailClass}
-          layout={layout === "embedded-demo" ? "flow" : "anchored"}
-          testId="document-review-rail"
-          commentGroups={commentGroups}
-          comments={comments}
-          suggestions={suggestions}
-          selectedCommentId={selectedCommentId}
-          hoveredCommentId={hoveredCommentId}
-          selectedChangeId={selectedChangeId}
-          hoveredChangeId={hoveredChangeId}
-          contentHeight={contentHeight}
-          onDeleteComment={deleteComment}
+        {showReview ? (
+          <DocumentReviewRail
+            className={reviewRailClass}
+            testId="document-review-rail"
+            entries={entries}
+            currentEntryId={currentEntryId}
+            resolvedEntryIds={resolvedEntryIds}
+            contentHeight={contentHeight}
+            onSelectEntry={setCurrentEntry}
+            onOpenDialog={openDialog}
+            onGoToPreviousEntry={goToPreviousEntry}
+            onGoToNextEntry={goToNextEntry}
+            onAcceptSuggestion={acceptSuggestion}
+            onRejectSuggestion={rejectSuggestion}
+          />
+        ) : null}
+      </div>
+      {showFooter ? (
+        <ReviewEntryFooter
+          entries={entries}
+          currentEntryId={currentEntryId}
+          resolvedEntryIds={resolvedEntryIds}
+          onSelectEntry={setCurrentEntry}
+          onOpenDialog={openDialog}
+          onGoToPreviousEntry={goToPreviousEntry}
+          onGoToNextEntry={goToNextEntry}
+          onAcceptSuggestion={acceptSuggestion}
+          onRejectSuggestion={rejectSuggestion}
+        />
+      ) : null}
+      {showReview ? (
+        <ReviewThreadDialog
+          entry={dialogEntry}
+          comments={dialogComments}
+          excerpt={dialogExcerpt}
+          closedReason={dialogClosedReason}
+          onClose={closeDialog}
+          onSubmitReply={submitThreadComment}
           onUpdateComment={(commentId, nextContent) => {
             updateComment(commentId, (current) => ({
               ...current,
               content: nextContent,
             }));
           }}
-          onReplyComment={replyToComment}
-          onSelectComment={selectComment}
-          onFocusComment={focusComment}
-          onHoverComment={setHoveredCommentId}
+          onDeleteComment={deleteComment}
+          onDeleteThread={deleteComment}
+          onToggleResolved={toggleResolved}
           onAcceptSuggestion={acceptSuggestion}
           onRejectSuggestion={rejectSuggestion}
-          onReplySuggestion={replyToSuggestion}
-          onSelectSuggestion={selectSuggestion}
-          onFocusSuggestion={focusSuggestion}
-          onHoverSuggestion={setHoveredChangeId}
-          pendingFocusCommentId={pendingFocusCommentId}
-          onAutoFocusComment={(commentId) => {
-            setPendingFocusCommentId((current) =>
-              current === commentId ? null : current,
-            );
-          }}
-          draftSuggestion={draftSuggestion}
-          onDraftSuggestionTextChange={(text) => {
-            setDraftSuggestion((current) =>
-              current ? { ...current, text } : current,
-            );
-          }}
-          onApplyDraftSuggestion={applyDraftSuggestion}
-          onCancelDraftSuggestion={() => setDraftSuggestion(null)}
-          editor={editor}
         />
-      </div>
+      ) : null}
+      <SuggestionComposerPopover
+        draft={draftSuggestion}
+        anchorRect={draftSuggestion?.anchorRect ?? null}
+        onTextChange={(text) => {
+          setDraftSuggestion((current) =>
+            current ? { ...current, text } : current,
+          );
+        }}
+        onApply={applyDraftSuggestion}
+        onCancel={() => {
+          setDraftSuggestion(null);
+        }}
+      />
     </div>
   );
 });
@@ -1724,22 +1906,24 @@ const CodeEditorSurface = memo(function CodeEditorSurface({
     "document-page-shell",
     layout === "embedded-demo"
       ? "grid grid-cols-1 gap-3 p-4 min-[900px]:grid-cols-[minmax(0,min(100%,42rem))_minmax(13rem,16rem)] min-[900px]:items-start min-[900px]:justify-start"
-      : "flex flex-col gap-6 min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,60rem)_minmax(24rem,1fr)] min-[1100px]:items-start min-[1100px]:justify-between min-[1100px]:gap-8",
+      : "flex flex-col gap-6 rail:grid rail:grid-cols-[minmax(0,var(--document-measure))_var(--review-rail-width)] rail:items-start rail:justify-between rail:gap-8",
     !hasCommentRailSpace && "document-page-shell-no-comments",
     layout !== "embedded-demo" &&
       !hasCommentRailSpace &&
-      "min-[1100px]:grid-cols-[minmax(0,60rem)] min-[1100px]:justify-center",
+      "rail:grid-cols-[minmax(0,var(--document-measure))] rail:justify-center",
   );
   const documentMainClass = cn(
     "document-page-main w-full min-w-0",
-    layout === "embedded-demo" ? "max-w-none" : "max-w-[60rem]",
+    layout === "embedded-demo"
+      ? "max-w-none"
+      : "max-w-[var(--document-measure)]",
   );
   const contentInsetClass = layout === "embedded-demo" ? "pb-0" : "pb-24";
   const reviewRailClass = cn(
     "document-comment-rail pointer-events-none invisible",
     layout === "embedded-demo"
       ? "block px-4 pb-4 min-[900px]:p-0"
-      : "hidden min-[1100px]:block",
+      : "hidden rail:block",
   );
 
   return (

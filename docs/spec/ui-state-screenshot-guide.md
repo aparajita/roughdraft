@@ -79,6 +79,11 @@ comments:
     by: Nora
     at: "2026-04-28T12:03:00.000Z"
     re: rd-s1
+  rd-c4:
+    scope: document
+    body: Overall, this reads well.
+    by: Nora
+    at: "2026-04-28T11:59:00.000Z"
 suggestions:
   rd-s1:
     by: AI
@@ -117,7 +122,7 @@ suggestions:
 | Document | Rich/code toggle | Use `document-editor-view-toggle` | `document-editor-view-toggle` | URL changes to `?editor=code` or `?editor=rich-text`. |
 | Document | Editing mode | Open mode menu and choose Editing | `document-mode-trigger` | Normal edit behavior. |
 | Document | Suggesting mode | Open mode menu and choose Suggesting | `document-mode-trigger` | Selection actions should create suggestions instead of direct edits. |
-| Document | Viewing mode | Open mode menu and choose Viewing | `document-mode-trigger` | Editing controls should look non-editable. |
+| Document | Viewing mode | Open mode menu and choose Viewing | `document-mode-trigger` | Editing controls should look non-editable; the review rail is not rendered and the document is centered at its normal measure. |
 | Document | Save status: saved | Any clean document after autosave | `document-save-button`, `document-save-status` | Checkmark and `Saved` label on a disabled save button in the top-right status stack, left of the handoff control. |
 | Document | Save status: saving | Type and capture during autosave | `document-save-button`, `document-save-status` | Spinner and `Saving` label; the button stays enabled so a click flushes the pending write. Transient; easiest with mocked delayed save. |
 | Document | Save status: failed | Force save error | `document-save-button`, `document-save-status` | Warning icon and `Save failed` label; the button stays enabled to retry. Use backend/API mocking or a component harness. |
@@ -131,6 +136,7 @@ suggestions:
 | Document | Review handoff sent | Successful handoff | `review-handoff-status`, `review-handoff-robots-toy`, `review-handoff-close-window`, `review-handoff-copy-message` | Capture the random completion title, robot toy, primary close button, and fallback copy hint below it. |
 | Document | Review handoff undelivered | Watcher disconnects before handoff | `review-handoff-status` | Popover title: `No agent is watching now`. |
 | Document | Review handoff error | Force handoff API error | `review-handoff-status` | Popover title: `Could not notify agent`. |
+| Document | Narrow-width footer | Open review fixture in rich mode with viewport width below 1100px | `review-entry-footer`, `review-entry-footer-action-previous`, `review-entry-footer-action-next` | Replaces the rail below the `rail` breakpoint; capture with a comment thread and a suggestion entry present. |
 | Remote | Connected banner | Open with `?session=<id>&token=<token>` and remote capability enabled | `role=status`, `aria-label="Remote session connected"` | Requires remote backend support in `/api/status`. |
 | Remote | Disconnected banner | Drop remote session connection | `role=alert`, `aria-label="Remote session disconnected"` | Best captured with backend mocking. |
 | Editor | Selection menu | Select text in rich editor | `selection-menu` | Capture formatting buttons and comment/suggestion actions. |
@@ -139,11 +145,13 @@ suggestions:
 | Editor | Context menu review actions blocked | Select text inside a fenced code block, then right-click inside the selection | `editor-context-menu-action-add-comment`, `editor-context-menu-action-suggest-insertion`, `editor-context-menu-action-suggest-deletion`, `editor-context-menu-action-suggest-replacement`, `blocked-action-tooltip` | All four review actions are disabled; each carries the same reason. Right-click outside the selection collapses it and changes why the actions are disabled. |
 | Editor | Link popover | Click a link or choose Link from selection menu | `link-popover`, `link-url-input`, `link-action-open`, `link-action-delete` | Use the plain fixture link. |
 | Editor | Context menu | Right-click in rich editor | `editor-context-menu` | Capture comment, suggestion, paste, and paste-markdown actions. |
-| Review rail | Comments | Open review fixture in rich mode | `document-review-rail`, `comment-thread-root` | Thread containers use `data-comment-thread-container="true"`. |
-| Review rail | Suggestions | Open review fixture in rich mode | `suggestion-thread-s1`, `suggestion-thread-s2`, `suggestion-thread-s3` | Thread containers use `data-suggestion-thread-container="true"`. |
-| Review rail | Draft suggestion | Select text and choose a suggestion action | `draft-suggestion-thread`, `draft-suggestion-editor` | Capture dismiss/cancel/apply actions. |
-| Comment editor | Root comment editing | Use a comment card edit action | `comment-rail-root-editor` | Comment test IDs follow `comment-${variant}-${id}-...`. |
-| Comment editor | Reply editing | Use a reply action | `comment-rail-child-editor` | Useful for nested thread spacing. |
+| Review rail | Entry chips | Open review fixture in rich mode | `document-review-rail`, `review-entry-chip-rd-c1`, `review-entry-chip-rd-s1` | One chip per entry, stacked beside its anchor; comment and suggestion chips both use `review-entry-chip-{id}`. |
+| Review rail | Navigation control | Open review fixture in rich mode | `review-entry-nav`, `review-entry-nav-position`, `review-entry-nav-action-previous`, `review-entry-nav-action-next` | Fixed at the top of the rail; steps `currentEntryId` through the entry sequence. |
+| Review rail | Thread dialog: comment | Click `review-entry-chip-rd-c1-action-open` | `review-thread-dialog`, `review-thread-dialog-excerpt` | Shows the anchored excerpt and the comment thread. |
+| Review rail | Thread dialog: suggestion | Click `review-entry-chip-rd-s1-action-open` | `review-thread-dialog`, `review-thread-dialog-excerpt`, `review-thread-dialog-action-accept`, `review-thread-dialog-action-reject` | Accept/reject actions appear alongside the thread. |
+| Review rail | Resolved chip | Resolve a thread, then view its chip | `review-entry-chip-rd-c1` | Muted at reduced opacity; the entry stays in the sequence. |
+| Review rail | Document-scope chip | Open review fixture in rich mode | `review-entry-chip-rd-c4` | Pinned above the anchored chips; has no excerpt because it has no anchor. |
+| Review rail | Suggestion composer popover | Select text and choose a suggestion action | `suggestion-composer`, `suggestion-composer-input`, `suggestion-composer-action-cancel`, `suggestion-composer-action-apply` | Capture with typed replacement text before applying. |
 | Code mode | Review rail present | Open review fixture with `?editor=code` | `page-card-code`, `markdown-code-editor` | Confirms code editor and rail can coexist. |
 | Code mode | Review rail absent | Open fenced fixture with `?editor=code` | `page-card-code`, `markdown-code-editor` | Confirms fenced CriticMarkup alone does not create review rail. |
 | Error/home fallback | Non-Markdown path | Open URL with `?path=/tmp/file.txt` | homepage error message | Copy: `Roughdraft now opens one .md file at a time.` |

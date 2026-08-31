@@ -610,6 +610,67 @@ describe("editor state to review markdown", () => {
     );
     expect(output).toContain("body: test");
   });
+
+  it("keeps a resolved root resolved when a reply is added after a round trip", () => {
+    const RESOLUTION = "Confirmed out of the beta.";
+    const input = [
+      'Ship <span id="rd-c1">guest checkout</span> in the beta.',
+      "",
+      "---",
+      'roughdraft: "1.0"',
+      "comments:",
+      "  rd-c1:",
+      "    body: Confirm this excludes SSO-only workspaces.",
+      "    by: user",
+      '    at: "2026-08-28T12:00:00.000Z"',
+      "",
+    ].join("\n");
+
+    const opened = reviewMarkdownToEditorState(input);
+    const root = opened.comments.get("rd-c1");
+
+    if (!root) throw new Error("Document is missing rd-c1");
+
+    const resolvedMarkdown = editorStateToReviewMarkdown(
+      opened.doc,
+      new Map(opened.comments).set("rd-c1", {
+        ...root,
+        status: "resolved",
+        resolved: RESOLUTION,
+      }),
+      { frontmatter: opened.frontmatter, endmatter: opened.endmatter },
+    );
+
+    const reopened = reviewMarkdownToEditorState(resolvedMarkdown);
+
+    expect(reopened.comments.get("rd-c1")).toMatchObject({
+      status: "resolved",
+      resolved: RESOLUTION,
+    });
+
+    const repliedMarkdown = editorStateToReviewMarkdown(
+      reopened.doc,
+      new Map(reopened.comments).set("rd-c2", {
+        id: "rd-c2",
+        content: "Noted in the launch checklist.",
+        createdAt: "2026-08-28T12:05:00.000Z",
+        parentCommentId: "rd-c1",
+      }),
+      { frontmatter: reopened.frontmatter, endmatter: reopened.endmatter },
+    );
+
+    const replied = reviewMarkdownToEditorState(repliedMarkdown);
+
+    expect(replied.comments.get("rd-c1")).toMatchObject({
+      status: "resolved",
+      resolved: RESOLUTION,
+    });
+    expect(replied.comments.get("rd-c2")).toMatchObject({
+      parentCommentId: "rd-c1",
+      status: undefined,
+      resolved: undefined,
+    });
+  });
 });
 
 describe("suggestion review actions", () => {

@@ -1,336 +1,91 @@
-import type { Editor } from "@tiptap/react";
-import { Check, Reply, X } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  type CSSProperties,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  type CommentActionDefinition,
-  type CommentActionsRenderContext,
-  type CommentContentRenderContext,
-  CommentEditorList,
-} from "./CommentEditorList";
-import {
-  buildCommentThreadRailItems,
-  type CommentGroupAnchor,
-  type CommentThreadRailItem,
-  getPreferredCommentId,
-  getRootThreadIdForCommentId,
   normalizeCommentMeasurement,
+  type ReviewEntry,
   resolveAnchoredRailLayouts,
 } from "./document-comments";
 import { cn } from "./lib/utils";
-import { EMPTY_ANCHOR_SENTINEL } from "./markdown";
-import type { DraftSuggestionState } from "./PageCard";
-import type { ReviewComment, SuggestionAttrs, SuggestionKind } from "./review";
+import { ReviewEntryChip } from "./ReviewEntryChip";
 
-const SUGGESTION_QUOTE_PREVIEW_LIMIT = 140;
-
-export interface SuggestionRailItem {
-  suggestionId: string;
-  attrs: SuggestionAttrs;
-  kind: SuggestionKind;
-  oldText: string;
-  newText: string;
-  commentIds: string[];
-  anchorTop: number;
-  anchorBottom: number;
-}
+const RAIL_BOTTOM_PADDING = 24;
 
 interface DocumentReviewRailProps {
-  commentGroups: CommentGroupAnchor[];
-  comments: Map<string, ReviewComment>;
-  suggestions: SuggestionRailItem[];
-  selectedCommentId: string | null;
-  hoveredCommentId: string | null;
-  selectedChangeId: string | null;
-  hoveredChangeId: string | null;
+  entries: ReviewEntry[];
+  currentEntryId: string | null;
+  resolvedEntryIds: ReadonlySet<string>;
   contentHeight: number;
   className?: string;
-  layout?: "anchored" | "flow";
   testId?: string;
-  onDeleteComment: (commentId: string) => void;
-  onUpdateComment: (commentId: string, nextContent: string) => void;
-  onReplyComment: (commentId: string) => void;
-  onSelectComment: (commentId: string) => void;
-  onFocusComment: (commentId: string) => void;
-  onHoverComment: (commentId: string | null) => void;
-  onAcceptSuggestion: (changeId: string) => void;
-  onRejectSuggestion: (changeId: string) => void;
-  onReplySuggestion: (changeId: string) => void;
-  onSelectSuggestion: (changeId: string) => void;
-  onFocusSuggestion: (changeId: string) => void;
-  onHoverSuggestion: (changeId: string | null) => void;
-  pendingFocusCommentId?: string | null;
-  onAutoFocusComment?: (commentId: string) => void;
-  draftSuggestion?: DraftSuggestionState | null;
-  onDraftSuggestionTextChange?: (text: string) => void;
-  onApplyDraftSuggestion?: () => void;
-  onCancelDraftSuggestion?: () => void;
-  editor?: Editor | null;
+  onSelectEntry: (entryId: string) => void;
+  onOpenDialog: (entryId: string) => void;
+  onGoToPreviousEntry: () => void;
+  onGoToNextEntry: () => void;
+  onAcceptSuggestion: (suggestionId: string) => void;
+  onRejectSuggestion: (suggestionId: string) => void;
 }
 
-function railLayoutItemClass(layout: "anchored" | "flow") {
-  return cn(
-    "left-0 right-0 rounded-xl border border-transparent bg-transparent shadow-none transition-all duration-200 ease-out will-change-transform",
-    layout === "anchored" ? "absolute" : "relative",
-  );
+/** An entry whose place in the rail is the place of its anchor. */
+type AnchoredReviewEntry = Extract<
+  ReviewEntry,
+  { kind: "comment-thread" | "suggestion" }
+>;
+
+/** An anchored entry as the stacking layout consumes it: keyed by entry id. */
+interface AnchoredRailEntry {
+  key: string;
+  anchorTop: number;
+  anchorBottom: number;
+  entry: AnchoredReviewEntry;
 }
 
-function railLayoutItemStyle(
-  layout: "anchored" | "flow",
-  railTop: number,
-): CSSProperties | undefined {
-  return layout === "anchored" ? { top: railTop } : undefined;
+function isAnchoredEntry(entry: ReviewEntry): entry is AnchoredReviewEntry {
+  return entry.kind !== "document-comment";
 }
 
-function getSuggestionPreview(suggestion: SuggestionRailItem) {
-  const oldText = suggestion.oldText.trim();
-  const newText = suggestion.newText.trim();
-
-  if (suggestion.kind === "insert") return newText || "Inserted text";
-  if (suggestion.kind === "delete") return oldText || "Deleted text";
-  if (oldText && newText) return `${oldText} -> ${newText}`;
-  return oldText || newText || "Changed text";
-}
-
-function getSuggestionRootComment(
-  suggestion: SuggestionRailItem,
-): ReviewComment {
-  return {
-    id: suggestion.suggestionId,
-    content: getSuggestionPreview(suggestion),
-    createdAt: suggestion.attrs.createdAt,
-    authorType: suggestion.attrs.authorType,
-    authorId: suggestion.attrs.authorId,
-  };
-}
-
-function truncateSuggestionQuote(text: string) {
-  if (text.length <= SUGGESTION_QUOTE_PREVIEW_LIMIT) return text;
-  return `${text.slice(0, SUGGESTION_QUOTE_PREVIEW_LIMIT)}...`;
-}
-
-function renderQuotedSuggestionText(text: string, fallback: string) {
-  const withoutParagraphSentinels = text.replaceAll(EMPTY_ANCHOR_SENTINEL, "");
-  const fullDisplayText =
-    withoutParagraphSentinels.trim() ||
-    (text.includes(EMPTY_ANCHOR_SENTINEL) ? "Inserted paragraph" : fallback);
-  const displayText = truncateSuggestionQuote(fullDisplayText);
-
-  return (
-    <span className="italic text-slate-600 dark:text-slate-400">
-      "{displayText}"
-    </span>
-  );
-}
-
-function SuggestionCommentContent({
-  suggestion,
-}: {
-  suggestion: SuggestionRailItem;
-}) {
-  const oldText = suggestion.oldText.trim();
-  const newText = suggestion.newText.trim();
-
-  if (suggestion.kind === "insert") {
-    return (
-      <>
-        <span className="font-semibold text-slate-800 dark:text-slate-200">
-          Insert:
-        </span>{" "}
-        {renderQuotedSuggestionText(newText, "Inserted text")}
-      </>
-    );
-  }
-
-  if (suggestion.kind === "delete") {
-    return (
-      <>
-        <span className="font-semibold text-slate-800 dark:text-slate-200">
-          Delete:
-        </span>{" "}
-        {renderQuotedSuggestionText(oldText, "Deleted text")}
-      </>
-    );
-  }
-
-  return (
-    <>
-      <span className="font-semibold text-slate-800 dark:text-slate-200">
-        Replace:
-      </span>{" "}
-      {renderQuotedSuggestionText(oldText, "Original text")}{" "}
-      <span className="text-slate-500 dark:text-slate-400">with</span>{" "}
-      {renderQuotedSuggestionText(newText, "Changed text")}
-    </>
-  );
-}
-
+/**
+ * The review rail: the entry sequence rendered as one chip per entry, with a
+ * navigation control at the top. The sequence itself is computed by `PageCard`
+ * and arrives whole; the rail decides only where each chip sits.
+ */
 export function DocumentReviewRail({
-  commentGroups,
-  comments,
-  suggestions,
-  selectedCommentId,
-  hoveredCommentId,
-  selectedChangeId,
-  hoveredChangeId,
+  entries,
+  currentEntryId,
+  resolvedEntryIds,
   contentHeight,
   className,
-  layout: railLayout = "anchored",
-  testId,
-  onDeleteComment,
-  onUpdateComment,
-  onReplyComment,
-  onSelectComment,
-  onFocusComment,
-  onHoverComment,
+  testId = "document-review-rail",
+  onSelectEntry,
+  onOpenDialog,
+  onGoToPreviousEntry,
+  onGoToNextEntry,
   onAcceptSuggestion,
   onRejectSuggestion,
-  onReplySuggestion,
-  onSelectSuggestion,
-  onFocusSuggestion,
-  onHoverSuggestion,
-  pendingFocusCommentId = null,
-  onAutoFocusComment,
-  draftSuggestion = null,
-  onDraftSuggestionTextChange,
-  onApplyDraftSuggestion,
-  onCancelDraftSuggestion,
-  editor = null,
 }: DocumentReviewRailProps) {
-  const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const itemRefs = useRef(new Map<string, HTMLDivElement>());
   const [itemHeights, setItemHeights] = useState<Record<string, number>>({});
 
-  const activeRootThreadId = useMemo(
-    () => getRootThreadIdForCommentId(selectedCommentId, comments),
-    [comments, selectedCommentId],
+  const documentCommentEntries = useMemo(
+    () => entries.filter((entry) => entry.kind === "document-comment"),
+    [entries],
   );
 
-  const suggestionCommentIds = useMemo(
-    () => new Set(suggestions.flatMap((suggestion) => suggestion.commentIds)),
-    [suggestions],
-  );
-
-  const visibleCommentThreads = useMemo(
+  const anchoredEntries = useMemo<AnchoredRailEntry[]>(
     () =>
-      buildCommentThreadRailItems(
-        commentGroups
-          .map((group) => ({
-            ...group,
-            commentIds: group.commentIds.filter(
-              (commentId) => !suggestionCommentIds.has(commentId),
-            ),
-          }))
-          .filter((group) => group.commentIds.length > 0),
-        comments,
-      )
-        .map((item) => {
-          const visibleComments = item.commentIds
-            .map((commentId) => comments.get(commentId))
-            .filter((comment): comment is ReviewComment => Boolean(comment));
-
-          if (visibleComments.length === 0) return null;
-
-          return {
-            ...item,
-            visibleComments,
-          };
-        })
-        .filter(
-          (
-            item,
-          ): item is CommentThreadRailItem & {
-            visibleComments: ReviewComment[];
-          } => Boolean(item),
-        ),
-    [commentGroups, comments, suggestionCommentIds],
-  );
-
-  const commentEntries = useMemo(
-    () =>
-      visibleCommentThreads.map((thread) => ({
-        type: "comment" as const,
-        key: thread.key,
-        anchorTop: thread.anchorTop,
-        anchorBottom: thread.anchorBottom,
-        thread,
+      entries.filter(isAnchoredEntry).map((entry) => ({
+        key: entry.id,
+        anchorTop: entry.anchorTop,
+        anchorBottom: entry.anchorBottom,
+        entry,
       })),
-    [visibleCommentThreads],
+    [entries],
   );
 
-  const suggestionEntries = useMemo(
+  const layouts = useMemo(
     () =>
-      suggestions.map((suggestion) => ({
-        type: "suggestion" as const,
-        key: suggestion.suggestionId,
-        anchorTop: suggestion.anchorTop,
-        anchorBottom: suggestion.anchorBottom,
-        suggestion,
-      })),
-    [suggestions],
+      resolveAnchoredRailLayouts(anchoredEntries, itemHeights, currentEntryId),
+    [anchoredEntries, currentEntryId, itemHeights],
   );
-
-  const draftAnchorTop = useMemo(() => {
-    if (!draftSuggestion || !editor) return 0;
-    try {
-      const editorElement = editor.view.dom as HTMLElement;
-      const editorRect = editorElement.getBoundingClientRect();
-      const coords = editor.view.coordsAtPos(draftSuggestion.from);
-      return coords.top - editorRect.top;
-    } catch {
-      return 0;
-    }
-  }, [draftSuggestion, editor]);
-
-  const draftEntry = useMemo(() => {
-    if (!draftSuggestion) return null;
-    return {
-      type: "draft" as const,
-      key: "__draft_suggestion__",
-      anchorTop: draftAnchorTop,
-      anchorBottom: draftAnchorTop + 20,
-    };
-  }, [draftSuggestion, draftAnchorTop]);
-
-  const activeSuggestionIdForComment = useMemo(
-    () =>
-      selectedCommentId
-        ? (suggestions.find((suggestion) =>
-            suggestion.commentIds.includes(selectedCommentId),
-          )?.suggestionId ?? null)
-        : null,
-    [selectedCommentId, suggestions],
-  );
-
-  const layouts = useMemo(() => {
-    const entries = [
-      ...suggestionEntries,
-      ...commentEntries,
-      ...(draftEntry ? [draftEntry] : []),
-    ].sort((left, right) => left.anchorTop - right.anchorTop);
-    const activeKey =
-      draftEntry?.key ??
-      selectedChangeId ??
-      activeSuggestionIdForComment ??
-      activeRootThreadId;
-
-    return resolveAnchoredRailLayouts(entries, itemHeights, activeKey);
-  }, [
-    activeRootThreadId,
-    activeSuggestionIdForComment,
-    commentEntries,
-    draftEntry,
-    itemHeights,
-    selectedChangeId,
-    suggestionEntries,
-  ]);
 
   const setItemRef = useCallback((key: string, node: HTMLDivElement | null) => {
     if (node) {
@@ -397,317 +152,87 @@ export function DocumentReviewRail({
     };
   }, [layouts]);
 
-  useEffect(() => {
-    if (draftSuggestion && draftTextareaRef.current) {
-      draftTextareaRef.current.focus();
-    }
-  }, [draftSuggestion]);
+  const currentIndex = currentEntryId
+    ? entries.findIndex((entry) => entry.id === currentEntryId)
+    : -1;
 
-  const railHeight =
-    railLayout === "flow"
-      ? undefined
-      : Math.max(contentHeight, layouts.at(-1)?.railBottom ?? 0) + 24;
-
-  const hasDraftOnly = layouts.length === 0 && !draftSuggestion;
-  if (hasDraftOnly) {
+  if (entries.length === 0) {
     return <aside className={cn("min-w-0", className)} aria-hidden="true" />;
   }
+
+  const railHeight =
+    Math.max(contentHeight, layouts.at(-1)?.railBottom ?? 0) +
+    RAIL_BOTTOM_PADDING;
+
+  const renderChip = (entry: ReviewEntry) => (
+    <ReviewEntryChip
+      entry={entry}
+      isCurrent={entry.id === currentEntryId}
+      isResolved={resolvedEntryIds.has(entry.id)}
+      onSelect={() => onSelectEntry(entry.id)}
+      onOpenDialog={() => onOpenDialog(entry.id)}
+      onAcceptSuggestion={onAcceptSuggestion}
+      onRejectSuggestion={onRejectSuggestion}
+    />
+  );
 
   return (
     <aside className={cn("min-w-0", className)} data-testid={testId}>
       <div
-        className={cn(railLayout === "flow" ? "grid gap-3" : "relative")}
-        style={railHeight ? { minHeight: railHeight } : undefined}
+        data-testid="review-entry-nav"
+        className="mb-2 flex items-center gap-1"
       >
-        {layouts.map((layout) => {
-          if (layout.type === "comment") {
-            const isSelected =
-              !!activeRootThreadId &&
-              layout.thread.rootCommentId === activeRootThreadId;
-            const isExpanded = isSelected;
-            const primaryCommentId =
-              getPreferredCommentId(
-                layout.thread.commentIds,
-                selectedCommentId,
-              ) ?? layout.thread.visibleComments[0]?.id;
+        <span
+          data-testid="review-entry-nav-position"
+          className="text-xs tabular-nums text-stone-500 dark:text-stone-400"
+        >
+          {currentIndex >= 0
+            ? `${currentIndex + 1} of ${entries.length}`
+            : `${entries.length}`}
+        </span>
+        <div className="ml-auto flex items-center gap-0.5">
+          <button
+            type="button"
+            data-testid="review-entry-nav-action-previous"
+            aria-label="Previous entry"
+            className="flex size-6 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 disabled:cursor-not-allowed disabled:opacity-40 dark:text-stone-400 dark:hover:bg-slate-700 dark:focus-visible:ring-slate-600"
+            disabled={currentIndex <= 0}
+            onClick={onGoToPreviousEntry}
+          >
+            <ChevronUp className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            data-testid="review-entry-nav-action-next"
+            aria-label="Next entry"
+            className="flex size-6 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 disabled:cursor-not-allowed disabled:opacity-40 dark:text-stone-400 dark:hover:bg-slate-700 dark:focus-visible:ring-slate-600"
+            disabled={currentIndex < 0 || currentIndex === entries.length - 1}
+            onClick={onGoToNextEntry}
+          >
+            <ChevronDown className="size-3.5" />
+          </button>
+        </div>
+      </div>
 
-            return (
-              <div
-                key={layout.key}
-                ref={(node) => setItemRef(layout.key, node)}
-                data-testid={`comment-thread-${layout.thread.rootCommentId}`}
-                data-comment-thread-container="true"
-                className={cn(
-                  railLayoutItemClass(railLayout),
-                  isSelected
-                    ? "border-[#DFDFDC] dark:border-slate-600 bg-white dark:bg-card shadow-[0_20px_48px_rgba(57,47,38,0.14)] dark:shadow-[0_20px_48px_rgba(0,0,0,0.4)]"
-                    : "",
-                  isSelected && "-translate-x-2",
-                  isExpanded ? "cursor-default" : "cursor-pointer",
-                )}
-                style={railLayoutItemStyle(railLayout, layout.railTop)}
-                onMouseEnter={() => {
-                  if (primaryCommentId) {
-                    onHoverComment(primaryCommentId);
-                  }
-                }}
-                onMouseLeave={() => onHoverComment(null)}
-                onClick={() => {
-                  if (isExpanded || !primaryCommentId) return;
-                  onFocusComment(primaryCommentId);
-                }}
-              >
-                <CommentEditorList
-                  comments={layout.thread.visibleComments}
-                  variant="rail"
-                  className={cn(!isExpanded && "pointer-events-none")}
-                  interactive={isExpanded}
-                  selectedCommentId={selectedCommentId}
-                  hoveredCommentId={hoveredCommentId}
-                  onDeleteComment={onDeleteComment}
-                  onUpdateComment={onUpdateComment}
-                  onReplyComment={onReplyComment}
-                  onSelectComment={onSelectComment}
-                  onFocusComment={onFocusComment}
-                  onHoverComment={onHoverComment}
-                  pendingFocusCommentId={pendingFocusCommentId}
-                  onAutoFocusComment={onAutoFocusComment}
-                />
-              </div>
-            );
-          }
+      {documentCommentEntries.length > 0 && (
+        <div className="mb-2 grid gap-1">
+          {documentCommentEntries.map((entry) => (
+            <div key={entry.id}>{renderChip(entry)}</div>
+          ))}
+        </div>
+      )}
 
-          if (layout.type === "draft") {
-            return (
-              <div
-                key={layout.key}
-                ref={(node) => setItemRef(layout.key, node)}
-                data-testid="draft-suggestion-thread"
-                data-suggestion-thread-container="true"
-                className={cn(
-                  railLayoutItemClass(railLayout),
-                  "-translate-x-2 border-[#DFDFDC] dark:border-slate-600 bg-white dark:bg-card px-4 py-3 shadow-[0_20px_48px_rgba(57,47,38,0.14)] dark:shadow-[0_20px_48px_rgba(0,0,0,0.4)]",
-                )}
-                style={railLayoutItemStyle(railLayout, layout.railTop)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold tracking-[0.08em] text-stone-500 dark:text-stone-400 uppercase">
-                      {draftSuggestion?.type === "replacement"
-                        ? "Replacement"
-                        : "Insertion"}
-                    </div>
-                    <div className="mt-1 text-sm leading-5 text-slate-700 dark:text-slate-300">
-                      {draftSuggestion?.sourceText || "Current cursor position"}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    data-testid="draft-suggestion-action-dismiss"
-                    className="flex size-7 shrink-0 items-center justify-center rounded-full text-stone-500 dark:text-stone-400 transition hover:bg-stone-100 dark:hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 dark:focus-visible:ring-slate-600"
-                    aria-label="Cancel suggestion"
-                    onClick={() => onCancelDraftSuggestion?.()}
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
-                <textarea
-                  ref={draftTextareaRef}
-                  data-testid="draft-suggestion-editor"
-                  value={draftSuggestion?.text ?? ""}
-                  rows={2}
-                  className="mt-3 min-h-16 w-full resize-y rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm leading-6 text-slate-800 dark:text-slate-200 outline-none transition focus:border-emerald-300 dark:focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 dark:focus:ring-emerald-900"
-                  placeholder={
-                    draftSuggestion?.type === "replacement"
-                      ? "Replacement text"
-                      : "Inserted text"
-                  }
-                  onChange={(event) => {
-                    onDraftSuggestionTextChange?.(event.target.value);
-                  }}
-                  onKeyDown={(event) => {
-                    if (
-                      (event.metaKey || event.ctrlKey) &&
-                      event.key.toLowerCase() === "enter"
-                    ) {
-                      event.preventDefault();
-                      onApplyDraftSuggestion?.();
-                    }
-                  }}
-                />
-                <div className="mt-3 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    data-testid="draft-suggestion-action-cancel"
-                    className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-sm font-medium text-stone-600 dark:text-stone-400 transition hover:bg-stone-100 dark:hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 dark:focus-visible:ring-slate-600"
-                    onClick={() => onCancelDraftSuggestion?.()}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="draft-suggestion-action-apply"
-                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-600 dark:bg-emerald-700 px-3 text-sm font-medium text-white transition hover:bg-emerald-700 dark:hover:bg-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 dark:focus-visible:ring-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!draftSuggestion?.text}
-                    onClick={() => onApplyDraftSuggestion?.()}
-                  >
-                    <Check className="size-4" />
-                    Suggest
-                  </button>
-                </div>
-              </div>
-            );
-          }
-
-          const suggestion = layout.suggestion;
-          const isSelected = selectedChangeId === suggestion.suggestionId;
-          const isHovered = hoveredChangeId === suggestion.suggestionId;
-          const suggestionComments = suggestion.commentIds
-            .map((commentId) => comments.get(commentId))
-            .filter((comment): comment is ReviewComment => Boolean(comment));
-          const suggestionCommentIds = new Set(
-            suggestionComments.map((comment) => comment.id),
-          );
-          const normalizedSuggestionComments = suggestionComments.map(
-            (comment) =>
-              comment.parentCommentId === suggestion.suggestionId ||
-              (comment.parentCommentId &&
-                suggestionCommentIds.has(comment.parentCommentId))
-                ? comment
-                : {
-                    ...comment,
-                    parentCommentId: suggestion.suggestionId,
-                  },
-          );
-          const suggestionRootComment = getSuggestionRootComment(suggestion);
-          const suggestionThreadComments = [
-            suggestionRootComment,
-            ...normalizedSuggestionComments,
-          ];
-          const renderCommentContent = ({
-            comment,
-            defaultContent,
-          }: CommentContentRenderContext) =>
-            comment.id === suggestion.suggestionId ? (
-              <SuggestionCommentContent suggestion={suggestion} />
-            ) : (
-              defaultContent
-            );
-          const getCommentActions = ({
-            comment,
-            defaultActions,
-          }: CommentActionsRenderContext): CommentActionDefinition[] =>
-            comment.id === suggestion.suggestionId
-              ? [
-                  {
-                    key: "accept",
-                    label: "Accept suggestion",
-                    icon: <Check className="size-3.5" />,
-                    compact: true,
-                    onClick: (event) => {
-                      event.stopPropagation();
-                      onAcceptSuggestion(suggestion.suggestionId);
-                    },
-                  },
-                  {
-                    key: "reject",
-                    label: "Reject suggestion",
-                    tone: "danger",
-                    icon: <X className="size-3.5" />,
-                    compact: true,
-                    onClick: (event) => {
-                      event.stopPropagation();
-                      onRejectSuggestion(suggestion.suggestionId);
-                    },
-                  },
-                  {
-                    key: "reply",
-                    label: "Reply",
-                    icon: <Reply className="size-3.5" />,
-                    compact: true,
-                    onClick: (event) => {
-                      event.stopPropagation();
-                      onReplySuggestion(suggestion.suggestionId);
-                    },
-                  },
-                ]
-              : defaultActions;
-
-          return (
-            <div
-              key={layout.key}
-              ref={(node) => setItemRef(layout.key, node)}
-              data-testid={`suggestion-thread-${suggestion.suggestionId}`}
-              data-suggestion-thread-container="true"
-              className={cn(
-                railLayoutItemClass(railLayout),
-                isSelected
-                  ? "-translate-x-2 border-[#DFDFDC] dark:border-slate-600 bg-white dark:bg-card shadow-[0_20px_48px_rgba(57,47,38,0.14)] dark:shadow-[0_20px_48px_rgba(0,0,0,0.4)]"
-                  : "",
-                isHovered && !isSelected && "cursor-pointer",
-              )}
-              style={railLayoutItemStyle(railLayout, layout.railTop)}
-              onMouseEnter={() => onHoverSuggestion(suggestion.suggestionId)}
-              onMouseLeave={() => onHoverSuggestion(null)}
-              onPointerDown={() => onSelectSuggestion(suggestion.suggestionId)}
-              onClick={() => {
-                if (isSelected) return;
-                onFocusSuggestion(suggestion.suggestionId);
-              }}
-            >
-              <CommentEditorList
-                comments={suggestionThreadComments}
-                variant="rail"
-                selectedCommentId={
-                  selectedCommentId ??
-                  (isSelected ? suggestion.suggestionId : null)
-                }
-                hoveredCommentId={
-                  hoveredCommentId ??
-                  (isHovered ? suggestion.suggestionId : null)
-                }
-                onDeleteComment={onDeleteComment}
-                onUpdateComment={onUpdateComment}
-                onReplyComment={(commentId) => {
-                  if (commentId === suggestion.suggestionId) {
-                    onReplySuggestion(suggestion.suggestionId);
-                    return;
-                  }
-
-                  onReplyComment(commentId);
-                }}
-                onSelectComment={(commentId) => {
-                  if (commentId === suggestion.suggestionId) {
-                    onSelectSuggestion(suggestion.suggestionId);
-                    return;
-                  }
-
-                  onSelectComment(commentId);
-                }}
-                onFocusComment={(commentId) => {
-                  if (commentId === suggestion.suggestionId) {
-                    onFocusSuggestion(suggestion.suggestionId);
-                    return;
-                  }
-
-                  onFocusComment(commentId);
-                }}
-                onHoverComment={(commentId) => {
-                  if (commentId === suggestion.suggestionId) {
-                    onHoverSuggestion(suggestion.suggestionId);
-                    return;
-                  }
-
-                  onHoverComment(commentId);
-                }}
-                pendingFocusCommentId={pendingFocusCommentId}
-                onAutoFocusComment={onAutoFocusComment}
-                renderCommentContent={renderCommentContent}
-                getCommentActions={getCommentActions}
-              />
-            </div>
-          );
-        })}
+      <div className="relative" style={{ minHeight: railHeight }}>
+        {layouts.map((layout) => (
+          <div
+            key={layout.key}
+            ref={(node) => setItemRef(layout.key, node)}
+            className="absolute left-0 right-0 transition-all duration-200 ease-out will-change-transform"
+            style={{ top: layout.railTop }}
+          >
+            {renderChip(layout.entry)}
+          </div>
+        ))}
       </div>
     </aside>
   );
