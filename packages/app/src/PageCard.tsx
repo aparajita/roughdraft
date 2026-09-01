@@ -794,7 +794,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       editorProps: {
         attributes: {
           class:
-            "tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-[70vh] prose-p:leading-[1.6] prose-h1:font-semibold prose-h2:font-semibold prose-code:before:content-none prose-code:after:content-none prose-blockquote:not-italic [&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none prose-code:bg-stone-100 dark:prose-code:bg-slate-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-a:font-normal prose-hr:p-0 prose-hr:my-2 prose-table:my-1 prose-th:text-base prose-th:pe-2 prose-td:text-base prose-td:ps-0",
+            "tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-[70vh] prose-p:leading-[1.6] prose-h1:font-semibold prose-h2:font-semibold prose-code:before:content-none prose-code:after:content-none prose-blockquote:not-italic [&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none prose-code:bg-stone-100 dark:prose-code:bg-slate-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-a:font-normal prose-hr:p-0 prose-hr:my-3 prose-table:my-1 prose-th:text-base prose-th:pe-2 prose-td:text-base prose-td:ps-0",
         },
         handleDrop: (_view, event) => {
           const files = Array.from(event.dataTransfer?.files ?? []);
