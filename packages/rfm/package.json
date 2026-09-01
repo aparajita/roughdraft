@@ -20,8 +20,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^5.8.3",
-    "vitest": "^4.1.5"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "mdast-util-from-markdown": "^2.0.3",
