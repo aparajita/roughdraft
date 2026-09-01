@@ -668,28 +668,78 @@ const Suggestion = Mark.create({
   },
 });
 
-interface CommentHighlightMeta {
-  selectedCommentId: string | null;
-  hoveredCommentId: string | null;
+interface HighlightMeta {
+  selectedId: string | null;
+  hoveredId: string | null;
 }
 
-interface CommentHighlightPluginState extends CommentHighlightMeta {
+interface HighlightPluginState extends HighlightMeta {
   decorations: DecorationSet;
 }
 
-interface SuggestionHighlightMeta {
-  selectedChangeId: string | null;
-  hoveredChangeId: string | null;
-}
+export const commentHighlightPluginKey = new PluginKey<HighlightPluginState>(
+  "commentHighlight",
+);
+export const suggestionHighlightPluginKey = new PluginKey<HighlightPluginState>(
+  "suggestionHighlight",
+);
 
-interface SuggestionHighlightPluginState extends SuggestionHighlightMeta {
-  decorations: DecorationSet;
-}
+/**
+ * The plugin scaffolding every highlight extension shares: a `{selectedId,
+ * hoveredId, decorations}` state recomputed from `createDecorations` on init,
+ * on a matching meta dispatch, and on every doc change. `createDecorations`
+ * is the only part that differs between highlight kinds.
+ */
+function createHighlightExtension(
+  name: string,
+  pluginKey: PluginKey<HighlightPluginState>,
+  createDecorations: (
+    doc: ProseMirrorNode,
+    selectedId: string | null,
+    hoveredId: string | null,
+  ) => DecorationSet,
+) {
+  return Extension.create({
+    name,
 
-export const commentHighlightPluginKey =
-  new PluginKey<CommentHighlightPluginState>("commentHighlight");
-export const suggestionHighlightPluginKey =
-  new PluginKey<SuggestionHighlightPluginState>("suggestionHighlight");
+    addProseMirrorPlugins() {
+      return [
+        new Plugin<HighlightPluginState>({
+          key: pluginKey,
+          state: {
+            init: (_, state) => ({
+              selectedId: null,
+              hoveredId: null,
+              decorations: createDecorations(state.doc, null, null),
+            }),
+            apply: (tr, pluginState) => {
+              const meta = tr.getMeta(pluginKey) as HighlightMeta | undefined;
+
+              if (!meta && !tr.docChanged) {
+                return pluginState;
+              }
+
+              const selectedId =
+                meta !== undefined ? meta.selectedId : pluginState.selectedId;
+              const hoveredId =
+                meta !== undefined ? meta.hoveredId : pluginState.hoveredId;
+
+              return {
+                selectedId,
+                hoveredId,
+                decorations: createDecorations(tr.doc, selectedId, hoveredId),
+              };
+            },
+          },
+          props: {
+            decorations: (state) =>
+              pluginKey.getState(state)?.decorations ?? null,
+          },
+        }),
+      ];
+    },
+  });
+}
 
 /**
  * Which background a comment decoration paints. The decoration owns the
@@ -769,60 +819,11 @@ function createCommentHighlightDecorations(
   return DecorationSet.create(doc, decorations);
 }
 
-const CommentHighlight = Extension.create({
-  name: "commentHighlight",
-
-  addProseMirrorPlugins() {
-    return [
-      new Plugin<CommentHighlightPluginState>({
-        key: commentHighlightPluginKey,
-        state: {
-          init: (_, state) => ({
-            selectedCommentId: null,
-            hoveredCommentId: null,
-            decorations: createCommentHighlightDecorations(
-              state.doc,
-              null,
-              null,
-            ),
-          }),
-          apply: (tr, pluginState) => {
-            const meta = tr.getMeta(commentHighlightPluginKey) as
-              | CommentHighlightMeta
-              | undefined;
-
-            if (!meta && !tr.docChanged) {
-              return pluginState;
-            }
-
-            const selectedCommentId =
-              meta !== undefined
-                ? meta.selectedCommentId
-                : pluginState.selectedCommentId;
-            const hoveredCommentId =
-              meta !== undefined
-                ? meta.hoveredCommentId
-                : pluginState.hoveredCommentId;
-
-            return {
-              selectedCommentId,
-              hoveredCommentId,
-              decorations: createCommentHighlightDecorations(
-                tr.doc,
-                selectedCommentId,
-                hoveredCommentId,
-              ),
-            };
-          },
-        },
-        props: {
-          decorations: (state) =>
-            commentHighlightPluginKey.getState(state)?.decorations ?? null,
-        },
-      }),
-    ];
-  },
-});
+const CommentHighlight = createHighlightExtension(
+  "commentHighlight",
+  commentHighlightPluginKey,
+  createCommentHighlightDecorations,
+);
 
 function createSuggestionHighlightDecorations(
   doc: ProseMirrorNode,
@@ -885,60 +886,11 @@ function createSuggestionHighlightDecorations(
   return DecorationSet.create(doc, decorations);
 }
 
-const SuggestionHighlight = Extension.create({
-  name: "suggestionHighlight",
-
-  addProseMirrorPlugins() {
-    return [
-      new Plugin<SuggestionHighlightPluginState>({
-        key: suggestionHighlightPluginKey,
-        state: {
-          init: (_, state) => ({
-            selectedChangeId: null,
-            hoveredChangeId: null,
-            decorations: createSuggestionHighlightDecorations(
-              state.doc,
-              null,
-              null,
-            ),
-          }),
-          apply: (tr, pluginState) => {
-            const meta = tr.getMeta(suggestionHighlightPluginKey) as
-              | SuggestionHighlightMeta
-              | undefined;
-
-            if (!meta && !tr.docChanged) {
-              return pluginState;
-            }
-
-            const selectedChangeId =
-              meta !== undefined
-                ? meta.selectedChangeId
-                : pluginState.selectedChangeId;
-            const hoveredChangeId =
-              meta !== undefined
-                ? meta.hoveredChangeId
-                : pluginState.hoveredChangeId;
-
-            return {
-              selectedChangeId,
-              hoveredChangeId,
-              decorations: createSuggestionHighlightDecorations(
-                tr.doc,
-                selectedChangeId,
-                hoveredChangeId,
-              ),
-            };
-          },
-        },
-        props: {
-          decorations: (state) =>
-            suggestionHighlightPluginKey.getState(state)?.decorations ?? null,
-        },
-      }),
-    ];
-  },
-});
+const SuggestionHighlight = createHighlightExtension(
+  "suggestionHighlight",
+  suggestionHighlightPluginKey,
+  createSuggestionHighlightDecorations,
+);
 
 const MarkdownLink = Link.extend({
   addAttributes() {

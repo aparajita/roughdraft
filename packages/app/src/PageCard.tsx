@@ -1101,8 +1101,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
     editor.view.dispatch(
       editor.state.tr.setMeta(commentHighlightPluginKey, {
-        selectedCommentId: highlightedCommentId,
-        hoveredCommentId: highlightedHoverCommentId,
+        selectedId: highlightedCommentId,
+        hoveredId: highlightedHoverCommentId,
       }),
     );
   }, [editor, highlightedCommentId, highlightedHoverCommentId]);
@@ -1112,8 +1112,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
     editor.view.dispatch(
       editor.state.tr.setMeta(suggestionHighlightPluginKey, {
-        selectedChangeId: highlightedSuggestionId,
-        hoveredChangeId: highlightedHoverSuggestionId,
+        selectedId: highlightedSuggestionId,
+        hoveredId: highlightedHoverSuggestionId,
       }),
     );
   }, [editor, highlightedHoverSuggestionId, highlightedSuggestionId]);
