@@ -1808,8 +1808,12 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     return () => onReviewFooterVisibleChange?.(false);
   }, [hasReviewFooter, onReviewFooterVisibleChange]);
 
-  const contentCardClass =
-    "rounded-[0.75rem] border border-border bg-card shadow-lg";
+  const contentCardClass = cn(
+    "rounded-[0.75rem] border bg-card shadow-lg",
+    currentEntry?.kind === "document-comment"
+      ? "border-blue-400"
+      : "border-border",
+  );
   const contentInsetClass = cn(
     "pb-24",
     // The footer is fixed over the document below the rail breakpoint, so the
