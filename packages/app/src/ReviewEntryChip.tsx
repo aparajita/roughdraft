@@ -1,4 +1,4 @@
-import { Check, PencilLine, Trash2, X } from "lucide-react";
+import { Check, FileText, PencilLine, Trash2, X } from "lucide-react";
 import type { ReviewEntry, SuggestionOperation } from "./document-comments";
 import { cn } from "./lib/utils";
 import { ReviewButton } from "./ReviewButton";
@@ -42,6 +42,7 @@ export function ReviewEntryChip({
 
   let label: string;
   let showCheckAndCross = false;
+  const showDocumentIcon = entry.kind === "document-comment";
 
   switch (entry.kind) {
     case "document-comment":
@@ -77,9 +78,12 @@ export function ReviewEntryChip({
     >
       <button
         type="button"
-        className="flex items-center px-1 text-left"
+        className="flex items-center gap-1 px-1 text-left"
         onClick={onSelect}
       >
+        {showDocumentIcon && (
+          <FileText className="size-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+        )}
         <span className="truncate whitespace-nowrap text-sm leading-5 text-slate-700 dark:text-slate-300">
           {label}
         </span>
