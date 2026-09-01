@@ -6,7 +6,6 @@ import {
   editorStateToReviewMarkdown,
   getCommentDescendantIds,
   type ReviewComment,
-  reviewMarkdownHasReviewRail,
   reviewMarkdownToEditorState,
   reviewMarkdownToRenderedHtml,
 } from "../src/review";
@@ -107,57 +106,6 @@ describe("review documents", () => {
     ].join("\n");
 
     expect(roundTrip(input)).toBe(input);
-  });
-
-  it.each([
-    {
-      name: "an anchored comment",
-      markdown: ANCHORED_COMMENT,
-      hasReviewRail: true,
-    },
-    {
-      name: "a document-scope comment with no anchor",
-      markdown: [
-        "# Draft",
-        "",
-        "---",
-        'roughdraft: "1.0"',
-        "comments:",
-        "  rd-c1:",
-        "    body: Please address the risk section.",
-        "    by: user",
-        '    at: "2026-08-28T12:00:00.000Z"',
-        "    scope: document",
-        "",
-      ].join("\n"),
-      hasReviewRail: true,
-    },
-    {
-      name: "anchor markup inside a fenced code block",
-      markdown: [
-        "```md",
-        'This is <ins id="rd-s1">inserted</ins> text.',
-        "```",
-        "",
-      ].join("\n"),
-      hasReviewRail: false,
-    },
-    {
-      name: "a trailing YAML block with no roughdraft key",
-      markdown: [
-        "# Release notes",
-        "",
-        "---",
-        "comments:",
-        "  rd-c1:",
-        "    by: docs",
-        '    at: "not review metadata"',
-        "",
-      ].join("\n"),
-      hasReviewRail: false,
-    },
-  ])("detects a review rail for $name", ({ markdown, hasReviewRail }) => {
-    expect(reviewMarkdownHasReviewRail(markdown)).toBe(hasReviewRail);
   });
 
   it("reads an anchored comment and writes it back unchanged", () => {
@@ -740,10 +688,11 @@ describe("markdown fixtures", () => {
 
   it("keeps anchor markup in code spans and fenced code literal and record-free", () => {
     const input = readMarkdownFixture("anchors-code-fences.md");
-    const { comments } = reviewMarkdownToEditorState(input);
+    const { comments, document } = reviewMarkdownToEditorState(input);
 
     expect(comments.size).toBe(0);
-    expect(reviewMarkdownHasReviewRail(input)).toBe(false);
+    expect(document.anchors).toHaveLength(0);
+    expect(document.suggestions.size).toBe(0);
     expect(roundTrip(input)).toBe(input);
   });
 });

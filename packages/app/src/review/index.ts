@@ -733,20 +733,6 @@ function addReplacementPairRule(
   });
 }
 
-/**
- * True when the document carries anything the review rail renders: an anchor
- * in the body, or a comment or suggestion record in the endmatter.
- */
-export function reviewMarkdownHasReviewRail(markdown: string): boolean {
-  const document = parseDocument(markdown);
-
-  return (
-    document.anchors.length > 0 ||
-    document.comments.size > 0 ||
-    document.suggestions.size > 0
-  );
-}
-
 export function reviewMarkdownToRenderedHtml(
   markdown: string,
   options?: MarkdownOptions,

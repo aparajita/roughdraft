@@ -118,7 +118,7 @@ suggestions:
 | Document | Rich/code toggle | Use `document-editor-view-toggle` | `document-editor-view-toggle` | URL changes to `?editor=code` or `?editor=rich-text`. |
 | Document | Editing mode | Open mode menu and choose Editing | `document-mode-trigger` | Normal edit behavior. |
 | Document | Suggesting mode | Open mode menu and choose Suggesting | `document-mode-trigger` | Selection actions should create suggestions instead of direct edits. |
-| Document | Viewing mode | Open mode menu and choose Viewing | `document-mode-trigger` | Editing controls should look non-editable; the review rail is not rendered and the document is centered at its normal measure. |
+| Document | Viewing mode | Open mode menu and choose Viewing | `document-mode-trigger` | Editing controls should look non-editable; the review rail is not rendered, and the document column stays where it sits in the other modes rather than recentering. |
 | Document | Save failed alert | Force a save error (e.g. mock the write endpoint to fail) | `save-failed-alert` | Modal alert: "Save failed" / "The document failed to save. Try again?" with OK and Cancel. OK retries the save and closes only on success; Cancel dismisses and leaves Cmd/Ctrl+S available to retry. |
 | Document | Disk changed | Open local file, modify file externally while browser content is clean | `file-conflict-notice`, `file-conflict-action-reload`, `file-conflict-action-overwrite` | Banner title: `File changed on disk`. |
 | Document | Save conflict | Edit in browser, then modify file externally before autosave resolves | `file-conflict-notice`, `file-conflict-action-keep-editing` | Banner title: `Save conflict`; autosave pauses. |
@@ -126,10 +126,11 @@ suggestions:
 | Document | Review handoff idle | Open a local file while a watcher is connected | `review-handoff-button` | Header text: `Agent watching`. |
 | Document | Review handoff comment popover | Open a local file while a watcher is connected, then click the handoff dropdown trigger | `review-handoff-comment-trigger`, `review-handoff-comment-popover`, `review-handoff-overall-comment` | Capture the split handoff control and textarea with `Overall comment` placeholder before submission. |
 | Document | Review handoff sending | Click handoff button while watcher is connected | `review-handoff-button` | Button label: `Sending`. |
-| Document | Review handoff sent | Successful handoff | `review-handoff-status`, `review-handoff-robots-toy`, `review-handoff-close-window`, `review-handoff-copy-message` | Capture the random completion title, robot toy, primary close button, and fallback copy hint below it. |
+| Document | Review handoff sent | Successful handoff | `review-handoff-status`, `review-handoff-close-window`, `review-handoff-copy-message` | Capture the random completion title, primary close button, and fallback copy hint below it. |
 | Document | Review handoff undelivered | Watcher disconnects before handoff | `review-handoff-status` | Popover title: `No agent is watching now`. |
 | Document | Review handoff error | Force handoff API error | `review-handoff-status` | Popover title: `Could not notify agent`. |
 | Document | Narrow-width footer | Open review fixture in rich mode with viewport width below 1100px | `review-entry-footer`, `review-entry-footer-action-previous`, `review-entry-footer-action-next` | Replaces the rail below the `rail` breakpoint; capture with a comment thread and a suggestion entry present. |
+| Document | Markdown rendering (typography plugin) | Open a fixture containing h1-h3 headings, inline code, a fenced code block, a blockquote, a nested ordered list, a table, and a task list, in rich mode | `page-card-rich-text`, `rich-text-editor` | Capture in light and dark; no automated test covers the plugin's rendered spacing, list markers, table borders, or blockquote/code styling. |
 | Remote | Connected banner | Open with `?session=<id>&token=<token>` and remote capability enabled | `role=status`, `aria-label="Remote session connected"` | Requires remote backend support in `/api/status`. |
 | Remote | Disconnected banner | Drop remote session connection | `role=alert`, `aria-label="Remote session disconnected"` | Best captured with backend mocking. |
 | Editor | Selection menu | Select text in rich editor | `selection-menu` | Capture formatting buttons and comment/suggestion actions. |

@@ -58,11 +58,11 @@ export function createMarkdownCodeEditorExtensions(
       ".cm-gutters": {
         backgroundColor: "transparent",
         border: "none",
-        color: "rgb(148 163 184)",
+        color: "var(--cm-gutter-foreground)",
         marginRight: "0.75rem",
       },
       "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-        backgroundColor: "var(--cm-selection-bg, rgb(224 242 254))",
+        backgroundColor: "var(--cm-selection-bg)",
       },
       ".cm-gutterElement": {
         padding: "0 0.5rem 0 0",
@@ -75,7 +75,7 @@ export function createMarkdownCodeEditorExtensions(
       },
       ".cm-activeLineGutter": {
         backgroundColor: "transparent",
-        color: "rgb(100 116 139)",
+        color: "var(--cm-active-line-gutter-foreground)",
       },
       "&.cm-focused": {
         outline: "none",

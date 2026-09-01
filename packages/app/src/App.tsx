@@ -240,7 +240,7 @@ export function HomepageSubtitle() {
     <>
       Refine complex ideas with{" "}
       <span
-        className="rounded-sm bg-[#fff5c7] px-1 text-slate-950 dark:bg-amber-500/35 dark:text-slate-50"
+        className="rounded-sm bg-amber-100 px-1 text-slate-950 dark:bg-amber-500/35 dark:text-slate-50"
         data-testid="homepage-subtitle-comment"
       >
         comments
@@ -363,7 +363,7 @@ export function Homepage({
 
   return (
     <div
-      className="flex min-h-screen items-start justify-center bg-[#FCFCFC] dark:bg-background px-6 pt-8 pb-12 text-slate-950 dark:text-slate-50"
+      className="flex min-h-screen items-start justify-center bg-background px-6 pt-8 pb-12 text-foreground"
       data-testid="homepage"
     >
       {updateStatus ? (
@@ -372,7 +372,7 @@ export function Homepage({
         </div>
       ) : null}
       <div className="w-full">
-        <div className="font-die-grotesk-a mx-auto max-w-[100rem] text-left">
+        <div className="mx-auto max-w-[100rem] text-left">
           <p
             className="text-[clamp(1.125rem,0.9rem+0.35vw,1.375rem)] font-bold text-stone-500 dark:text-stone-500"
             data-testid="homepage-logo"
@@ -381,7 +381,7 @@ export function Homepage({
           </p>
           <div className="mt-20 sm:mt-28">
             <h1
-              className="font-die-grotesk-b text-[clamp(2.875rem,14.2vw,5rem)] leading-[0.88] font-bold text-slate-950 dark:text-slate-50"
+              className="text-[clamp(2.875rem,14.2vw,5rem)] leading-[0.88] font-bold text-slate-950 dark:text-slate-50"
               data-testid="homepage-heading"
             >
               Easier collaboration
@@ -466,7 +466,7 @@ export function Homepage({
           </div>
         </div>
 
-        <div className="mt-10 w-screen max-w-none -translate-x-6 overflow-hidden border-y border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-[0_20px_60px_rgba(15,23,42,0.12)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.4)] min-[1000px]:mx-auto min-[1000px]:w-full min-[1000px]:max-w-[100rem] min-[1000px]:translate-x-0 min-[1000px]:rounded-lg min-[1000px]:border">
+        <div className="mt-10 w-screen max-w-none -translate-x-6 overflow-hidden border-y border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl min-[1000px]:mx-auto min-[1000px]:w-full min-[1000px]:max-w-[100rem] min-[1000px]:translate-x-0 min-[1000px]:rounded-lg min-[1000px]:border">
           <img
             data-testid="homepage-sneak-peek-image"
             src="/sneak-peek.png"
@@ -482,11 +482,11 @@ export function Homepage({
           data-testid="homepage-workflow-storyboard"
         >
           <div
-            className="homepage-workflow-intro font-die-grotesk-a py-8 pb-6 font-bold min-[900px]:pt-12 min-[900px]:pb-8"
+            className="homepage-workflow-intro py-8 pb-6 font-bold min-[900px]:pt-12 min-[900px]:pb-8"
             ref={workflowIntroRef}
           >
             <h2
-              className="font-die-grotesk-b text-center text-[clamp(4rem,2.8rem+3vw,4.5rem)] font-bold text-slate-950 dark:text-slate-50"
+              className="text-center text-[clamp(4rem,2.8rem+3vw,4.5rem)] font-bold text-slate-950 dark:text-slate-50"
               id="homepage-workflow-heading"
               data-testid="homepage-workflow-heading"
             >
@@ -496,7 +496,7 @@ export function Homepage({
 
           <div className="grid grid-cols-1 gap-6 [--homepage-workflow-dock-bottom:calc(0.75rem+env(safe-area-inset-bottom,0px))] [--homepage-workflow-dock-gap:clamp(1rem,4vw,1.5rem)] [--homepage-workflow-dock-height:clamp(16rem,38svh,20rem)] max-[899px]:gap-0 min-[900px]:grid-cols-[minmax(16rem,0.72fr)_minmax(0,1.28fr)] min-[900px]:items-start min-[900px]:gap-[clamp(2rem,5vw,4rem)] min-[900px]:[--homepage-workflow-dock-bottom:0rem] min-[900px]:[--homepage-workflow-dock-gap:0rem] min-[900px]:[--homepage-workflow-dock-height:auto]">
             <div
-              className="homepage-workflow-sticky-visual min-w-0 max-[899px]:sticky max-[899px]:z-[2] max-[899px]:flex max-[899px]:h-[var(--homepage-workflow-dock-height)] max-[899px]:min-h-0 max-[899px]:items-end max-[899px]:overflow-visible max-[899px]:rounded-[0.65rem] max-[899px]:shadow-[0_18px_48px_rgba(15,23,42,0.16)] max-[899px]:transition-opacity max-[899px]:duration-200 max-[899px]:[bottom:var(--homepage-workflow-dock-bottom)] max-[899px]:[top:calc(100svh-var(--homepage-workflow-dock-height)-var(--homepage-workflow-dock-bottom))] max-[899px]:data-[mobile-workflow-visible=false]:pointer-events-none max-[899px]:data-[mobile-workflow-visible=false]:opacity-0 min-[900px]:sticky min-[900px]:top-8 min-[900px]:order-2 min-[900px]:flex min-[900px]:min-h-[calc(100vh-4rem)] min-[900px]:items-center min-[900px]:overflow-visible"
+              className="homepage-workflow-sticky-visual min-w-0 max-[899px]:sticky max-[899px]:z-[2] max-[899px]:flex max-[899px]:h-[var(--homepage-workflow-dock-height)] max-[899px]:min-h-0 max-[899px]:items-end max-[899px]:overflow-visible max-[899px]:rounded-[0.65rem] max-[899px]:shadow-xl max-[899px]:transition-opacity max-[899px]:duration-200 max-[899px]:[bottom:var(--homepage-workflow-dock-bottom)] max-[899px]:[top:calc(100svh-var(--homepage-workflow-dock-height)-var(--homepage-workflow-dock-bottom))] max-[899px]:data-[mobile-workflow-visible=false]:pointer-events-none max-[899px]:data-[mobile-workflow-visible=false]:opacity-0 min-[900px]:sticky min-[900px]:top-8 min-[900px]:order-2 min-[900px]:flex min-[900px]:min-h-[calc(100vh-4rem)] min-[900px]:items-center min-[900px]:overflow-visible"
               data-homepage-workflow-sticky-visual=""
               data-mobile-workflow-visible={
                 mobileWorkflowVisualVisible ? "true" : "false"
@@ -535,7 +535,7 @@ export function Homepage({
           className="rfm-format-demo mx-auto mt-20 w-full max-w-none border-t border-slate-200 pt-10 text-left dark:border-slate-700 sm:mt-24"
         >
           <div
-            className="rfm-format-demo-intro font-die-grotesk-a mx-auto w-full px-4 font-bold"
+            className="rfm-format-demo-intro mx-auto w-full px-4 font-bold"
             data-testid="rfm-format-demo-intro"
           >
             <div className="max-w-3xl">
@@ -543,7 +543,7 @@ export function Homepage({
                 Roughdraft flavored Markdown
               </p>
               <h2
-                className="font-die-grotesk-b mt-3 text-3xl leading-tight font-bold text-balance text-slate-950 dark:text-slate-50 sm:text-4xl"
+                className="mt-3 text-3xl leading-tight font-bold text-balance text-slate-950 dark:text-slate-50 sm:text-4xl"
                 id="roughdraft-markdown-heading"
               >
                 It's just Markdown
@@ -588,13 +588,13 @@ function HomepageWorkflowScene({
       ref={sceneRef}
     >
       <div
-        className="font-die-grotesk-a min-w-0 max-w-[28rem] font-bold max-[899px]:max-w-[min(100%,27rem)]"
+        className="min-w-0 max-w-[28rem] font-bold max-[899px]:max-w-[min(100%,27rem)]"
         data-testid="homepage-workflow-scene-copy"
       >
         <div className="inline-flex h-12 min-w-12 items-center justify-center rounded-full border border-slate-950 bg-slate-950 px-2 text-[2.25rem] leading-none font-bold text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950">
           {step}
         </div>
-        <h3 className="font-die-grotesk-b mt-5 text-[clamp(2rem,1.5rem+1.5vw,2.5rem)] leading-tight font-bold text-balance text-slate-950 dark:text-slate-50">
+        <h3 className="mt-5 text-[clamp(2rem,1.5rem+1.5vw,2.5rem)] leading-tight font-bold text-balance text-slate-950 dark:text-slate-50">
           {title}
         </h3>
         <p className="mt-4 max-w-md text-base leading-7 text-stone-600 dark:text-stone-400">
@@ -633,7 +633,7 @@ function AgentChatMock({
 
   return (
     <div
-      className="homepage-workflow-terminal w-full overflow-hidden rounded-lg border border-slate-950/70 bg-[#1F232B] font-mono text-slate-50 shadow-[0_20px_48px_rgba(15,23,42,0.16)] max-[899px]:h-full max-[899px]:border-slate-950/60 dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)]"
+      className="homepage-workflow-terminal w-full overflow-hidden rounded-lg border border-slate-950/70 bg-slate-800 font-mono text-slate-50 shadow-2xl max-[899px]:h-full max-[899px]:border-slate-950/60"
       data-homepage-workflow-terminal-stage={workflowStage}
       data-testid="homepage-workflow-terminal"
       ref={terminalRef}
@@ -656,7 +656,7 @@ function AgentChatMock({
           <div>workspace ~/roughdraft</div>
         </div>
 
-        <div className="flex gap-3 bg-zinc-700/75 px-4 py-[0.45rem] text-slate-50 max-[899px]:gap-2 max-[899px]:px-3 max-[899px]:py-1.5">
+        <div className="flex gap-3 bg-slate-700/75 px-4 py-[0.45rem] text-slate-50 max-[899px]:gap-2 max-[899px]:px-3 max-[899px]:py-1.5">
           <span className="text-slate-400">›</span>
           <span>
             Let's make the homepage more persuasive. Write a plan first.
@@ -928,7 +928,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
   return (
     <div
       aria-hidden={visible ? undefined : true}
-      className="absolute right-[calc(-1*var(--homepage-workflow-popup-overhang))] bottom-4 left-[clamp(0.5rem,3vw,1.5rem)] z-[2] w-auto min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-[0_18px_44px_rgba(15,23,42,0.08)] transition-[opacity,transform] duration-200 [--homepage-workflow-popup-overhang:clamp(0rem,calc((100vw-72rem)*0.5),4rem)] data-[popup-visible=false]:translate-y-3 data-[popup-visible=false]:scale-[0.98] data-[popup-visible=false]:pointer-events-none data-[popup-visible=false]:opacity-0 data-[popup-visible=true]:translate-y-0 data-[popup-visible=true]:scale-100 data-[popup-visible=true]:opacity-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 dark:shadow-[0_18px_44px_rgba(0,0,0,0.28)] max-[899px]:right-2 max-[899px]:bottom-2 max-[899px]:left-2 max-[899px]:[--homepage-workflow-popup-overhang:0rem] max-[520px]:right-1.5 max-[520px]:bottom-1.5 max-[520px]:left-1.5"
+      className="absolute right-[calc(-1*var(--homepage-workflow-popup-overhang))] bottom-4 left-[clamp(0.5rem,3vw,1.5rem)] z-[2] w-auto min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-lg transition-[opacity,transform] duration-200 [--homepage-workflow-popup-overhang:clamp(0rem,calc((100vw-72rem)*0.5),4rem)] data-[popup-visible=false]:translate-y-3 data-[popup-visible=false]:scale-[0.98] data-[popup-visible=false]:pointer-events-none data-[popup-visible=false]:opacity-0 data-[popup-visible=true]:translate-y-0 data-[popup-visible=true]:scale-100 data-[popup-visible=true]:opacity-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 max-[899px]:right-2 max-[899px]:bottom-2 max-[899px]:left-2 max-[899px]:[--homepage-workflow-popup-overhang:0rem] max-[520px]:right-1.5 max-[520px]:bottom-1.5 max-[520px]:left-1.5"
       data-homepage-workflow-popup=""
       data-popup-visible={visible ? "true" : "false"}
       data-testid="homepage-workflow-popup"
@@ -973,7 +973,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
         >
           {showDoneButton ? (
             <Button
-              className="absolute top-3 right-3 z-[3] h-12 rounded-[7px] bg-black px-4.5 text-base font-bold text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:bg-black/85"
+              className="absolute top-3 right-3 z-[3] h-12 rounded-[7px] bg-black px-4.5 text-base font-bold text-white shadow-lg hover:bg-black/85"
               data-testid="homepage-workflow-handoff-button"
               type="button"
               size="sm"
@@ -1000,10 +1000,10 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
               <div className="flex min-w-0 items-center gap-2 px-1 pb-3 font-mono text-[0.7rem] font-medium text-stone-400 dark:text-slate-400">
                 <button
                   aria-label="Switch editor view"
-                  className="grid h-[1.375rem] grid-cols-[repeat(2,1.625rem)] items-center rounded-full bg-[#DED8CE] p-0.5 shadow-[inset_0_1px_0_rgba(255,251,245,0.72)] dark:bg-slate-700 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                  className="grid h-[1.375rem] grid-cols-[repeat(2,1.625rem)] items-center rounded-full bg-secondary p-0.5"
                   type="button"
                 >
-                  <span className="flex h-[1.125rem] items-center justify-center rounded-full bg-[#FFFDFC] text-stone-700 shadow-[0_1px_2px_rgba(41,37,36,0.12)] dark:bg-slate-500 dark:text-white">
+                  <span className="flex h-[1.125rem] items-center justify-center rounded-full bg-card text-stone-700 shadow-sm dark:text-white">
                     <Eye className="size-3" aria-hidden="true" />
                   </span>
                   <span className="flex h-[1.125rem] items-center justify-center rounded-full text-stone-500 dark:text-slate-400">
@@ -1019,7 +1019,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
                 </span>
               </div>
               <div
-                className="min-h-[25rem] rounded-xl border border-[#E9E9E8] bg-white p-[clamp(2rem,6vw,3.5rem)] shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)] max-[899px]:min-h-[19rem] max-[899px]:p-6"
+                className="min-h-[25rem] rounded-xl border border-border bg-card p-[clamp(2rem,6vw,3.5rem)] shadow-lg max-[899px]:min-h-[19rem] max-[899px]:p-6"
                 ref={documentPageRef}
               >
                 <p className="m-0 mb-4 text-[0.72rem] leading-none font-semibold tracking-[0.14em] text-stone-600 uppercase dark:text-slate-400">
@@ -1035,7 +1035,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
                   Move the workflow story above{" "}
                   {showUserFeedback ? (
                     <span
-                      className="bg-[#FFF5C7] decoration-clone box-decoration-clone dark:bg-amber-900/35"
+                      className="bg-amber-100 decoration-clone box-decoration-clone dark:bg-amber-900/35"
                       id="rd-c1"
                       data-testid="homepage-workflow-comment-highlight"
                     >
@@ -1104,7 +1104,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
                       ref={(node) => setThreadRef(item.key, node)}
                       style={layout ? { top: layout.railTop } : undefined}
                     >
-                      <div className="flex size-8 items-center justify-center rounded-full border border-stone-300 bg-[#E7E0D5] text-[0.72rem] font-bold text-stone-700">
+                      <div className="flex size-8 items-center justify-center rounded-full border border-stone-300 bg-stone-200 text-[0.72rem] font-bold text-stone-700">
                         N
                       </div>
                       <div>
@@ -1162,7 +1162,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
 
 export function RoughdraftFlavoredMarkdownPage() {
   return (
-    <main className="min-h-screen bg-[#FCFCFC] dark:bg-background px-4 py-4 text-slate-950 dark:text-slate-50">
+    <main className="min-h-screen bg-background px-4 py-4 text-foreground">
       <div className="mx-auto max-w-5xl">
         <Button
           className="h-9 gap-2 px-3 text-sm"
@@ -1205,7 +1205,7 @@ export function RoughdraftFlavoredMarkdownPage() {
           {ROUGHDRAFT_MARKDOWN_REFERENCES.map(
             ({ description, href, title }) => (
               <a
-                className="group rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.3)] transition hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)] dark:hover:shadow-[0_14px_34px_rgba(0,0,0,0.4)]"
+                className="group rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-md transition hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-lg"
                 href={href}
                 key={title}
                 target="_blank"
@@ -1250,7 +1250,7 @@ export function RoughdraftFlavoredMarkdownPage() {
             },
           ].map(({ description, icon: Icon, title }) => (
             <div
-              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-md"
               key={title}
             >
               <div className="flex size-10 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-stone-700 dark:text-stone-300">
@@ -1336,7 +1336,7 @@ export function RoughdraftFlavoredMarkdownPage() {
                   <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-400">
                     {description}
                   </p>
-                  <code className="mt-3 block overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700 bg-[#FAFAF8] dark:bg-slate-800 px-3 py-2 text-xs text-stone-700 dark:text-stone-300">
+                  <code className="mt-3 block overflow-x-auto rounded-md border border-border bg-stone-50 dark:bg-slate-800 px-3 py-2 text-xs text-stone-700 dark:text-stone-300">
                     {syntax}
                   </code>
                 </div>

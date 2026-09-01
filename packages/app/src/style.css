@@ -3,37 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
-@font-face {
-  font-family: "Die Grotesk A";
-  src: url("./assets/fonts/die-grotesk-a-bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Die Grotesk B";
-  src: url("./assets/fonts/die-grotesk-b-bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Die Grotesk C";
-  src: url("./assets/fonts/die-grotesk-c-bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Die Grotesk D";
-  src: url("./assets/fonts/die-grotesk-d-bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -73,109 +43,16 @@
 }
 
 @layer components {
-  .review-handoff-robots .flash {
-    transform-origin: 340px 165px;
-    opacity: 0;
-  }
-
-  .review-handoff-robots .flash.pop {
-    animation: review-handoff-robots-pop 450ms ease-out;
-  }
-
-  .review-handoff-robots .bob-l.hop,
-  .review-handoff-robots .bob-r.hop {
-    animation: review-handoff-robots-hop 400ms ease-out;
-  }
-
   .tiptap {
-    @apply min-h-30 text-slate-800 dark:text-slate-200 outline-none;
-    --editor-font-size: 16px;
-    font-size: var(--editor-font-size);
-    line-height: 1.58;
+    @apply outline-none;
   }
 
   .tiptap p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);
-    color: rgb(148 163 184);
+    @apply text-stone-400 dark:text-slate-500;
     float: left;
     height: 0;
     pointer-events: none;
-  }
-
-  .tiptap h1 {
-    @apply mt-[0.1em] mb-[0.7em] font-semibold text-slate-950 dark:text-slate-50;
-    font-size: 2.15em;
-    line-height: 1.1;
-    letter-spacing: -0.03em;
-  }
-
-  .tiptap h2 {
-    @apply mt-[1.8em] mb-[0.5em] font-semibold text-slate-950 dark:text-slate-50;
-    font-size: 1.65em;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-  }
-
-  .tiptap h3 {
-    @apply mt-[1.45em] mb-[0.35em] font-semibold text-slate-950 dark:text-slate-50;
-    font-size: 1.25em;
-    line-height: 1.28;
-    letter-spacing: -0.01em;
-  }
-
-  .tiptap p {
-    margin: 0 0 1.05em;
-  }
-
-  .tiptap > p {
-    margin-bottom: 1.05em;
-  }
-
-  .tiptap code {
-    @apply rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[0.9em] text-slate-900 dark:text-slate-200;
-  }
-
-  .tiptap pre {
-    @apply overflow-x-auto rounded-2xl border p-4;
-    margin: 1.35em 0;
-    background-color: var(--code-block-background);
-    border-color: var(--code-block-border);
-    color: var(--code-block-foreground);
-  }
-
-  .tiptap pre code {
-    @apply bg-transparent p-0 text-inherit;
-  }
-
-  .tiptap blockquote {
-    @apply border-l-4 border-slate-300 dark:border-slate-600 pl-4 text-slate-600 dark:text-slate-400;
-    margin: 1.3em 0;
-  }
-
-  .tiptap ul {
-    @apply list-disc;
-    margin: 0.45em 0 1.05em;
-    padding-left: 1.35em;
-  }
-
-  .tiptap ol {
-    @apply list-decimal;
-    margin: 0.45em 0 1.05em;
-    padding-left: 1.35em;
-  }
-
-  .tiptap li > ul,
-  .tiptap li > ol {
-    margin-top: 0.45em;
-    padding-left: 1.35em;
-  }
-
-  .tiptap li p {
-    margin: 0 0 0.55em 0;
-  }
-
-  .tiptap li > p:last-child {
-    margin-bottom: 0;
   }
 
   .tiptap ol ol li {
@@ -190,51 +67,23 @@
     list-style-type: decimal;
   }
 
-  .tiptap li::marker {
-    color: rgb(51 65 85);
-  }
-
-  .dark .tiptap li::marker {
-    color: rgb(148 163 184);
-  }
-
-  .tiptap hr {
-    @apply my-6 border-0 border-t border-slate-200 dark:border-slate-700;
-  }
-
-  .tiptap img {
-    @apply my-4 block h-auto max-w-full rounded-2xl;
-  }
-
   .tiptap .tableWrapper {
     @apply my-4 overflow-x-auto rounded-2xl;
   }
 
   .tiptap table {
-    @apply table-fixed border-collapse;
+    /* Tiptap's column-resize handles write widths into the colgroup, which only
+       take effect under a fixed table layout. */
+    @apply table-fixed;
     /* biome-ignore lint/complexity/noImportantStyles: override Tiptap inline min-width */
     min-width: 100% !important;
-  }
-
-  .tiptap th,
-  .tiptap td {
-    @apply relative min-w-[1em] border border-slate-200 dark:border-slate-700 px-3 py-2 text-left align-top;
-  }
-
-  .tiptap th {
-    @apply bg-slate-50 dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100;
-  }
-
-  .tiptap td > *,
-  .tiptap th > * {
-    margin-bottom: 0;
   }
 
   .tiptap .selectedCell::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgb(14 165 233 / 0.12);
+    background: color-mix(in oklab, var(--color-sky-500) 12%, transparent);
     pointer-events: none;
   }
 
@@ -244,7 +93,7 @@
     right: -2px;
     bottom: -2px;
     width: 4px;
-    background: rgb(2 132 199);
+    background: var(--color-sky-600);
     pointer-events: none;
   }
 
@@ -281,12 +130,19 @@
   }
 
   .markdown-code-editor {
-    color: rgb(15 23 42);
+    color: var(--color-stone-900);
+    --cm-gutter-foreground: var(--color-stone-400);
+    --cm-active-line-gutter-foreground: var(--color-stone-500);
+    --cm-selection-bg: var(--color-sky-100);
+    --cm-caret: var(--color-stone-900);
   }
 
   .dark .markdown-code-editor {
-    color: rgb(226 232 240);
-    --cm-selection-bg: rgb(30 58 138 / 0.45);
+    color: var(--color-slate-200);
+    --cm-gutter-foreground: var(--color-slate-400);
+    --cm-active-line-gutter-foreground: var(--color-slate-500);
+    --cm-selection-bg: --alpha(var(--color-blue-900) / 45%);
+    --cm-caret: var(--color-slate-200);
   }
 
   .markdown-code-editor .cm-editor {
@@ -303,48 +159,12 @@
 
   .markdown-code-editor .cm-content,
   .markdown-code-editor .cm-line {
-    caret-color: rgb(15 23 42);
+    caret-color: var(--cm-caret);
   }
 
   .markdown-code-editor .cm-cursor,
   .markdown-code-editor .cm-dropCursor {
-    border-left-color: rgb(15 23 42);
-  }
-
-  .dark .markdown-code-editor .cm-content,
-  .dark .markdown-code-editor .cm-line {
-    caret-color: rgb(226 232 240);
-  }
-
-  .dark .markdown-code-editor .cm-cursor,
-  .dark .markdown-code-editor .cm-dropCursor {
-    border-left-color: rgb(226 232 240);
-  }
-
-}
-
-@keyframes review-handoff-robots-pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  35% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.6);
-  }
-}
-
-@keyframes review-handoff-robots-hop {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  45% {
-    transform: translateY(-7px);
+    border-left-color: var(--cm-caret);
   }
 }
 
@@ -355,26 +175,7 @@
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", sans-serif;
-  --font-die-grotesk-a: "Die Grotesk A", sans-serif;
-  --font-die-grotesk-b: "Die Grotesk B", sans-serif;
-  --font-die-grotesk-c: "Die Grotesk C", sans-serif;
-  --font-die-grotesk-d: "Die Grotesk D", sans-serif;
-  --color-emerald-850: rgb(6 83 61);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -403,113 +204,68 @@
 }
 
 :root {
-  --background: #fcfcfc;
-  --foreground: oklch(0.141 0.006 67.1);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.006 67.1);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.006 67.1);
-  --primary: oklch(0.21 0.006 56.1);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.003 84.7);
-  --secondary-foreground: oklch(0.21 0.006 56.1);
-  --muted: oklch(0.967 0.003 84.7);
-  --muted-foreground: oklch(0.552 0.014 66.4);
-  --accent: oklch(0.967 0.003 84.7);
-  --accent-foreground: oklch(0.21 0.006 56.1);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.005 84.2);
-  --input: oklch(0.92 0.005 84.2);
-  --ring: oklch(0.705 0.012 67.8);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
+  --background: var(--color-stone-50);
+  --foreground: var(--color-stone-900);
+  --card: #fff;
+  --card-foreground: var(--color-stone-900);
+  --popover: #fff;
+  --popover-foreground: var(--color-stone-700);
+  --primary: var(--color-stone-800);
+  --primary-foreground: var(--color-stone-50);
+  --secondary: var(--color-stone-200);
+  --secondary-foreground: var(--color-stone-900);
+  --muted: var(--color-stone-100);
+  --muted-foreground: var(--color-stone-500);
+  --accent: var(--color-stone-100);
+  --accent-foreground: var(--color-stone-900);
+  --destructive: var(--color-red-600);
+  --border: var(--color-stone-200);
+  --input: var(--color-stone-300);
+  --ring: var(--color-stone-400);
   --radius: 0.45rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.006 67.1);
-  --sidebar-primary: oklch(0.21 0.006 56.1);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.967 0.003 84.7);
-  --sidebar-accent-foreground: oklch(0.21 0.006 56.1);
-  --sidebar-border: oklch(0.92 0.005 84.2);
-  --sidebar-ring: oklch(0.705 0.012 67.8);
-  --code-block-background: oklch(0.985 0.002 84.7);
-  --code-block-border: oklch(0.92 0.005 84.2);
-  --code-block-foreground: oklch(0.141 0.006 67.1);
 }
 
 .dark {
-  --background: oklch(0.141 0.006 67.1);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.025 257);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.025 257);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.005 84.2);
-  --primary-foreground: oklch(0.21 0.006 56.1);
-  --secondary: oklch(0.274 0.006 61.4);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 61.4);
-  --muted-foreground: oklch(0.705 0.012 67.8);
-  --accent: oklch(0.274 0.006 61.4);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.014 66.4);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.21 0.006 56.1);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.274 0.006 61.4);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.014 66.4);
-  --code-block-background: oklch(0.141 0.006 67.1);
-  --code-block-border: oklch(1 0 0 / 10%);
-  --code-block-foreground: oklch(0.985 0 0);
+  --background: var(--color-slate-950);
+  --foreground: var(--color-slate-50);
+  --card: var(--color-slate-900);
+  --card-foreground: var(--color-slate-50);
+  --popover: var(--color-slate-900);
+  --popover-foreground: var(--color-slate-300);
+  --primary: var(--color-slate-200);
+  --primary-foreground: var(--color-slate-900);
+  --secondary: var(--color-slate-800);
+  --secondary-foreground: var(--color-slate-50);
+  --muted: var(--color-slate-800);
+  --muted-foreground: var(--color-slate-400);
+  --accent: var(--color-slate-800);
+  --accent-foreground: var(--color-slate-50);
+  --destructive: var(--color-red-500);
+  --border: var(--color-slate-700);
+  --input: var(--color-slate-700);
+  --ring: var(--color-slate-500);
 }
 
 /*
- * Review layout grid: a single document column that rests centered (no
- * comments) or shifted-left with a review rail (comments present).
- *
- * The visible motion is FLIP-driven by useReviewLayoutShiftAnimation. The grid
- * moves to its next resting layout immediately, then a temporary inverse
- * translate animates back to zero. This avoids relying on grid-template-columns
- * interpolation while the first comment UI mounts.
+ * Review layout grid: the document column on the left, the review rail column
+ * on the right. Both tracks exist whether or not the rail has anything in it,
+ * so the document rests in the same place as comments and suggestions come and
+ * go.
  *
  * Below the breakpoint the shell falls back to a simple stacked column.
  */
 .review-layout-grid {
-  --review-layout-shift-x: 0px;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  transform: translateX(var(--review-layout-shift-x));
 }
 
 @variant rail {
   .review-layout-grid {
     display: grid;
-    /* comments present: document on the left, rail filling the remaining width on the right */
     grid-template-columns: minmax(0, var(--document-measure)) minmax(0, 1fr);
     align-items: start;
     column-gap: 1.5rem;
-  }
-
-  /* no comments: rail collapses to nothing and the document re-centers */
-  .review-layout-grid.review-layout-grid--centered {
-    grid-template-columns: minmax(0, var(--document-measure));
-    justify-content: center;
-    column-gap: 0;
   }
 
   .review-layout-grid > .review-layout-main {
@@ -519,17 +275,6 @@
   .review-layout-grid > .review-layout-rail {
     grid-column: 2;
     min-width: 0;
-  }
-}
-
-.review-layout-grid.review-layout-grid--animating {
-  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .review-layout-grid {
-    transition: none;
   }
 }
 

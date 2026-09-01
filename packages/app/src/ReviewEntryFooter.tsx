@@ -43,7 +43,7 @@ export function ReviewEntryFooter({
   return (
     <div
       data-testid="review-entry-footer"
-      className="review-entry-footer flex items-center gap-2 border-t border-[#DFDFDC] bg-white px-3 dark:border-slate-700 dark:bg-card"
+      className="review-entry-footer flex items-center gap-2 border-t border-border bg-card px-3"
     >
       <button
         type="button"

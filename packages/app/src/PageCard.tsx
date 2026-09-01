@@ -36,7 +36,6 @@ import {
   editorStateToReviewMarkdown,
   getCommentDescendantIds,
   type ReviewComment,
-  reviewMarkdownHasReviewRail,
   reviewMarkdownToEditorState,
   type SuggestionAttrs,
 } from "./review";
@@ -79,7 +78,6 @@ interface PageCardProps {
   interactionMode?: DocumentInteractionMode;
   backend: StorageBackend;
   onEditorReady?: (editor: Editor | null) => void;
-  onCommentRailPresenceChange?: (hasCommentRailSpace: boolean) => void;
   onDirtyStateChange?: (isDirty: boolean) => void;
   onLocalContentChange?: (markdown: string) => void;
   onSaveControllerChange?: (controller: DocumentSaveController | null) => void;
@@ -98,7 +96,6 @@ interface PageCardEditorSurfaceProps {
   interactionMode: DocumentInteractionMode;
   backend: StorageBackend;
   onEditorReady?: (editor: Editor | null) => void;
-  onCommentRailPresenceChange?: (hasCommentRailSpace: boolean) => void;
   onDirtyStateChange?: (isDirty: boolean) => void;
   onLocalContentChange?: (markdown: string) => void;
   onSaveControllerChange?: (controller: DocumentSaveController | null) => void;
@@ -116,12 +113,10 @@ interface RichTextEditorSurfaceProps {
   interactionMode: DocumentInteractionMode;
   backend: StorageBackend;
   onEditorReady?: (editor: Editor | null) => void;
-  onCommentRailPresenceChange?: (hasCommentRailSpace: boolean) => void;
 }
 
 interface CodeEditorSurfaceProps {
   markdown: string;
-  hasCommentRailSpace: boolean;
   interactionMode: DocumentInteractionMode;
   onMarkdownChange: (markdown: string) => void;
 }
@@ -600,17 +595,16 @@ function resolveThreadComments(
 }
 
 /**
- * The review layout grid: a document column, and a rail column when there is a
- * rail to put in it. `.review-layout-grid` in `style.css` is the single
- * definition of the grid; `document-page-shell` is a test hook carrying no CSS.
+ * The review layout grid: a document column and a rail column, both always
+ * present so the document does not move as the rail fills. `.review-layout-grid`
+ * in `style.css` is the single definition of the grid; `document-page-shell` is
+ * a test hook carrying no CSS.
  */
-function getReviewLayoutGridClass(hasReviewRail: boolean) {
-  return cn(
-    "review-layout-grid document-page-shell",
-    !hasReviewRail &&
-      "review-layout-grid--centered document-page-shell-no-comments",
-  );
-}
+const reviewLayoutGridClass = "review-layout-grid document-page-shell";
+
+/** The document column of the grid, shared by the rich-text and code surfaces. */
+const reviewLayoutMainClass =
+  "review-layout-main document-page-main w-full min-w-0 max-w-[var(--document-measure)]";
 
 /** The client rect of a document range: what the composer popover points at. */
 function getRangeClientRect(editor: Editor, from: number, to: number): DOMRect {
@@ -637,7 +631,6 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   interactionMode,
   backend,
   onEditorReady,
-  onCommentRailPresenceChange,
 }: RichTextEditorSurfaceProps) {
   const editorRef = useRef<Editor | null>(null);
   const suggestionFrameRef = useRef<number | null>(null);
@@ -702,10 +695,6 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   useEffect(() => {
     interactionModeRef.current = interactionMode;
   }, [interactionMode]);
-
-  useEffect(() => {
-    onCommentRailPresenceChange?.(comments.size > 0 || suggestions.length > 0);
-  }, [comments.size, suggestions.length, onCommentRailPresenceChange]);
 
   const emitMarkdownChange = useCallback(
     (doc?: JSONContent, nextComments?: Map<string, ReviewComment>) => {
@@ -797,7 +786,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       shouldRerenderOnTransaction: false,
       editorProps: {
         attributes: {
-          class: "tiptap min-h-[70vh]",
+          class:
+            "tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-[70vh] prose-code:before:content-none prose-code:after:content-none prose-blockquote:not-italic [&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none prose-code:bg-stone-100 dark:prose-code:bg-slate-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-a:font-normal",
         },
         handleDrop: (_view, event) => {
           const files = Array.from(event.dataTransfer?.files ?? []);
@@ -1756,14 +1746,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   );
 
   const showReview = interactionMode !== "viewing";
-  const hasReviewRail =
-    showReview && (comments.size > 0 || suggestions.length > 0);
   const contentCardClass =
-    "rounded-[0.75rem] border border-[#E9E9E8] dark:border-border bg-white dark:bg-card shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)]";
-  const documentShellClass = getReviewLayoutGridClass(hasReviewRail);
-  const documentMainClass = cn(
-    "review-layout-main document-page-main w-full min-w-0 max-w-[var(--document-measure)]",
-  );
+    "rounded-[0.75rem] border border-border bg-card shadow-lg";
   const contentInsetClass = cn(
     "pb-24",
     // The footer is fixed over the document below the rail breakpoint, so the
@@ -1780,8 +1764,8 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       className="cursor-text bg-transparent"
       data-testid="page-card-rich-text"
     >
-      <div data-testid="document-page-shell" className={documentShellClass}>
-        <div className={documentMainClass}>
+      <div data-testid="document-page-shell" className={reviewLayoutGridClass}>
+        <div className={reviewLayoutMainClass}>
           <div className={contentInsetClass}>
             <div
               data-testid="document-content-card"
@@ -1880,25 +1864,18 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
 const CodeEditorSurface = memo(function CodeEditorSurface({
   markdown,
-  hasCommentRailSpace,
   interactionMode,
   onMarkdownChange,
 }: CodeEditorSurfaceProps) {
-  const documentShellClass = getReviewLayoutGridClass(hasCommentRailSpace);
-  const documentMainClass = cn(
-    "review-layout-main document-page-main w-full min-w-0 max-w-[var(--document-measure)]",
-  );
   const contentInsetClass = "pb-24";
-  const reviewRailClass =
-    "review-layout-rail document-comment-rail pointer-events-none invisible hidden rail:block";
 
   return (
     <div className="cursor-text bg-transparent" data-testid="page-card-code">
-      <div data-testid="document-page-shell" className={documentShellClass}>
-        <div className={documentMainClass}>
+      <div data-testid="document-page-shell" className={reviewLayoutGridClass}>
+        <div className={reviewLayoutMainClass}>
           <div className={contentInsetClass}>
             <div
-              className="min-h-[calc(70vh+4rem)] rounded-[0.75rem] border border-[#E9E9E8] dark:border-slate-700 bg-white dark:bg-card py-10 pr-6 pl-5 shadow-[0_18px_44px_rgba(57,47,38,0.08)] dark:shadow-[0_18px_44px_rgba(0,0,0,0.35)] sm:py-14 sm:pr-10 sm:pl-8"
+              className="min-h-[calc(70vh+4rem)] rounded-[0.75rem] border border-border bg-card py-10 pr-6 pl-5 shadow-lg sm:py-14 sm:pr-10 sm:pl-8"
               data-testid="document-content-card"
             >
               <MarkdownCodeEditor
@@ -1911,13 +1888,6 @@ const CodeEditorSurface = memo(function CodeEditorSurface({
             </div>
           </div>
         </div>
-        {hasCommentRailSpace ? (
-          <div
-            data-testid="document-review-rail"
-            className={reviewRailClass}
-            aria-hidden="true"
-          />
-        ) : null}
       </div>
     </div>
   );
@@ -1934,7 +1904,6 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
   interactionMode,
   backend,
   onEditorReady,
-  onCommentRailPresenceChange,
   onDirtyStateChange,
   onLocalContentChange,
   onSaveControllerChange,
@@ -2158,21 +2127,10 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
     };
   }, []);
 
-  const hasCommentRailSpace = useMemo(
-    () => reviewMarkdownHasReviewRail(markdown),
-    [markdown],
-  );
-
-  useEffect(() => {
-    if (editorViewMode !== "code") return;
-    onCommentRailPresenceChange?.(hasCommentRailSpace);
-  }, [editorViewMode, hasCommentRailSpace, onCommentRailPresenceChange]);
-
   if (editorViewMode === "code") {
     return (
       <CodeEditorSurface
         markdown={markdown}
-        hasCommentRailSpace={hasCommentRailSpace}
         interactionMode={interactionMode}
         onMarkdownChange={handleMarkdownChange}
       />
@@ -2196,7 +2154,6 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
       sourceMarkdown={effectiveRichTextSourceMarkdown}
       onMarkdownChange={handleMarkdownChange}
       interactionMode={interactionMode}
-      onCommentRailPresenceChange={onCommentRailPresenceChange}
       backend={backend}
       onEditorReady={onEditorReady}
     />
@@ -2214,7 +2171,6 @@ export function PageCard({
   interactionMode = "editing",
   backend,
   onEditorReady,
-  onCommentRailPresenceChange,
   onDirtyStateChange,
   onLocalContentChange,
   onSaveControllerChange,
@@ -2240,7 +2196,6 @@ export function PageCard({
         interactionMode={interactionMode}
         backend={backend}
         onEditorReady={onEditorReady}
-        onCommentRailPresenceChange={onCommentRailPresenceChange}
         onDirtyStateChange={onDirtyStateChange}
         onLocalContentChange={onLocalContentChange}
         onSaveControllerChange={onSaveControllerChange}

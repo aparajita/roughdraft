@@ -69,13 +69,8 @@ import {
   type DocumentSaveState,
   PageCard,
 } from "./PageCard";
-import { RobotsHighFiveToy } from "./RobotsHighFiveToy";
-import {
-  reviewMarkdownHasReviewRail,
-  reviewMarkdownToRenderedHtml,
-} from "./review";
+import { reviewMarkdownToRenderedHtml } from "./review";
 import type { CompleteReviewOptions, Page, StorageBackend } from "./storage";
-import { useReviewLayoutShiftAnimation } from "./useReviewLayoutShiftAnimation";
 
 type FileCopyAction = "path" | "filename" | "markdown" | "rich-text";
 const FILE_COPY_PREVIEW_MAX_LENGTH = 34;
@@ -374,21 +369,6 @@ export function DocumentWorkspace({
     },
     [onDocumentSaveStateChange],
   );
-
-  const [documentHasComments, setDocumentHasComments] = useState(
-    () =>
-      !!documentPage?.content &&
-      reviewMarkdownHasReviewRail(documentPage.content),
-  );
-  const documentHeaderRef =
-    useReviewLayoutShiftAnimation<HTMLDivElement>(documentHasComments);
-
-  useEffect(() => {
-    setDocumentHasComments(
-      !!documentPage?.content &&
-        reviewMarkdownHasReviewRail(documentPage.content),
-    );
-  }, [documentPage?.content]);
 
   useEffect(() => {
     const documentIdentity = `${activeDocumentPath ?? ""}:${documentPage?.id ?? ""}`;
@@ -690,7 +670,7 @@ export function DocumentWorkspace({
               <div
                 data-testid="review-handoff-split-button"
                 className={cn(
-                  "relative flex items-center overflow-hidden rounded-[7px] shadow-[0_10px_28px_rgba(0,0,0,0.18)] transition-opacity after:pointer-events-none after:absolute after:top-px after:right-8 after:bottom-px after:z-10 after:w-px after:bg-[#4a4038] after:content-[''] dark:after:bg-slate-600",
+                  "relative flex items-center overflow-hidden rounded-[7px] shadow-lg transition-opacity after:pointer-events-none after:absolute after:top-px after:right-8 after:bottom-px after:z-10 after:w-px after:bg-stone-700 after:content-['']",
                   reviewHandoffDisabled && "opacity-50",
                 )}
               >
@@ -698,7 +678,7 @@ export function DocumentWorkspace({
                   type="button"
                   data-testid="review-handoff-button"
                   size="lg"
-                  className="h-9 rounded-r-none rounded-l-[7px] border-0 bg-[#2B2420] px-3 text-sm font-bold text-white hover:bg-[#3a322b] focus-visible:ring-slate-300 disabled:opacity-100 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600 dark:focus-visible:ring-slate-600"
+                  className="h-9 rounded-r-none rounded-l-[7px] border-0 bg-primary px-3 text-sm font-bold text-primary-foreground hover:bg-stone-700 focus-visible:ring-ring disabled:opacity-100"
                   disabled={reviewHandoffButtonDisabled}
                   aria-disabled={reviewHandoffButtonDisabled || undefined}
                   onClick={() => {
@@ -730,7 +710,7 @@ export function DocumentWorkspace({
                       type="button"
                       data-testid="review-handoff-comment-trigger"
                       size="icon-lg"
-                      className="h-9 w-8 rounded-l-none rounded-r-[7px] border-0 bg-[#2B2420] text-white hover:bg-[#3a322b] focus-visible:ring-slate-300 disabled:opacity-100 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600 dark:focus-visible:ring-slate-600"
+                      className="h-9 w-8 rounded-l-none rounded-r-[7px] border-0 bg-primary text-primary-foreground hover:bg-stone-700 focus-visible:ring-ring disabled:opacity-100"
                       disabled={reviewHandoffDisabled}
                       aria-label="Add overall handoff comment"
                     >
@@ -790,18 +770,6 @@ export function DocumentWorkspace({
                   </form>
                 ) : (
                   <div>
-                    <div
-                      className="mb-3 flex h-[170px] items-center justify-center overflow-hidden"
-                      data-testid="review-handoff-toy-frame"
-                    >
-                      <RobotsHighFiveToy
-                        onHighFive={() =>
-                          setReviewCompleteTitle((currentTitle) =>
-                            getRandomReviewCompleteTitleExcept(currentTitle),
-                          )
-                        }
-                      />
-                    </div>
                     <div className="flex items-start gap-3">
                       {reviewHandoffState === "notifying" ||
                       reviewHandoffState === "error" ||
@@ -868,7 +836,7 @@ export function DocumentWorkspace({
           data-testid="file-conflict-notice"
           role="status"
           aria-label="File conflict"
-          className="fixed top-3 left-1/2 z-50 flex w-[min(calc(100vw-1rem),52rem)] -translate-x-1/2 flex-col gap-3 rounded-[8px] border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 px-3 py-3 text-amber-950 dark:text-amber-100 shadow-[0_14px_40px_rgba(120,53,15,0.18)] dark:shadow-[0_14px_40px_rgba(0,0,0,0.4)] sm:flex-row sm:items-center sm:justify-between sm:px-4"
+          className="fixed top-3 left-1/2 z-50 flex w-[min(calc(100vw-1rem),52rem)] -translate-x-1/2 flex-col gap-3 rounded-[8px] border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 px-3 py-3 text-amber-950 dark:text-amber-100 shadow-lg sm:flex-row sm:items-center sm:justify-between sm:px-4"
         >
           <div className="flex min-w-0 items-start gap-2.5">
             <AlertTriangle
@@ -926,13 +894,8 @@ export function DocumentWorkspace({
       <div className="mx-auto min-h-full max-w-[1080px]">
         {documentPage ? (
           <div
-            ref={documentHeaderRef}
             data-testid="document-page-header"
-            className={cn(
-              "review-layout-grid document-page-shell mb-2 text-[0.62rem] font-medium tracking-[0.01em] text-stone-400",
-              !documentHasComments &&
-                "review-layout-grid--centered document-page-shell-no-comments",
-            )}
+            className="review-layout-grid document-page-shell mb-2 text-[0.62rem] font-medium tracking-[0.01em] text-stone-400"
           >
             <div className="review-layout-main document-page-main w-full max-w-[var(--document-measure)] min-w-0">
               <div className="flex w-full flex-wrap items-center gap-1.5 px-1">
@@ -942,12 +905,12 @@ export function DocumentWorkspace({
                       <button
                         type="button"
                         data-testid="document-editor-view-toggle"
-                        className="grid shrink-0 grid-cols-2 rounded-[999px] bg-[#E8E3DB] dark:bg-slate-800 px-[2px] pt-[3px] pb-[2px] shadow-[inset_0_1px_0_rgba(255,251,245,0.72)] dark:border-b dark:border-b-slate-800 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                        className="grid shrink-0 grid-cols-2 rounded-[999px] bg-secondary px-[2px] pt-[3px] pb-[2px]"
                       >
                         <span
                           className={`flex w-[1.375rem] items-center justify-center rounded-full py-[2px] transition ${
                             documentEditorViewMode === "rich-text"
-                              ? "bg-[#FFFDFC] dark:bg-slate-600 text-stone-700 dark:text-white shadow-[0_1px_2px_rgba(41,37,36,0.12)]"
+                              ? "bg-card text-stone-700 dark:text-white shadow-sm"
                               : "text-stone-500 dark:text-slate-400"
                           }`}
                         >
@@ -956,7 +919,7 @@ export function DocumentWorkspace({
                         <span
                           className={`flex w-[1.375rem] items-center justify-center rounded-full py-[2px] transition ${
                             documentEditorViewMode === "code"
-                              ? "bg-[#FFFDFC] dark:bg-slate-600 text-stone-700 dark:text-white shadow-[0_1px_2px_rgba(41,37,36,0.12)]"
+                              ? "bg-card text-stone-700 dark:text-white shadow-sm"
                               : "text-stone-500 dark:text-slate-400"
                           }`}
                         >
@@ -1011,7 +974,7 @@ export function DocumentWorkspace({
                           key={action}
                           type="button"
                           data-testid={`document-file-menu-${action}`}
-                          className="flex items-start gap-2 rounded-md px-2 py-1.5 text-left text-[0.72rem] leading-none text-stone-700 outline-none transition hover:bg-[#EEE9E1] focus-visible:bg-[#EEE9E1] dark:text-stone-300 dark:hover:bg-slate-700 dark:focus-visible:bg-slate-700"
+                          className="flex items-start gap-2 rounded-md px-2 py-1.5 text-left text-[0.72rem] leading-none text-stone-700 outline-none transition hover:bg-accent focus-visible:bg-accent dark:text-stone-300"
                           onClick={() => void handleCopyFileMenuAction(action)}
                         >
                           <Copy
@@ -1087,7 +1050,6 @@ export function DocumentWorkspace({
               editorViewMode={documentEditorViewMode}
               interactionMode={documentInteractionMode}
               backend={backend}
-              onCommentRailPresenceChange={setDocumentHasComments}
               onDirtyStateChange={handleDocumentDirtyStateChange}
               onLocalContentChange={onDocumentLocalContentChange}
               onSaveControllerChange={(controller) => {

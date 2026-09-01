@@ -1338,10 +1338,8 @@ describe("PageCard editor integration", () => {
       queryByTestId(rendered.container, "selection-menu-block-type"),
     ).toBeNull();
     expect(
-      rendered.container
-        .querySelector('[data-testid="document-review-rail"]')
-        ?.classList.contains("invisible"),
-    ).toBe(true);
+      queryByTestId(rendered.container, "document-review-rail"),
+    ).toBeNull();
   });
 
   it("switching a YAML endmatter-backed document to code mode shows the endmatter block", async () => {
@@ -1367,55 +1365,6 @@ describe("PageCard editor integration", () => {
     expect(rendered.container.textContent).toContain("comments:");
     expect(rendered.container.textContent).toContain("rd-c1:");
     expect(rendered.container.textContent).toContain("Needs a source.");
-  });
-
-  it("document code mode keeps rail space when comments exist", async () => {
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-code-2",
-        title: "Doc Code 2",
-        content: alphaCommentDocument("Paragraph"),
-      },
-      editorViewMode: "code",
-      selected: true,
-    });
-
-    expect(
-      rendered.container
-        .querySelector('[data-testid="document-page-shell"]')
-        ?.classList.contains("document-page-shell-no-comments"),
-    ).toBe(false);
-    expect(
-      queryByTestId(rendered.container, "document-review-rail"),
-    ).not.toBeNull();
-  });
-
-  it("document code mode does not keep rail space for fenced anchor examples", async () => {
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-code-examples",
-        title: "Doc Code Examples",
-        content: [
-          "```md",
-          'This is <del id="rd-s1">deleted</del> text.',
-          'This is <ins id="rd-s2">inserted</ins> text.',
-          'This is <span id="rd-s3"><del>old</del><ins>new</ins></span> replaced text.',
-          'This is <span id="rd-c1">commented</span> text.',
-          "```",
-        ].join("\n"),
-      },
-      editorViewMode: "code",
-      selected: true,
-    });
-
-    expect(
-      rendered.container
-        .querySelector('[data-testid="document-page-shell"]')
-        ?.classList.contains("document-page-shell-no-comments"),
-    ).toBe(true);
-    expect(
-      queryByTestId(rendered.container, "document-review-rail"),
-    ).toBeNull();
   });
 
   it("document code mode shows line numbers without the default dotted focus outline", async () => {
@@ -1836,37 +1785,6 @@ describe("PageCard editor integration", () => {
     expect(
       queryByTestId(rendered.container, "suggestion-decoration-active"),
     ).not.toBeNull();
-  });
-
-  it("centers document layout when there are no comments", async () => {
-    const rendered = await renderPageCard({
-      page: {
-        id: "doc-6",
-        title: "Doc 6",
-        content: "Just text",
-      },
-      selected: true,
-    });
-
-    expect(
-      rendered.container
-        .querySelector('[data-testid="document-page-shell"]')
-        ?.classList.contains("document-page-shell-no-comments"),
-    ).toBe(true);
-
-    await rendered.rerender({
-      page: {
-        id: "doc-6",
-        title: "Doc 6",
-        content: alphaCommentDocument("Just text"),
-      },
-    });
-
-    expect(
-      rendered.container
-        .querySelector('[data-testid="document-page-shell"]')
-        ?.classList.contains("document-page-shell-no-comments"),
-    ).toBe(false);
   });
 
   it("document props churn does not lose editor content or selection", async () => {

@@ -1129,12 +1129,6 @@ describe("review handoff watcher affordance", () => {
       "Your agent is now working in the background on this, in all likelihood. If our signal didn't make it, just click here to copy a line you can send it to keep going.",
     );
     expect(queryByTestId(document.body, "review-handoff-status")).toBeDefined();
-    expect(
-      queryByTestId(document.body, "review-handoff-toy-frame"),
-    ).not.toBeNull();
-    expect(
-      queryByTestId(document.body, "review-handoff-robots-toy"),
-    ).toBeDefined();
 
     await act(async () => {
       document.dispatchEvent(
@@ -1155,11 +1149,6 @@ describe("review handoff watcher affordance", () => {
 
     expect(onCompleteReview).toHaveBeenCalledTimes(1);
     expect(queryByTestId(document.body, "review-handoff-status")).toBeDefined();
-
-    const toy = getByTestId(document.body, "review-handoff-robots-toy");
-    await click(toy);
-
-    expect(document.body.textContent).toContain("Great work!");
 
     const copyLink = queryByTestId<HTMLButtonElement>(
       document.body,

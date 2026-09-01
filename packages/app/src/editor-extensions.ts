@@ -142,6 +142,16 @@ function readCommentAnchorIds(element: HTMLElement): string[] | null {
   return [outermost, ...parsed];
 }
 
+/**
+ * How a `code` element nested inside a review mark is painted, as a single
+ * literal Tailwind class string. The comment anchor and both suggestion
+ * appearances share it: a nested `code` keeps its inline ring but drops its own
+ * background, so the mark's colour shows through. It must stay one literal so
+ * Tailwind's source scanner sees every class in it.
+ */
+const NESTED_CODE_MARK_CLASS =
+  "[&_code]:bg-transparent [&_code]:inset-ring-1 [&_code]:inset-ring-slate-900/10 dark:[&_code]:inset-ring-slate-200/15";
+
 const CommentAnchor = Mark.create({
   name: "commentAnchor",
   priority: 1100,
@@ -193,8 +203,7 @@ const CommentAnchor = Mark.create({
     return [
       "span",
       mergeAttributes(HTMLAttributes, {
-        class:
-          "comment-anchor text-inherit box-decoration-clone [&_code]:bg-transparent [&_code]:shadow-[inset_0_0_0_1px_rgb(15_23_42/0.12)] dark:[&_code]:shadow-[inset_0_0_0_1px_rgb(226_232_240/0.15)]",
+        class: `comment-anchor text-inherit box-decoration-clone ${NESTED_CODE_MARK_CLASS}`,
       }),
       0,
     ];
@@ -467,7 +476,8 @@ function suggestionAppearance(kind: SuggestionKind): SuggestionAppearance {
 
 /**
  * The complete resting appearance of a suggestion of `kind`, as a single
- * space-separated literal Tailwind class string. This is the only place a
+ * space-separated Tailwind class string built from literals. This is the only
+ * place a
  * suggestion's resting color is decided, and it never encodes hover or
  * selection state — that state belongs to the decoration, which the mark cannot
  * know about. `insert` and `replace-new` share the insert appearance; `delete`
@@ -481,9 +491,9 @@ function suggestionAppearance(kind: SuggestionKind): SuggestionAppearance {
 function suggestionMarkClass(kind: SuggestionKind): string {
   switch (suggestionAppearance(kind)) {
     case "insert":
-      return "suggestion rounded-sm px-0.5 box-decoration-clone text-emerald-850 dark:text-emerald-300 bg-emerald-50/95 dark:bg-emerald-900/50 underline decoration-emerald-500/75 dark:decoration-emerald-400/60 underline-offset-[0.16em] [&_code]:bg-transparent [&_code]:shadow-[inset_0_0_0_1px_rgb(15_23_42/0.12)] dark:[&_code]:shadow-[inset_0_0_0_1px_rgb(226_232_240/0.15)]";
+      return `suggestion rounded-sm px-0.5 box-decoration-clone text-emerald-900 dark:text-emerald-300 bg-emerald-50/95 dark:bg-emerald-900/50 underline decoration-emerald-500/75 dark:decoration-emerald-400/60 underline-offset-[0.16em] ${NESTED_CODE_MARK_CLASS}`;
     case "delete":
-      return "suggestion rounded-sm px-0.5 box-decoration-clone text-rose-950 dark:text-rose-300 bg-rose-50/95 dark:bg-rose-900/35 line-through decoration-rose-600/75 dark:decoration-rose-400/60 [&_code]:bg-transparent [&_code]:shadow-[inset_0_0_0_1px_rgb(15_23_42/0.12)] dark:[&_code]:shadow-[inset_0_0_0_1px_rgb(226_232_240/0.15)]";
+      return `suggestion rounded-sm px-0.5 box-decoration-clone text-rose-950 dark:text-rose-300 bg-rose-50/95 dark:bg-rose-900/35 line-through decoration-rose-600/75 dark:decoration-rose-400/60 ${NESTED_CODE_MARK_CLASS}`;
   }
 }
 
@@ -696,8 +706,8 @@ type CommentDecorationBackground = "resting" | "highlighted" | "on-suggestion";
  */
 function commentDecorationClass(background: CommentDecorationBackground) {
   const backgroundClasses = {
-    resting: "bg-[#fff5c7] dark:bg-yellow-800/35",
-    highlighted: "bg-[#ffd000] dark:bg-amber-700/55",
+    resting: "bg-amber-100 dark:bg-yellow-800/35",
+    highlighted: "bg-yellow-400 dark:bg-amber-700/55",
     "on-suggestion": "bg-transparent dark:bg-transparent",
   }[background];
 

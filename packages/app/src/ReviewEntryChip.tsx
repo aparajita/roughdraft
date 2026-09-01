@@ -68,9 +68,7 @@ export function ReviewEntryChip({
       data-testid={`review-entry-chip-${entry.id}`}
       className={cn(
         "group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-md border px-2",
-        isCurrent
-          ? "border-[#DFDFDC] bg-white dark:border-slate-600 dark:bg-card"
-          : "border-transparent",
+        isCurrent ? "border-border bg-card" : "border-transparent",
         isResolved && "opacity-50",
       )}
     >

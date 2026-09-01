@@ -273,10 +273,10 @@ function CommentRow({
         <div
           aria-hidden="true"
           className={cn(
-            "flex size-5 shrink-0 items-center justify-center rounded-full border shadow-[0_1px_2px_rgba(15,23,42,0.08)]",
+            "flex size-5 shrink-0 items-center justify-center rounded-full border shadow-sm",
             isAiAuthor
               ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900 dark:text-sky-400"
-              : "border-[#D2C7B8] bg-[#DED8CE] text-stone-700 dark:border-slate-600 dark:bg-slate-700 dark:text-stone-300",
+              : "border-stone-300 bg-stone-300 text-stone-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300",
           )}
         >
           <AuthorIcon className="size-2.5 shrink-0" />
@@ -362,7 +362,7 @@ function CommentRow({
         </>
       ) : (
         <div
-          className="tiptap mt-1 min-h-0 text-[13px] leading-5 text-slate-700 dark:text-slate-300"
+          className="tiptap prose prose-sm prose-stone dark:prose-slate dark:prose-invert max-w-none mt-1 min-h-0 prose-code:before:content-none prose-code:after:content-none"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: a comment body is Markdown and renders through the document's own renderer.
           dangerouslySetInnerHTML={{ __html: bodyHtml }}
         />

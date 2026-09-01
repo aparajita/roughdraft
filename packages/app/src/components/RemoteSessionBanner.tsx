@@ -38,7 +38,7 @@ export function RemoteSessionBanner({ backend }: RemoteSessionBannerProps) {
     <div
       role="alert"
       aria-label="Remote session disconnected"
-      className="fixed top-3 left-1/2 z-50 flex w-[min(calc(100vw-1rem),52rem)] -translate-x-1/2 items-start gap-2.5 rounded-[8px] border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 px-3 py-3 text-amber-950 dark:text-amber-100 shadow-[0_14px_40px_rgba(120,53,15,0.18)] dark:shadow-[0_14px_40px_rgba(0,0,0,0.4)] sm:px-4"
+      className="fixed top-3 left-1/2 z-50 flex w-[min(calc(100vw-1rem),52rem)] -translate-x-1/2 items-start gap-2.5 rounded-[8px] border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 px-3 py-3 text-amber-950 dark:text-amber-100 shadow-lg sm:px-4"
     >
       <CloudOff
         className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400"

@@ -160,7 +160,7 @@ describe("Homepage", () => {
     expect(getByTestId(container, "homepage-subtitle-break")).not.toBeNull();
     expect(
       getByTestId(container, "homepage-subtitle-comment").className,
-    ).toContain("bg-[#fff5c7]");
+    ).toContain("bg-amber-100");
     expect(
       getByTestId(container, "homepage-subtitle-addition").className,
     ).toContain("bg-emerald-50");

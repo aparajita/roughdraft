@@ -18,10 +18,10 @@ The spec's "Review state ownership" section — moving every review record into 
 | 8   | [Suggestion Composer Popover](#-phase-8-suggestion-composer-popover) | ✅ Complete | —   |
 | 9   | [PageCard Orchestration](#-phase-9-pagecard-orchestration) | ✅ Complete | —   |
 | 10  | [Document Shell](#-phase-10-document-shell) | ✅ Complete | —   |
-| 11  | [Tests](#-phase-11-tests) | 🔄 In Progress | —   |
+| 11  | [Tests](#-phase-11-tests) | ✅ Complete | —   |
 | 12  | [Screenshot Guide](#-phase-12-screenshot-guide) | ✅ Complete | —   |
-| 13  | [Gate](#-phase-13-gate) | ⏸️ Blocked by 9, 10, 11, 12 | —   |
-| 14  | [Manual UI Verification](#-phase-14-manual-ui-verification) | ⏸️ Blocked by 13 | —   |
+| 13  | [Gate](#-phase-13-gate) | ✅ Complete | —   |
+| 14  | [Manual UI Verification](#-phase-14-manual-ui-verification) | 🔄 In Progress | —   |
 
 ---
 
@@ -458,9 +458,9 @@ The `layout="embedded-demo"` variant is used by `packages/app/src/RoughdraftForm
 
 ---
 
-## 🔄 Phase 11: Tests
+## ✅ Phase 11: Tests
 
-**Status:** In Progress — new coverage written; awaiting a decision on 13 stale tests (see below)  
+**Status:** Complete  
 **BlockedBy:** 9  
 **Files:** packages/app/test/document-comments.test.ts, packages/app/test/page-card.test.tsx, packages/app/test/review.test.ts, packages/app/e2e/anchor-review.spec.ts, scripts/check-test-selectors.mjs  
 **Recommended model/effort:** Opus, high — deciding what survives the rewrite and what is deleted, and writing e2e flows against a modal dialog.
@@ -532,9 +532,9 @@ The guide's Capture Matrix currently lists rows whose states no longer exist aft
 
 ---
 
-## ⏳ Phase 13: Gate
+## ✅ Phase 13: Gate
 
-**Status:** Pending  
+**Status:** Complete  
 **BlockedBy:** 9, 10, 11, 12  
 **Files:** —  
 **Recommended model/effort:** Sonnet, low — running the project's checks and reporting exactly what they print.
@@ -548,9 +548,9 @@ The guide's Capture Matrix currently lists rows whose states no longer exist aft
 
 ---
 
-## ⏳ Phase 14: Manual UI Verification
+## 🔄 Phase 14: Manual UI Verification
 
-**Status:** Pending  
+**Status:** In Progress — fixture open, awaiting the user's confirmations  
 **BlockedBy:** 13  
 **Files:** —  
 **Recommended model/effort:** Sonnet, low — driving the app and handing the user a checklist.
