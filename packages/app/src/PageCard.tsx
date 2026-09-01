@@ -1688,8 +1688,10 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       const index = entries.findIndex((entry) => entry.id === currentEntryId);
       if (index < 0) return;
 
-      // The sequence does not wrap: both ends are clamped.
-      const nextEntry = entries[index + offset];
+      // The sequence wraps at both ends.
+      const nextIndex =
+        (((index + offset) % entries.length) + entries.length) % entries.length;
+      const nextEntry = entries[nextIndex];
       if (!nextEntry) return;
 
       setCurrentEntry(nextEntry.id);

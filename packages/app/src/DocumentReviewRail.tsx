@@ -7,6 +7,7 @@ import {
 } from "./document-comments";
 import { cn } from "./lib/utils";
 import { ReviewEntryChip } from "./ReviewEntryChip";
+import { ReviewEntryNavButton } from "./ReviewEntryNavButton";
 
 const RAIL_BOTTOM_PADDING = 24;
 
@@ -194,26 +195,22 @@ export function DocumentReviewRail({
             : `${entries.length}`}
         </span>
         <div className="ml-auto flex items-center gap-0.5">
-          <button
-            type="button"
-            data-testid="review-entry-nav-action-previous"
-            aria-label="Previous entry"
-            className="flex size-6 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 disabled:cursor-not-allowed disabled:opacity-40 dark:text-stone-400 dark:hover:bg-slate-700 dark:focus-visible:ring-slate-600"
-            disabled={currentIndex <= 0}
+          <ReviewEntryNavButton
+            testId="review-entry-nav-action-previous"
+            ariaLabel="Previous entry"
+            icon={ChevronUp}
+            size="sm"
+            disabled={entries.length <= 1}
             onClick={onGoToPreviousEntry}
-          >
-            <ChevronUp className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            data-testid="review-entry-nav-action-next"
-            aria-label="Next entry"
-            className="flex size-6 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 disabled:cursor-not-allowed disabled:opacity-40 dark:text-stone-400 dark:hover:bg-slate-700 dark:focus-visible:ring-slate-600"
-            disabled={currentIndex < 0 || currentIndex === entries.length - 1}
+          />
+          <ReviewEntryNavButton
+            testId="review-entry-nav-action-next"
+            ariaLabel="Next entry"
+            icon={ChevronDown}
+            size="sm"
+            disabled={entries.length <= 1}
             onClick={onGoToNextEntry}
-          >
-            <ChevronDown className="size-3.5" />
-          </button>
+          />
         </div>
       </div>
 
