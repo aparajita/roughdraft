@@ -511,11 +511,11 @@ function suggestionDecorationClass(
     case "insert":
       return state === "hovered"
         ? "rounded-[0.2rem] bg-emerald-100/95 dark:bg-emerald-900/65"
-        : "rounded-[0.2rem] bg-emerald-200/95 dark:bg-emerald-900/80";
+        : "rounded-[0.2rem] bg-emerald-200/95 dark:bg-emerald-900/80 ring-1 ring-emerald-500/75 dark:ring-emerald-400/60";
     case "delete":
       return state === "hovered"
         ? "rounded-[0.2rem] bg-rose-100/95 dark:bg-rose-900/50"
-        : "rounded-[0.2rem] bg-rose-200/95 dark:bg-rose-900/65";
+        : "rounded-[0.2rem] bg-rose-200/95 dark:bg-rose-900/65 ring-1 ring-rose-500/75 dark:ring-rose-400/60";
   }
 }
 
@@ -755,13 +755,16 @@ type CommentDecorationBackground = "resting" | "highlighted" | "on-suggestion";
  * so the rest is written once here.
  */
 function commentDecorationClass(background: CommentDecorationBackground) {
+  if (background === "on-suggestion") {
+    return "comment-decoration rounded-sm px-0.5 text-inherit box-decoration-clone bg-transparent dark:bg-transparent transition-colors duration-[140ms]";
+  }
+
   const backgroundClasses = {
-    resting: "bg-blue-100 dark:bg-blue-400/70",
-    highlighted: "bg-blue-400 dark:bg-blue-700",
-    "on-suggestion": "bg-transparent dark:bg-transparent",
+    resting: "bg-blue-50/95 dark:bg-blue-900/50",
+    highlighted: "bg-blue-200/95 dark:bg-blue-900/90 ring-1 ring-blue-500/75 dark:ring-blue-400/60",
   }[background];
 
-  return `comment-decoration px-0.5 text-inherit box-decoration-clone ${backgroundClasses} transition-colors duration-[140ms]`;
+  return `comment-decoration rounded-sm px-0.5 text-blue-900 dark:text-blue-300 box-decoration-clone ${backgroundClasses} transition-colors duration-[140ms]`;
 }
 
 function createCommentHighlightDecorations(
