@@ -569,6 +569,18 @@ function scrollAnchorIntoView(anchor: HTMLElement) {
   if (delta != null) container.scrollBy({ top: delta });
 }
 
+/** A document thread has no anchor, so navigating to it scrolls the document pane to the top instead. */
+function scrollDocumentPaneToTop(editor: Editor | null) {
+  if (!editor) return;
+
+  const container = findScrollContainer(editor.view.dom);
+  if (container) {
+    container.scrollTo({ top: 0 });
+  } else {
+    window.scrollTo({ top: 0 });
+  }
+}
+
 /** The document text an entry is anchored to, or null when it has no anchor. */
 function resolveEntryExcerpt(
   editor: Editor | null,
@@ -1034,6 +1046,11 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     // The anchor is read after the document has drawn the change that made this
     // entry current — accepting a suggestion moves every anchor below it.
     requestAnimationFrame(() => {
+      if (entry.kind === "document-comment") {
+        scrollDocumentPaneToTop(editorRef.current);
+        return;
+      }
+
       const anchor = findEntryAnchorElement(editorRef.current, entry);
       if (anchor) scrollAnchorIntoView(anchor);
     });
