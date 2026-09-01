@@ -1250,6 +1250,11 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
     const { from, to } = currentEditor.state.selection;
 
+    // Collapsing the selection here, rather than leaving it to the dialog's
+    // close handler, keeps the anchor range read above intact for both the
+    // exact-match reopen and the new-comment path below.
+    currentEditor.commands.setTextSelection(to);
+
     // A selection matching an anchor's range exactly names the same text a
     // comment already sits on: open that thread rather than filing a second,
     // independent thread over identical text.
