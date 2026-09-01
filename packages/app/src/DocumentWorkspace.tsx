@@ -645,7 +645,7 @@ export function DocumentWorkspace({
     <div
       className={cn(
         "min-h-0 flex-1 overflow-y-auto px-6 pb-4 sm:px-6",
-        conflictNotice ? "pt-40 sm:pt-28" : "pt-6",
+        conflictNotice ? "pt-40 sm:pt-28" : "pt-4",
       )}
     >
       <RemoteSessionBanner backend={backend} />
@@ -679,7 +679,7 @@ export function DocumentWorkspace({
                   type="button"
                   data-testid="review-handoff-button"
                   size="lg"
-                  className="h-9 rounded-r-none rounded-l-[7px] border-0 bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-stone-700 focus-visible:ring-ring disabled:opacity-100"
+                  className="h-8 rounded-r-none rounded-l-[7px] border-0 bg-primary dark:bg-slate-700 dark:text-slate-100 px-3 text-sm font-semibold text-primary-foreground hover:bg-stone-700 dark:hover:bg-slate-600 focus-visible:ring-ring disabled:opacity-100"
                   disabled={reviewHandoffButtonDisabled}
                   aria-disabled={reviewHandoffButtonDisabled || undefined}
                   onClick={() => {
@@ -711,7 +711,7 @@ export function DocumentWorkspace({
                       type="button"
                       data-testid="review-handoff-comment-trigger"
                       size="icon-lg"
-                      className="h-9 w-8 rounded-l-none rounded-r-[7px] border-0 bg-primary text-primary-foreground hover:bg-stone-700 focus-visible:ring-ring disabled:opacity-100"
+                      className="h-8 w-8 rounded-l-none rounded-r-[7px] border-0 bg-primary dark:bg-slate-700 text-primary-foreground dark:text-slate-100 hover:bg-stone-700 dark:hover:bg-slate-600 focus-visible:ring-ring disabled:opacity-100"
                       disabled={reviewHandoffDisabled}
                       aria-label="Add overall handoff comment"
                     >
@@ -762,7 +762,7 @@ export function DocumentWorkspace({
                       type="submit"
                       data-testid="review-handoff-submit-comment"
                       size="lg"
-                      className="w-full rounded-[7px] bg-black text-sm font-semibold text-white hover:bg-black/85 focus-visible:ring-black/25 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                      className="w-full rounded-[7px] bg-black text-sm font-semibold bg-primary dark:bg-slate-700 text-primary-foreground dark:text-slate-100 hover:bg-stone-700 dark:hover:bg-slate-600"
                       disabled={!trimmedOverallComment}
                     >
                       <CheckCheck className="size-4" />
