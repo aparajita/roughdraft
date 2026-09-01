@@ -236,6 +236,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: var(--color-stone-50);
   --foreground: var(--color-stone-900);
   --card: #fff;
@@ -258,6 +259,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: var(--color-slate-950);
   --foreground: var(--color-slate-50);
   --card: var(--color-slate-900);
