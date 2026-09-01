@@ -321,59 +321,6 @@
     border-left-color: rgb(226 232 240);
   }
 
-  .rfm-source-editor .cm-editor {
-    min-height: calc(70vh + 4.5rem);
-  }
-
-  .rfm-source-editor .cm-scroller {
-    min-height: calc(70vh + 4.5rem);
-  }
-
-  .rfm-source-editor .cm-content {
-    min-height: 19rem;
-    padding: 1rem;
-  }
-
-  .rfm-source-editor .cm-line {
-    padding: 0;
-  }
-
-  .rfm-source-editor .cm-content,
-  .rfm-source-editor .cm-line {
-    caret-color: rgb(226 232 240);
-  }
-
-  .rfm-source-editor .cm-cursor,
-  .rfm-source-editor .cm-dropCursor {
-    border-left-color: rgb(226 232 240);
-  }
-
-  .rfm-source-editor .cm-gutters {
-    color: rgb(148 163 184);
-  }
-
-  .rfm-source-editor .cm-activeLineGutter {
-    color: rgb(226 232 240);
-  }
-
-  .rfm-result-editor .tiptap {
-    min-height: 17rem;
-    --editor-font-size: 14px;
-  }
-
-  .rfm-result-editor .tiptap h1 {
-    font-size: 1.65em;
-  }
-
-  .rfm-result-editor .tiptap h2 {
-    margin-top: 1.2em;
-    font-size: 1.3em;
-  }
-
-  .rfm-result-editor .tiptap h3 {
-    margin-top: 1em;
-    font-size: 1.12em;
-  }
 }
 
 @keyframes review-handoff-robots-pop {
