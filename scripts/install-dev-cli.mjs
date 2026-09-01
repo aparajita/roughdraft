@@ -107,6 +107,8 @@ function readExistingTarget(wrapperPath) {
   return match?.[1] ?? null;
 }
 
+export { sanitizeSuffix };
+
 export function installDevCli(options = {}) {
   const env = options.env ?? process.env;
   const repoRoot = options.repoRoot ?? path.resolve(import.meta.dirname, "..");
