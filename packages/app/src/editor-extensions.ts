@@ -761,7 +761,8 @@ function commentDecorationClass(background: CommentDecorationBackground) {
 
   const backgroundClasses = {
     resting: "bg-blue-50/95 dark:bg-blue-900/50",
-    highlighted: "bg-blue-200/95 dark:bg-blue-900/90 ring-1 ring-blue-500/75 dark:ring-blue-400/60",
+    highlighted:
+      "bg-blue-200/95 dark:bg-blue-900/90 ring-1 ring-blue-500/75 dark:ring-blue-400/60",
   }[background];
 
   return `comment-decoration rounded-sm px-0.5 text-blue-900 dark:text-blue-300 box-decoration-clone ${backgroundClasses} transition-colors duration-[140ms]`;
