@@ -1,5 +1,11 @@
 import { Check, X } from "lucide-react";
-import { type CSSProperties, type KeyboardEvent, useState } from "react";
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { CommentEditorList } from "./CommentEditorList";
 import { Button } from "./components/ui/button";
 import {
@@ -78,6 +84,12 @@ export function ReviewThreadDialog({
   onRejectSuggestion,
 }: ReviewThreadDialogProps) {
   const entryId = entry?.id ?? null;
+  const replyInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (entryId !== null) replyInputRef.current?.focus();
+  }, [entryId]);
+
   // A draft belongs to the thread it was typed into: it carries that thread's
   // id, so opening another entry shows an empty composer rather than the text
   // meant for somewhere else.
@@ -185,6 +197,7 @@ export function ReviewThreadDialog({
             </div>
             <div className="flex flex-col gap-3">
               <Textarea
+                ref={replyInputRef}
                 data-testid="review-thread-dialog-composer"
                 aria-label="Reply"
                 placeholder="Reply…"
