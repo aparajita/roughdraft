@@ -15,7 +15,13 @@ import {
   X,
 } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   getAddCommentShortcutLabel,
   matchesAddCommentShortcut,
@@ -68,6 +74,8 @@ interface LinkPopoverState {
   existingLink: boolean;
   focusInput: boolean;
 }
+
+const SELECTION_MENU_VIEWPORT_MARGIN = 8;
 
 function getNavigatorPlatform() {
   const navigatorWithUserAgentData = navigator as Navigator & {
@@ -264,6 +272,7 @@ export function EditorContextMenu({
     useState<LinkPopoverState | null>(null);
   const [linkDraft, setLinkDraft] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
+  const selectionMenuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
@@ -366,6 +375,44 @@ export function EditorContextMenu({
       top: nextTop,
     });
   }, [editor, onSuggestInsertion]);
+
+  /**
+   * The menu is anchored to the selection via `-translate-x-1/2
+   * -translate-y-full`, a Tailwind v4 utility that sets the CSS `translate`
+   * property (not `transform`), which can push it past the viewport edge for
+   * a selection near the top or a side of the window. Clearing the inline
+   * `translate` override first measures the anchored (unclamped) position —
+   * with the class's own `translate` value still applying — then an override
+   * on that same property shifts it back on-screen by the amount it
+   * overflowed. An override on `transform` instead would compose with, not
+   * replace, the class's `translate` value and double the offset.
+   */
+  useLayoutEffect(() => {
+    const menu = selectionMenuRef.current;
+    if (!menu || !selectionActionPosition) return;
+
+    menu.style.translate = "";
+    const rect = menu.getBoundingClientRect();
+    const margin = SELECTION_MENU_VIEWPORT_MARGIN;
+
+    let dx = 0;
+    if (rect.left < margin) {
+      dx = margin - rect.left;
+    } else if (rect.right > window.innerWidth - margin) {
+      dx = window.innerWidth - margin - rect.right;
+    }
+
+    let dy = 0;
+    if (rect.top < margin) {
+      dy = margin - rect.top;
+    } else if (rect.bottom > window.innerHeight - margin) {
+      dy = window.innerHeight - margin - rect.bottom;
+    }
+
+    if (dx !== 0 || dy !== 0) {
+      menu.style.translate = `calc(-50% + ${dx}px) calc(-100% + ${dy}px)`;
+    }
+  }, [selectionActionPosition]);
 
   const updateLinkPopover = useCallback(() => {
     setLinkPopoverState((current) => {
@@ -710,6 +757,7 @@ export function EditorContextMenu({
       {children}
       {selectionActionPosition && !linkPopoverState ? (
         <div
+          ref={selectionMenuRef}
           data-testid="selection-menu"
           className="absolute z-30 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-full rounded-2xl border border-slate-200/90 dark:border-slate-700/90 bg-white/95 dark:bg-slate-800/95 p-2 shadow-xl backdrop-blur-xl"
           style={{
