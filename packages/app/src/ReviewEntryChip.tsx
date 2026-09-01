@@ -4,14 +4,14 @@ import { cn } from "./lib/utils";
 import { ReviewButton } from "./ReviewButton";
 
 export interface ReviewEntryChipProps {
-  entry: ReviewEntry;
+  entry: ReviewEntry | null;
   isCurrent: boolean;
   isResolved: boolean;
-  onSelect: () => void;
-  onOpenDialog: () => void;
-  onDeleteThread: (rootCommentId: string) => void;
-  onAcceptSuggestion: (suggestionId: string) => void;
-  onRejectSuggestion: (suggestionId: string) => void;
+  onSelect?: () => void;
+  onOpenDialog?: () => void;
+  onDeleteThread?: (rootCommentId: string) => void;
+  onAcceptSuggestion?: (suggestionId: string) => void;
+  onRejectSuggestion?: (suggestionId: string) => void;
 }
 
 const SUGGESTION_OPERATION_LABELS: Record<SuggestionOperation, string> = {
@@ -38,6 +38,22 @@ export function ReviewEntryChip({
   onAcceptSuggestion,
   onRejectSuggestion,
 }: ReviewEntryChipProps) {
+  if (!entry) {
+    return (
+      <div
+        data-testid="review-entry-chip-empty"
+        className={cn(
+          "flex h-8 w-full items-center gap-1.5 rounded-md border px-2",
+          isCurrent ? "border-border bg-card" : "border-transparent",
+        )}
+      >
+        <span className="truncate whitespace-nowrap text-sm leading-5 text-muted-foreground">
+          No comments
+        </span>
+      </div>
+    );
+  }
+
   const commentCount = entry.commentIds.length;
 
   let label: string;
@@ -94,7 +110,7 @@ export function ReviewEntryChip({
           label="Open thread"
           color="neutral"
           testId={`review-entry-chip-${entry.id}-action-open`}
-          onClick={onOpenDialog}
+          onClick={() => onOpenDialog?.()}
         />
         {showCheckAndCross && entry.kind === "suggestion" && (
           <>
@@ -103,14 +119,14 @@ export function ReviewEntryChip({
               label="Accept suggestion"
               color="success"
               testId={`review-entry-chip-${entry.id}-action-accept`}
-              onClick={() => onAcceptSuggestion(entry.id)}
+              onClick={() => onAcceptSuggestion?.(entry.id)}
             />
             <ReviewButton
               icon={X}
               label="Reject suggestion"
               color="danger"
               testId={`review-entry-chip-${entry.id}-action-reject`}
-              onClick={() => onRejectSuggestion(entry.id)}
+              onClick={() => onRejectSuggestion?.(entry.id)}
             />
           </>
         )}
@@ -120,7 +136,7 @@ export function ReviewEntryChip({
         label="Delete thread"
         color="danger"
         testId={`review-entry-chip-${entry.id}-action-delete`}
-        onClick={() => onDeleteThread(entry.id)}
+        onClick={() => onDeleteThread?.(entry.id)}
       />
     </div>
   );

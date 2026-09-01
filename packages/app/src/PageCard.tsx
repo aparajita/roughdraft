@@ -1801,12 +1801,11 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   );
 
   const showReview = interactionMode !== "viewing";
-  const hasReviewFooter = showReview && entries.length > 0;
 
   useEffect(() => {
-    onReviewFooterVisibleChange?.(hasReviewFooter);
+    onReviewFooterVisibleChange?.(showReview);
     return () => onReviewFooterVisibleChange?.(false);
-  }, [hasReviewFooter, onReviewFooterVisibleChange]);
+  }, [showReview, onReviewFooterVisibleChange]);
 
   const contentCardClass = cn(
     "rounded-[0.75rem] border bg-card shadow-lg",
@@ -1818,7 +1817,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     "pb-24",
     // The footer is fixed over the document below the rail breakpoint, so the
     // document ends above it rather than behind it.
-    hasReviewFooter && "pb-[var(--review-footer-height)] rail:pb-24",
+    showReview && "pb-[var(--review-footer-height)] rail:pb-24",
   );
   const reviewRailClass =
     "review-layout-rail document-comment-rail hidden rail:block";
@@ -1832,7 +1831,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
         data-testid="document-page-shell"
         className={cn(
           reviewLayoutGridClass,
-          hasReviewFooter && "review-layout-grid--centered",
+          showReview && "review-layout-grid--centered",
         )}
       >
         <div className={reviewLayoutMainClass}>

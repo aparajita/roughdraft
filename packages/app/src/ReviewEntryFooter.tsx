@@ -33,14 +33,15 @@ export function ReviewEntryFooter({
   onAcceptSuggestion,
   onRejectSuggestion,
 }: ReviewEntryFooterProps) {
-  if (entries.length === 0) {
-    return null;
-  }
-
   const currentIndex = currentEntryId
     ? entries.findIndex((entry) => entry.id === currentEntryId)
     : -1;
-  const entry = currentIndex >= 0 ? entries[currentIndex] : entries[0];
+  const entry =
+    entries.length === 0
+      ? null
+      : currentIndex >= 0
+        ? entries[currentIndex]
+        : entries[0];
   const canNavigate = entries.length > 1;
 
   return (
@@ -60,12 +61,12 @@ export function ReviewEntryFooter({
         <ReviewEntryChip
           entry={entry}
           isCurrent
-          isResolved={resolvedEntryIds.has(entry.id)}
-          onSelect={() => onSelectEntry(entry.id)}
-          onOpenDialog={() => onOpenDialog(entry.id)}
-          onDeleteThread={onDeleteThread}
-          onAcceptSuggestion={onAcceptSuggestion}
-          onRejectSuggestion={onRejectSuggestion}
+          isResolved={entry ? resolvedEntryIds.has(entry.id) : false}
+          onSelect={entry ? () => onSelectEntry(entry.id) : undefined}
+          onOpenDialog={entry ? () => onOpenDialog(entry.id) : undefined}
+          onDeleteThread={entry ? onDeleteThread : undefined}
+          onAcceptSuggestion={entry ? onAcceptSuggestion : undefined}
+          onRejectSuggestion={entry ? onRejectSuggestion : undefined}
         />
       </div>
       <ReviewEntryNavButton

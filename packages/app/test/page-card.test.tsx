@@ -1911,6 +1911,23 @@ describe("PageCard editor integration", () => {
     expect(rendered.getEditor().getText()).toContain("Focus target");
   });
 
+  it("shows a 'No comments' footer chip in review mode when the document has no entries", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-no-comments-1",
+        title: "Doc No Comments 1",
+        content: "Plain text",
+      },
+      interactionMode: "suggesting",
+      selected: true,
+    });
+
+    const footer = getByTestId(rendered.container, "review-entry-footer");
+    expect(getByTestId(footer, "review-entry-chip-empty").textContent).toBe(
+      "No comments",
+    );
+  });
+
   it("non-editor prop churn does not recreate the editor", async () => {
     const rendered = await renderPageCard({
       page: {
