@@ -12,8 +12,17 @@ const TRAFFIC_LIGHT_COUNT = 3;
 const REVIEW_THREAD_COUNT = 2;
 
 // Desktop layout.
+// The popup overhangs the terminal once the viewport exceeds the storyboard
+// section's own max-width (72rem, i.e. 1296px at the app's 18px root font
+// size), so the desktop viewport here must clear that threshold.
+const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 /** The document preview is shrunk to this fraction so a full page fits. */
 const DESKTOP_DOCUMENT_SCALE = 0.6;
+/**
+ * Clearance kept off the activation line when scrolling a scene to it, so the
+ * check doesn't depend on a sub-pixel-exact scroll landing on the boundary.
+ */
+const DESKTOP_ACTIVATION_MARGIN_PX = 24;
 /** Decimal places the measured transform scale is compared to. */
 const DOCUMENT_SCALE_PRECISION = 2;
 /** A rail thread tracks its anchor: at most this far from the anchor's top. */
@@ -45,6 +54,7 @@ test.describe("homepage workflow storyboard", () => {
   test("renders the plan-review storyboard above the Markdown section @smoke", async ({
     page,
   }, testInfo) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/");
 
     const storyboard = page.getByTestId("homepage-workflow-storyboard");
@@ -112,10 +122,13 @@ test.describe("homepage workflow storyboard", () => {
       });
     });
     await page.evaluate(
-      (activationOffset) => {
-        window.scrollBy(0, -activationOffset - 1);
+      ({ activationOffset, margin }) => {
+        window.scrollBy(0, -activationOffset - margin);
       },
-      await getDesktopActivationOffset(),
+      {
+        activationOffset: await getDesktopActivationOffset(),
+        margin: DESKTOP_ACTIVATION_MARGIN_PX,
+      },
     );
     await expect(agentWorkTranscript).toHaveAttribute(
       "data-agent-work-visible",
@@ -128,10 +141,13 @@ test.describe("homepage workflow storyboard", () => {
       });
     });
     await page.evaluate(
-      (activationOffset) => {
-        window.scrollBy(0, -activationOffset);
+      ({ activationOffset, margin }) => {
+        window.scrollBy(0, -activationOffset + margin);
       },
-      await getDesktopActivationOffset(),
+      {
+        activationOffset: await getDesktopActivationOffset(),
+        margin: DESKTOP_ACTIVATION_MARGIN_PX,
+      },
     );
     await expect(agentWorkTranscript).toHaveAttribute(
       "data-agent-work-visible",

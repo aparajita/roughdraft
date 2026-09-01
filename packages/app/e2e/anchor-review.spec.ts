@@ -44,10 +44,10 @@ test.describe("Anchor review flows", () => {
     );
 
     await openMarkdownFile(page, filePath);
-    // The footer renders the current entry's chip too, so every chip testid is
-    // in the DOM twice at any viewport; the rail is the one on screen here.
+    // The rail stays permanently hidden (`--breakpoint-rail` is unreachable);
+    // the footer is the only place the chip renders.
     await page
-      .getByTestId("document-review-rail")
+      .getByTestId("review-entry-footer")
       .getByTestId("review-entry-chip-rd-c1-action-open")
       .click();
 
@@ -292,12 +292,15 @@ test.describe("Anchor review flows", () => {
     await openMarkdownFile(page, filePath);
     await expect(page.locator('[id="rd-s2"]')).toBeVisible();
 
-    // The middle suggestion, so advancing to the next entry is distinguishable
-    // from falling back to the first one.
-    await page
-      .getByTestId("document-review-rail")
-      .getByTestId("review-entry-chip-rd-s2-action-open")
-      .click();
+    // The rail stays permanently hidden (`--breakpoint-rail` is unreachable);
+    // the footer only ever renders the current entry's chip, so advance to
+    // the middle suggestion first, distinguishing it from falling back to the
+    // first one.
+    const footer = page.getByTestId("review-entry-footer");
+    await footer.getByTestId("review-entry-footer-action-next").click();
+    await expect(footer.getByTestId("review-entry-chip-rd-s2")).toBeVisible();
+
+    await footer.getByTestId("review-entry-chip-rd-s2-action-open").click();
     await expect(page.getByTestId("review-thread-dialog")).toBeVisible();
 
     await page.getByTestId("review-thread-dialog-action-accept").click();
@@ -306,9 +309,7 @@ test.describe("Anchor review flows", () => {
     await expect
       .poll(() => readProjectFile(projectDir, "suggestions.md"))
       .toContain("Remove there.");
-    await expect(page.getByTestId("review-entry-nav-position")).toHaveText(
-      "2 of 2",
-    );
+    await expect(footer.getByTestId("review-entry-chip-rd-s3")).toBeVisible();
 
     logE2eEvent("anchors.suggestions-applied", {
       file: "suggestions.md",
