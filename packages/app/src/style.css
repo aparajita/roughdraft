@@ -200,7 +200,8 @@
 }
 
 @theme {
-  --breakpoint-rail: 950px;
+  /* We'll keep the rail code, but I prefer the footer navigation interface */
+  --breakpoint-rail: 10000px;
   --document-measure: 38rem;
   --review-footer-height: 3.5rem;
 }
