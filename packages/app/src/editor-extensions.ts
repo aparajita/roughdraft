@@ -706,8 +706,8 @@ type CommentDecorationBackground = "resting" | "highlighted" | "on-suggestion";
  */
 function commentDecorationClass(background: CommentDecorationBackground) {
   const backgroundClasses = {
-    resting: "bg-amber-100 dark:bg-yellow-800/35",
-    highlighted: "bg-yellow-400 dark:bg-amber-700/55",
+    resting: "bg-blue-100 dark:bg-blue-500",
+    highlighted: "bg-blue-400 dark:bg-blue-700",
     "on-suggestion": "bg-transparent dark:bg-transparent",
   }[background];
 

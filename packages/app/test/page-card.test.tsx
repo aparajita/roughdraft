@@ -1664,6 +1664,69 @@ describe("PageCard editor integration", () => {
     expect(savedMarkdown).not.toContain("rd-c2");
   });
 
+  it("adding a comment on an already-commented range reopens its existing thread", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-exact-anchor-overlap-1",
+        title: "Doc Exact Anchor Overlap 1",
+        content: alphaCommentDocument("Paragraph"),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    await selectText(rendered.getEditor(), "alpha");
+    await addCommentWithShortcut();
+
+    const dialog = getThreadDialog();
+    expect(getByTestId(dialog, "comment-row-rd-c1").textContent).toContain(
+      "Comment body",
+    );
+  });
+
+  it("adding a comment on a range that contains an existing anchor opens a new thread", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-nested-anchor-overlap-1",
+        title: "Doc Nested Anchor Overlap 1",
+        content: reviewDocument(
+          '<span id="rd-c1">alpha</span> beta',
+          commentRecords({ id: "rd-c1", body: "Comment body" }),
+        ),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    // "alpha" and " beta" are separate text nodes on either side of the
+    // anchor mark boundary, so the selection spans two nodes rather than one
+    // contiguous run findTextRange can match by substring.
+    const editor = rendered.getEditor();
+    const alphaRange = findTextRange(editor, "alpha");
+    const betaRange = findTextRange(editor, "beta");
+    expect(alphaRange).not.toBeNull();
+    expect(betaRange).not.toBeNull();
+
+    await act(async () => {
+      editor.commands.focus();
+      editor.commands.setTextSelection({
+        from: alphaRange?.from ?? 0,
+        to: betaRange?.to ?? 0,
+      });
+    });
+    await flushReact();
+
+    await addCommentWithShortcut();
+
+    const dialog = getThreadDialog();
+    expect(
+      getByTestId(dialog, "review-thread-dialog-excerpt").textContent,
+    ).toBe("alpha beta");
+    expect(queryByTestId(dialog, "comment-row-rd-c1")).toBeNull();
+  });
+
   it("saving a reply to a YAML endmatter-backed suggestion preserves split endmatter", async () => {
     const rendered = await renderPageCard({
       page: {

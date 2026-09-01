@@ -95,6 +95,24 @@ function getMarkRanges(editor: Editor, markName: string): MarkRange[] {
   return ranges;
 }
 
+/**
+ * The comment anchor whose range exactly matches the given range, if any. A
+ * selection that merely contains or is contained by an anchor is a new,
+ * distinct nested comment; only an exact match reuses the same anchor's
+ * thread rather than adding a second one over identical text.
+ */
+export function findExactCommentAnchorMatch(
+  editor: Editor,
+  from: number,
+  to: number,
+): Mark | null {
+  return (
+    getMarkRanges(editor, "commentAnchor").find(
+      (range) => range.from === from && range.to === to,
+    )?.mark ?? null
+  );
+}
+
 function selectionPartiallyOverlapsAnchor(editor: Editor): boolean {
   const { from, to, empty } = editor.state.selection;
   if (empty) return false;

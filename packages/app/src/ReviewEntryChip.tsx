@@ -1,6 +1,7 @@
-import { Check, PencilLine, X } from "lucide-react";
+import { Check, PencilLine, Trash2, X } from "lucide-react";
 import type { ReviewEntry, SuggestionOperation } from "./document-comments";
 import { cn } from "./lib/utils";
+import { ReviewButton } from "./ReviewButton";
 
 export interface ReviewEntryChipProps {
   entry: ReviewEntry;
@@ -8,6 +9,7 @@ export interface ReviewEntryChipProps {
   isResolved: boolean;
   onSelect: () => void;
   onOpenDialog: () => void;
+  onDeleteThread: (rootCommentId: string) => void;
   onAcceptSuggestion: (suggestionId: string) => void;
   onRejectSuggestion: (suggestionId: string) => void;
 }
@@ -32,6 +34,7 @@ export function ReviewEntryChip({
   isResolved,
   onSelect,
   onOpenDialog,
+  onDeleteThread,
   onAcceptSuggestion,
   onRejectSuggestion,
 }: ReviewEntryChipProps) {
@@ -67,62 +70,54 @@ export function ReviewEntryChip({
     <div
       data-testid={`review-entry-chip-${entry.id}`}
       className={cn(
-        "group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-md border px-2",
+        "group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-md border px-1",
         isCurrent ? "border-border bg-card" : "border-transparent",
         isResolved && "opacity-50",
       )}
     >
       <button
         type="button"
-        className="absolute inset-0 flex items-center px-2 text-left"
+        className="flex items-center px-1 text-left"
         onClick={onSelect}
       >
         <span className="truncate whitespace-nowrap text-sm leading-5 text-slate-700 dark:text-slate-300">
           {label}
         </span>
       </button>
-      <div className="relative ml-auto flex shrink-0 items-center gap-0.5">
-        <button
-          type="button"
-          data-testid={`review-entry-chip-${entry.id}-action-open`}
-          aria-label="Open thread"
-          className="flex size-6 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 dark:hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 dark:text-slate-400 dark:hover:bg-slate-700 dark:focus-visible:ring-slate-600"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenDialog();
-          }}
-        >
-          <PencilLine className="size-3.5" />
-        </button>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <ReviewButton
+          icon={PencilLine}
+          label="Open thread"
+          color="neutral"
+          testId={`review-entry-chip-${entry.id}-action-open`}
+          onClick={onOpenDialog}
+        />
         {showCheckAndCross && entry.kind === "suggestion" && (
           <>
-            <button
-              type="button"
-              data-testid={`review-entry-chip-${entry.id}-action-accept`}
-              aria-label="Accept suggestion"
-              className="flex size-6 items-center justify-center rounded-full text-emerald-600 transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 dark:text-emerald-500 dark:hover:bg-emerald-950 dark:focus-visible:ring-emerald-800"
-              onClick={(event) => {
-                event.stopPropagation();
-                onAcceptSuggestion(entry.id);
-              }}
-            >
-              <Check className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              data-testid={`review-entry-chip-${entry.id}-action-reject`}
-              aria-label="Reject suggestion"
-              className="flex size-6 items-center justify-center rounded-full text-red-600 transition hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:text-red-500 dark:hover:bg-red-950 dark:focus-visible:ring-red-800"
-              onClick={(event) => {
-                event.stopPropagation();
-                onRejectSuggestion(entry.id);
-              }}
-            >
-              <X className="size-3.5" />
-            </button>
+            <ReviewButton
+              icon={Check}
+              label="Accept suggestion"
+              color="success"
+              testId={`review-entry-chip-${entry.id}-action-accept`}
+              onClick={() => onAcceptSuggestion(entry.id)}
+            />
+            <ReviewButton
+              icon={X}
+              label="Reject suggestion"
+              color="danger"
+              testId={`review-entry-chip-${entry.id}-action-reject`}
+              onClick={() => onRejectSuggestion(entry.id)}
+            />
           </>
         )}
       </div>
+      <ReviewButton
+        icon={Trash2}
+        label="Delete thread"
+        color="danger"
+        testId={`review-entry-chip-${entry.id}-action-delete`}
+        onClick={() => onDeleteThread(entry.id)}
+      />
     </div>
   );
 }

@@ -825,7 +825,7 @@ export function EditorContextMenu({
             <button
               type="button"
               data-testid="selection-menu-action-comment"
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-secondary px-3 py-2 text-left text-sm font-semibold text-secondary-foreground transition hover:bg-stone-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-secondary px-3 py-2 text-left text-sm font-semibold text-secondary-foreground transition hover:bg-stone-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-slate-700 dark:text-gray-100 dark:hover:bg-slate-600 dark:focus-visible:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={
                 !onAddComment ||
                 editor?.state.selection.empty ||

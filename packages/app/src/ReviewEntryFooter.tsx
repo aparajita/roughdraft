@@ -10,6 +10,7 @@ interface ReviewEntryFooterProps {
   onOpenDialog: (entryId: string) => void;
   onGoToPreviousEntry: () => void;
   onGoToNextEntry: () => void;
+  onDeleteThread: (rootCommentId: string) => void;
   onAcceptSuggestion: (suggestionId: string) => void;
   onRejectSuggestion: (suggestionId: string) => void;
 }
@@ -27,6 +28,7 @@ export function ReviewEntryFooter({
   onOpenDialog,
   onGoToPreviousEntry,
   onGoToNextEntry,
+  onDeleteThread,
   onAcceptSuggestion,
   onRejectSuggestion,
 }: ReviewEntryFooterProps) {
@@ -62,6 +64,7 @@ export function ReviewEntryFooter({
           isResolved={resolvedEntryIds.has(entry.id)}
           onSelect={() => onSelectEntry(entry.id)}
           onOpenDialog={() => onOpenDialog(entry.id)}
+          onDeleteThread={onDeleteThread}
           onAcceptSuggestion={onAcceptSuggestion}
           onRejectSuggestion={onRejectSuggestion}
         />

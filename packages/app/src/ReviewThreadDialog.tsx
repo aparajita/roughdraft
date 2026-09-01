@@ -165,32 +165,6 @@ export function ReviewThreadDialog({
                 <DialogTitle className="text-base">
                   {ENTRY_TITLES[entry.kind]}
                 </DialogTitle>
-                {entry.kind === "suggestion" && (
-                  <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                    <button
-                      type="button"
-                      data-testid="review-thread-dialog-action-accept"
-                      aria-label="Accept suggestion"
-                      className="flex size-6 items-center justify-center rounded-full text-emerald-600 transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 dark:text-emerald-500 dark:hover:bg-emerald-950 dark:focus-visible:ring-emerald-800"
-                      onClick={() => {
-                        onAcceptSuggestion(entry.id);
-                      }}
-                    >
-                      <Check className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="review-thread-dialog-action-reject"
-                      aria-label="Reject suggestion"
-                      className="flex size-6 items-center justify-center rounded-full text-red-600 transition hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:text-red-500 dark:hover:bg-red-950 dark:focus-visible:ring-red-800"
-                      onClick={() => {
-                        onRejectSuggestion(entry.id);
-                      }}
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                )}
               </div>
               {excerpt !== null && (
                 <div
@@ -223,6 +197,36 @@ export function ReviewThreadDialog({
                 }}
               />
               <div className="flex items-center justify-end gap-1.5">
+                {entry.kind === "suggestion" && (
+                  <div className="mr-auto flex shrink-0 items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-base text-emerald-600 dark:text-emerald-500"
+                      data-testid="review-thread-dialog-action-accept"
+                      onClick={() => {
+                        onAcceptSuggestion(entry.id);
+                      }}
+                    >
+                      <Check />
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-base text-red-600 dark:text-red-500"
+                      data-testid="review-thread-dialog-action-reject"
+                      onClick={() => {
+                        onRejectSuggestion(entry.id);
+                      }}
+                    >
+                      <X />
+                      Reject
+                    </Button>
+                  </div>
+                )}
                 {entry.kind !== "suggestion" && (
                   <Button
                     type="button"

@@ -41,7 +41,10 @@ import {
   reviewMarkdownToEditorState,
   type SuggestionAttrs,
 } from "./review";
-import { getReviewMarkupBlockedReason } from "./review-markup-selection";
+import {
+  findExactCommentAnchorMatch,
+  getReviewMarkupBlockedReason,
+} from "./review-markup-selection";
 import { SuggestionComposerPopover } from "./SuggestionComposerPopover";
 import type { Page, StorageBackend } from "./storage";
 import {
@@ -81,6 +84,7 @@ interface PageCardProps {
   onDirtyStateChange?: (isDirty: boolean) => void;
   onLocalContentChange?: (markdown: string) => void;
   onSaveControllerChange?: (controller: DocumentSaveController | null) => void;
+  onReviewFooterVisibleChange?: (visible: boolean) => void;
   saveBlocked?: boolean;
   forceResetKey?: string | null;
 }
@@ -99,6 +103,7 @@ interface PageCardEditorSurfaceProps {
   onDirtyStateChange?: (isDirty: boolean) => void;
   onLocalContentChange?: (markdown: string) => void;
   onSaveControllerChange?: (controller: DocumentSaveController | null) => void;
+  onReviewFooterVisibleChange?: (visible: boolean) => void;
   saveBlocked?: boolean;
   forceResetKey?: string | null;
 }
@@ -113,6 +118,7 @@ interface RichTextEditorSurfaceProps {
   interactionMode: DocumentInteractionMode;
   backend: StorageBackend;
   onEditorReady?: (editor: Editor | null) => void;
+  onReviewFooterVisibleChange?: (visible: boolean) => void;
 }
 
 interface CodeEditorSurfaceProps {
@@ -631,6 +637,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   interactionMode,
   backend,
   onEditorReady,
+  onReviewFooterVisibleChange,
 }: RichTextEditorSurfaceProps) {
   const editorRef = useRef<Editor | null>(null);
   const suggestionFrameRef = useRef<number | null>(null);
@@ -1225,6 +1232,35 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     if (getReviewMarkupBlockedReason(currentEditor, "comment")) return;
 
     const { from, to } = currentEditor.state.selection;
+
+    // A selection matching an anchor's range exactly names the same text a
+    // comment already sits on: open that thread rather than filing a second,
+    // independent thread over identical text.
+    const exactAnchor = findExactCommentAnchorMatch(currentEditor, from, to);
+    if (exactAnchor) {
+      const candidateEntryIds = (
+        (exactAnchor.attrs.commentIds ?? []) as string[]
+      )
+        .map((commentId) =>
+          getRootThreadIdForCommentId(commentId, commentsRef.current),
+        )
+        .filter(
+          (entryId): entryId is string =>
+            Boolean(entryId) &&
+            entriesRef.current.some((entry) => entry.id === entryId),
+        );
+
+      if (candidateEntryIds.length > 0) {
+        const current = currentEntryIdRef.current;
+        openDialog(
+          current && candidateEntryIds.includes(current)
+            ? current
+            : candidateEntryIds[0],
+        );
+        return;
+      }
+    }
+
     const commentId = idsRef.current.allocateCommentId();
 
     setPendingComment({
@@ -1236,7 +1272,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     setCurrentEntryId(commentId);
     setDialogEntryId(commentId);
     setDialogClosedReason(null);
-  }, []);
+  }, [openDialog]);
 
   const handleSuggestDeletion = useCallback(() => {
     const currentEditor = editorRef.current;
@@ -1746,15 +1782,20 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   );
 
   const showReview = interactionMode !== "viewing";
+  const hasReviewFooter = showReview && entries.length > 0;
+
+  useEffect(() => {
+    onReviewFooterVisibleChange?.(hasReviewFooter);
+    return () => onReviewFooterVisibleChange?.(false);
+  }, [hasReviewFooter, onReviewFooterVisibleChange]);
+
   const contentCardClass =
     "rounded-[0.75rem] border border-border bg-card shadow-lg";
   const contentInsetClass = cn(
     "pb-24",
     // The footer is fixed over the document below the rail breakpoint, so the
     // document ends above it rather than behind it.
-    showReview &&
-      entries.length > 0 &&
-      "pb-[var(--review-footer-height)] rail:pb-24",
+    hasReviewFooter && "pb-[var(--review-footer-height)] rail:pb-24",
   );
   const reviewRailClass =
     "review-layout-rail document-comment-rail hidden rail:block";
@@ -1764,12 +1805,18 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       className="cursor-text bg-transparent"
       data-testid="page-card-rich-text"
     >
-      <div data-testid="document-page-shell" className={reviewLayoutGridClass}>
+      <div
+        data-testid="document-page-shell"
+        className={cn(
+          reviewLayoutGridClass,
+          hasReviewFooter && "review-layout-grid--centered",
+        )}
+      >
         <div className={reviewLayoutMainClass}>
           <div className={contentInsetClass}>
             <div
               data-testid="document-content-card"
-              className={cn(contentCardClass, "px-6 py-6 sm:px-6 sm:py-6")}
+              className={cn(contentCardClass, "px-6 py-5 sm:px-6 sm:py-5")}
             >
               <EditorContextMenu
                 editor={editor}
@@ -1806,6 +1853,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
             onOpenDialog={openDialog}
             onGoToPreviousEntry={goToPreviousEntry}
             onGoToNextEntry={goToNextEntry}
+            onDeleteThread={deleteComment}
             onAcceptSuggestion={acceptSuggestion}
             onRejectSuggestion={rejectSuggestion}
           />
@@ -1820,6 +1868,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           onOpenDialog={openDialog}
           onGoToPreviousEntry={goToPreviousEntry}
           onGoToNextEntry={goToNextEntry}
+          onDeleteThread={deleteComment}
           onAcceptSuggestion={acceptSuggestion}
           onRejectSuggestion={rejectSuggestion}
         />
@@ -1907,6 +1956,7 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
   onDirtyStateChange,
   onLocalContentChange,
   onSaveControllerChange,
+  onReviewFooterVisibleChange,
   saveBlocked = false,
   forceResetKey = null,
 }: PageCardEditorSurfaceProps) {
@@ -2127,6 +2177,11 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
     };
   }, []);
 
+  useEffect(() => {
+    if (editorViewMode !== "code") return;
+    onReviewFooterVisibleChange?.(false);
+  }, [editorViewMode, onReviewFooterVisibleChange]);
+
   if (editorViewMode === "code") {
     return (
       <CodeEditorSurface
@@ -2156,6 +2211,7 @@ const PageCardEditorSurface = memo(function PageCardEditorSurface({
       interactionMode={interactionMode}
       backend={backend}
       onEditorReady={onEditorReady}
+      onReviewFooterVisibleChange={onReviewFooterVisibleChange}
     />
   );
 });
@@ -2174,6 +2230,7 @@ export function PageCard({
   onDirtyStateChange,
   onLocalContentChange,
   onSaveControllerChange,
+  onReviewFooterVisibleChange,
   saveBlocked,
   forceResetKey,
 }: PageCardProps) {
@@ -2199,6 +2256,7 @@ export function PageCard({
         onDirtyStateChange={onDirtyStateChange}
         onLocalContentChange={onLocalContentChange}
         onSaveControllerChange={onSaveControllerChange}
+        onReviewFooterVisibleChange={onReviewFooterVisibleChange}
         saveBlocked={saveBlocked}
         forceResetKey={forceResetKey}
       />

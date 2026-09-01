@@ -341,6 +341,7 @@ export function DocumentWorkspace({
 }: DocumentWorkspaceProps) {
   const [documentInteractionMode, setDocumentInteractionMode] =
     useState<DocumentInteractionMode>("suggesting");
+  const [reviewFooterVisible, setReviewFooterVisible] = useState(false);
   const [saveState, setSaveState] = useState<DocumentSaveState>("saved");
   const [saveErrorAlertOpen, setSaveErrorAlertOpen] = useState(false);
   const [reviewHandoffState, setReviewHandoffState] =
@@ -655,8 +656,8 @@ export function DocumentWorkspace({
       />
       <div
         className={cn(
-          "fixed right-3 z-[60] flex max-w-[min(22rem,calc(100vw-1rem))] flex-col items-end gap-1.5",
-          conflictNotice ? "top-[19rem] sm:top-[7rem]" : "top-3",
+          "fixed right-3 z-60 flex max-w-[min(22rem,calc(100vw-1rem))] flex-col items-end gap-1.5",
+          conflictNotice ? "top-76 sm:top-28" : "top-3",
         )}
         data-testid="document-status-stack"
         data-document-status-stack="true"
@@ -891,13 +892,16 @@ export function DocumentWorkspace({
           </div>
         </div>
       ) : null}
-      <div className="mx-auto min-h-full max-w-[1080px]">
+      <div className="mx-auto min-h-full max-w-270">
         {documentPage ? (
           <div
             data-testid="document-page-header"
-            className="review-layout-grid document-page-shell mb-2 text-[0.62rem] font-medium tracking-[0.01em] text-stone-400"
+            className={cn(
+              "review-layout-grid document-page-shell mb-2 text-[0.62rem] font-medium tracking-[0.01em] text-stone-400",
+              reviewFooterVisible && "review-layout-grid--centered",
+            )}
           >
-            <div className="review-layout-main document-page-main w-full max-w-[var(--document-measure)] min-w-0">
+            <div className="review-layout-main document-page-main w-full max-w-(--document-measure) min-w-0">
               <div className="flex w-full flex-wrap items-center gap-1.5 px-1">
                 <Tooltip>
                   <TooltipTrigger
@@ -905,25 +909,25 @@ export function DocumentWorkspace({
                       <button
                         type="button"
                         data-testid="document-editor-view-toggle"
-                        className="grid shrink-0 grid-cols-2 rounded-[999px] bg-secondary px-[2px] pt-[3px] pb-[2px]"
+                        className="grid shrink-0 grid-cols-2 rounded-[999px] bg-secondary px-0.5 pt-0.75 pb-0.5"
                       >
                         <span
-                          className={`flex w-[1.375rem] items-center justify-center rounded-full py-[2px] transition ${
+                          className={`flex w-5.5 items-center justify-center rounded-full py-0.5 transition ${
                             documentEditorViewMode === "rich-text"
                               ? "bg-card text-stone-700 dark:text-white shadow-sm"
                               : "text-stone-500 dark:text-slate-400"
                           }`}
                         >
-                          <Eye className="size-[0.75rem]" />
+                          <Eye className="size-3" />
                         </span>
                         <span
-                          className={`flex w-[1.375rem] items-center justify-center rounded-full py-[2px] transition ${
+                          className={`flex w-5.5 items-center justify-center rounded-full py-0.5 transition ${
                             documentEditorViewMode === "code"
                               ? "bg-card text-stone-700 dark:text-white shadow-sm"
                               : "text-stone-500 dark:text-slate-400"
                           }`}
                         >
-                          <CodeXml className="size-[0.75rem]" />
+                          <CodeXml className="size-3" />
                         </span>
                       </button>
                     }
@@ -947,7 +951,7 @@ export function DocumentWorkspace({
                       <button
                         type="button"
                         data-testid="document-file-menu-trigger"
-                        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-1 py-0.5 text-[0.8rem] font-medium tracking-[0.01em] text-stone-400 outline-none transition hover:text-stone-500 focus-visible:ring-2 focus-visible:ring-stone-300/70 dark:text-slate-400 dark:hover:text-slate-300 dark:focus-visible:ring-slate-600/70"
+                        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-1 py-0.5 text-sm leading-none font-medium text-stone-400 outline-none transition hover:text-stone-500 focus-visible:ring-2 focus-visible:ring-stone-300/70 dark:text-slate-400 dark:hover:text-slate-300 dark:focus-visible:ring-slate-600/70"
                         title={documentFilenameLabel}
                         aria-label="Document file actions"
                       >
@@ -997,7 +1001,7 @@ export function DocumentWorkspace({
                     </div>
                   </PopoverContent>
                 </Popover>
-                <div className="ml-auto inline-flex h-[1.25rem] shrink-0 items-center">
+                <div className="ml-auto inline-flex h-5 shrink-0 items-center">
                   <Select<DocumentInteractionMode>
                     value={documentInteractionMode}
                     onValueChange={(value) => {
@@ -1007,7 +1011,7 @@ export function DocumentWorkspace({
                     <SelectTrigger
                       data-testid="document-mode-trigger"
                       aria-label="Document mode"
-                      className="h-[1.5rem] gap-1.5 px-1 text-[0.8rem] leading-[1.25rem] font-medium tracking-[0.01em] text-stone-400 dark:text-slate-400 hover:text-stone-500 dark:hover:text-slate-300"
+                      className="h-6 gap-1.5 px-1 text-sm leading-none font-medium tracking-[0.01em] text-stone-400 dark:text-slate-400 hover:text-stone-500 dark:hover:text-slate-300"
                     >
                       <ActiveDocumentInteractionModeIcon className="size-[0.8rem]" />
                       <span className="truncate">
@@ -1057,6 +1061,7 @@ export function DocumentWorkspace({
               }}
               saveBlocked={isDocumentSaveBlocked(documentDiskChangeState)}
               forceResetKey={documentForceResetKey}
+              onReviewFooterVisibleChange={setReviewFooterVisible}
             />
           ) : null
         ) : (

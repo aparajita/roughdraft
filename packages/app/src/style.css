@@ -200,7 +200,7 @@
 }
 
 @theme {
-  --breakpoint-rail: 920px;
+  --breakpoint-rail: 950px;
   --document-measure: 38rem;
   --review-footer-height: 3.5rem;
 }
@@ -306,6 +306,21 @@
   .review-layout-grid > .review-layout-rail {
     grid-column: 2;
     min-width: 0;
+  }
+}
+
+/*
+ * Below the rail breakpoint, the rail column disappears and the footer takes
+ * over its navigation, so the document is no longer holding its place beside
+ * a rail — center it instead of leaving it pinned to the rail's edge.
+ */
+.review-layout-grid.review-layout-grid--centered {
+  align-items: center;
+}
+
+@variant rail {
+  .review-layout-grid.review-layout-grid--centered {
+    align-items: start;
   }
 }
 
