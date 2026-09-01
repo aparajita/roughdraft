@@ -1497,6 +1497,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
             .setCommentAnchor({
               commentIds: [...anchoredCommentIds, comment.id],
             })
+            .setTextSelection(to)
             .run(),
         );
         commitComment(comment);

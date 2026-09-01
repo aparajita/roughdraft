@@ -1640,6 +1640,27 @@ describe("PageCard editor integration", () => {
     expect(rendered.getEditor().state.selection.empty).toBe(true);
   });
 
+  it("collapses the editor selection after submitting a new comment", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-comment-selection-collapse-submit-1",
+        title: "Doc Comment Selection Collapse Submit 1",
+        content: "Comment target text",
+      },
+      selected: true,
+    });
+
+    await selectText(rendered.getEditor(), "target");
+    expect(rendered.getEditor().state.selection.empty).toBe(false);
+
+    await addCommentWithShortcut();
+
+    const dialog = getThreadDialog();
+    await submitThreadDialogReply(dialog, "Some comment text");
+
+    expect(rendered.getEditor().state.selection.empty).toBe(true);
+  });
+
   it("deletes a whole root comment thread from the thread action", async () => {
     const rendered = await renderPageCard({
       page: {
