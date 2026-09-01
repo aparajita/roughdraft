@@ -784,16 +784,13 @@ export function DocumentWorkspace({
                         </span>
                       ) : null}
                       <div>
-                        <div className="text-xl font-semibold leading-6 text-stone-950 dark:text-slate-50">
-                          {reviewHandoffStatusTitle}
-                        </div>
                         {reviewHandoffStatusBody ? (
-                          <p className="mt-1 text-sm leading-6 text-stone-600 dark:text-slate-300">
+                          <p className="mt-3 text-sm leading-6 text-stone-700 dark:text-slate-100">
                             {reviewHandoffStatusBody}
                           </p>
                         ) : (
-                          <div className="mt-1">
-                            <p className="text-sm leading-[1.32rem] text-stone-500 dark:text-slate-400">
+                          <div className="mt-3">
+                            <p className="text-sm leading-[1.32rem] text-stone-700 dark:text-slate-100">
                               Your agent is now working in the background on
                               this, in all likelihood. If our signal didn't make
                               it, just{" "}
@@ -951,7 +948,7 @@ export function DocumentWorkspace({
                       <button
                         type="button"
                         data-testid="document-file-menu-trigger"
-                        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-1 py-0.5 text-sm leading-none font-medium text-stone-400 outline-none transition hover:text-stone-500 focus-visible:ring-2 focus-visible:ring-stone-300/70 dark:text-slate-400 dark:hover:text-slate-300 dark:focus-visible:ring-slate-600/70"
+                        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-1 py-0.5 text-base leading-none font-medium text-stone-400 outline-none transition hover:text-stone-500 focus-visible:ring-2 focus-visible:ring-stone-300/70 dark:text-slate-300 dark:hover:text-slate-200 dark:focus-visible:ring-slate-600/70"
                         title={documentFilenameLabel}
                         aria-label="Document file actions"
                       >
@@ -978,7 +975,7 @@ export function DocumentWorkspace({
                           key={action}
                           type="button"
                           data-testid={`document-file-menu-${action}`}
-                          className="flex items-start gap-2 rounded-md px-2 py-1.5 text-left text-[0.72rem] leading-none text-stone-700 outline-none transition hover:bg-accent focus-visible:bg-accent dark:text-stone-300"
+                          className="flex items-start gap-2 rounded-md px-2 py-1.5 text-left text-base leading-none text-stone-700 outline-none transition hover:bg-accent focus-visible:bg-accent dark:text-stone-300"
                           onClick={() => void handleCopyFileMenuAction(action)}
                         >
                           <Copy
@@ -989,7 +986,7 @@ export function DocumentWorkspace({
                             <span className="truncate font-medium">
                               {copiedFileAction === action ? "Copied!" : label}
                             </span>
-                            <span className="truncate text-[0.66rem] leading-none text-stone-400 dark:text-slate-500">
+                            <span className="truncate text-sm leading-none text-stone-400 dark:text-slate-500">
                               {fileCopyPreviewByAction[action]}
                             </span>
                           </span>
@@ -1011,7 +1008,7 @@ export function DocumentWorkspace({
                     <SelectTrigger
                       data-testid="document-mode-trigger"
                       aria-label="Document mode"
-                      className="h-6 gap-1.5 px-1 text-sm leading-none font-medium tracking-[0.01em] text-stone-400 dark:text-slate-400 hover:text-stone-500 dark:hover:text-slate-300"
+                      className="h-6 gap-1.5 px-1 text-base leading-none font-medium tracking-[0.01em] text-stone-400 dark:text-slate-300 hover:text-stone-500 dark:hover:text-slate-200"
                     >
                       <ActiveDocumentInteractionModeIcon className="size-[0.8rem]" />
                       <span className="truncate">
@@ -1029,7 +1026,7 @@ export function DocumentWorkspace({
                             className="text-[0.8rem]"
                           >
                             <Icon className="size-3 text-stone-500 dark:text-slate-400" />
-                            <SelectItemText className="font-medium">
+                            <SelectItemText className="font-medium text-base">
                               {label}
                             </SelectItemText>
                           </SelectItem>

@@ -59,7 +59,7 @@
 
   html {
     @apply font-sans;
-    font-size: 18px;
+    font-size: 16px;
   }
 }
 
@@ -200,6 +200,11 @@
 }
 
 @theme {
+  /* Make the base text size 18px, which is the same as 1.125rem at the default 16px root font size. */
+  --text-base: 1.125rem;
+  --text-sm: 1rem;
+  --text-lg: 1.25rem;
+
   /* We'll keep the rail code, but I prefer the footer navigation interface */
   --breakpoint-rail: 10000px;
   --document-measure: 38rem;
@@ -292,6 +297,15 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+@utility prose {
+  font-size: 1.25rem;   /* 18px */
+  line-height: 1.4;
+}
+
+@utility prose-slate {
+  --tw-prose-body: var(--color-slate-200);
 }
 
 @variant rail {
