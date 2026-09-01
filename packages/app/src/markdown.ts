@@ -362,16 +362,17 @@ const TIGHT_AFTER_MARKER = "";
 /**
  * Record each heading's surrounding blank lines onto its token.
  *
- * A blank line after a heading is inside the heading token's own `raw`, which
- * ends with two newlines. A blank line before one is a preceding `space` token.
- * Neither fact is recoverable once the tokens become HTML.
+ * A blank line on either side of a heading is a sibling `space` token: marked
+ * trims a block token's own `raw` down to its content, so neither fact is
+ * readable from the heading token itself. Neither is recoverable once the
+ * tokens become HTML.
  */
 function annotateHeadingSpacing(tokens: Token[] | TokensList): void {
   tokens.forEach((token, index) => {
     if (token.type === "heading") {
       const heading = token as Tokens.Heading & HeadingSpacing;
       heading.blankBefore = tokens[index - 1]?.type === "space";
-      heading.blankAfter = /\n\s*\n$/.test(token.raw);
+      heading.blankAfter = tokens[index + 1]?.type === "space";
     }
 
     const nested = token as { tokens?: Token[]; items?: Token[] };
@@ -468,6 +469,12 @@ function createMarkedRenderer(options?: MarkdownOptions) {
     return `<img src="${escapeHtml(renderedHref)}" alt="${escapeHtml(alt)}"${titleAttr}${markdownSrcAttr}>`;
   };
 
+  // A task item's own `[ ]`/`[x]` is tokenized as a `checkbox` token inside its
+  // content, rendered by the base renderer's own `checkbox` method. The `<li>`
+  // built below renders the checkbox itself, in the label/span shape the task
+  // list editor node expects, so the base rendering is suppressed everywhere.
+  renderer.checkbox = () => "";
+
   renderer.list = function (token) {
     const hasTaskItems = token.items.some((item) => item.task);
     if (!hasTaskItems) {
@@ -477,7 +484,7 @@ function createMarkedRenderer(options?: MarkdownOptions) {
     const items = token.items
       .map((item) => {
         const checked = item.checked ? "true" : "false";
-        const inner = this.parser.parse(item.tokens, false);
+        const inner = this.parser.parse(item.tokens);
         return `<li data-type="taskItem" data-checked="${checked}"><label><input type="checkbox"${
           item.checked ? ' checked="checked"' : ""
         }><span></span></label><div>${inner}</div></li>`;

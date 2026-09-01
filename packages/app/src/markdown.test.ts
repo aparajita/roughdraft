@@ -59,6 +59,7 @@ describe("toHtml", () => {
       '<a href="mailto:review@example.com" data-markdown-src="mailto:review@example.com">Mail</a>',
     );
     expect(html).toContain('<ul data-type="taskList">');
+    expect(html.match(/<input type="checkbox"/g)).toHaveLength(3);
     expect(html).toContain("<table>");
     expect(html).toContain(
       '<img src="./images/sketch.png" alt="Sketch" title="Sketch title" data-markdown-src="./images/sketch.png">',
@@ -122,6 +123,12 @@ describe("normalizeBlockSpacing", () => {
 
   it("preserves paragraph separation", () => {
     const spaced = "First paragraph.\n\nSecond paragraph.\n";
+
+    expect(toMarkdown(toHtml(spaced))).toBe(spaced);
+  });
+
+  it("preserves a blank line between a heading and the text that follows it", () => {
+    const spaced = "# Heading\n\nBody text.\n";
 
     expect(toMarkdown(toHtml(spaced))).toBe(spaced);
   });
