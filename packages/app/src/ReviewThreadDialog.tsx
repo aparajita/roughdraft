@@ -40,7 +40,7 @@ const VIEWPORT_INSET = "2rem";
 
 const ENTRY_TITLES: Record<ReviewEntry["kind"], string> = {
   "document-comment": "Document comment",
-  "comment-thread": "Comment thread",
+  "comment-thread": "Comment on:",
   suggestion: "Suggestion",
 };
 
@@ -148,16 +148,21 @@ export function ReviewThreadDialog({
               {closedReason}
             </DialogDescription>
             <div className="flex justify-end">
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button
+                type="button"
+                variant="outline"
+                className="text-base"
+                onClick={onClose}
+              >
                 Close
               </Button>
             </div>
           </>
         ) : (
           <>
-            <div className="flex flex-col gap-2 pr-8">
+            <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1.5">
-                <DialogTitle className="text-sm">
+                <DialogTitle className="text-base">
                   {ENTRY_TITLES[entry.kind]}
                 </DialogTitle>
                 {entry.kind === "suggestion" && (
@@ -190,7 +195,7 @@ export function ReviewThreadDialog({
               {excerpt !== null && (
                 <div
                   data-testid="review-thread-dialog-excerpt"
-                  className="h-20 overflow-y-auto rounded-md border border-border bg-muted/40 px-2.5 py-2 text-[13px] leading-5 whitespace-pre-wrap text-slate-700 dark:text-slate-300"
+                  className="rounded-md bg-muted/40 px-2.5 py-2 mb-2 text-base whitespace-pre-wrap text-slate-700 dark:text-slate-300"
                 >
                   {excerpt}
                 </div>
@@ -204,14 +209,14 @@ export function ReviewThreadDialog({
                 onDeleteThread={onDeleteThread}
               />
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               <Textarea
                 data-testid="review-thread-dialog-composer"
                 aria-label="Reply"
                 placeholder="Reply…"
                 value={replyDraft}
                 rows={2}
-                className="px-2.5 text-[13px] leading-5 md:text-[13px] md:leading-5"
+                className="px-2.5 text-base leading-5 md:text-base md:leading-5"
                 onKeyDown={handleComposerKeyDown}
                 onChange={(event) => {
                   setReplyDraft(event.target.value);
@@ -225,7 +230,7 @@ export function ReviewThreadDialog({
                     size="sm"
                     aria-pressed={isResolved}
                     data-testid="review-thread-dialog-action-resolve"
-                    className="mr-auto"
+                    className="mr-auto text-base"
                     onClick={() => {
                       onToggleResolved(entry.id, !isResolved);
                     }}
@@ -237,6 +242,7 @@ export function ReviewThreadDialog({
                   type="button"
                   size="sm"
                   disabled={!canSubmit}
+                  className="text-base"
                   data-testid="review-thread-dialog-action-submit"
                   onClick={submitReply}
                 >

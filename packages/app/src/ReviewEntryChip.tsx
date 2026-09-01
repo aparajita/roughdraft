@@ -86,7 +86,7 @@ export function ReviewEntryChip({
           type="button"
           data-testid={`review-entry-chip-${entry.id}-action-open`}
           aria-label="Open thread"
-          className="flex size-6 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 dark:text-stone-400 dark:hover:bg-slate-700 dark:focus-visible:ring-slate-600"
+          className="flex size-6 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 dark:hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 dark:text-slate-400 dark:hover:bg-slate-700 dark:focus-visible:ring-slate-600"
           onClick={(event) => {
             event.stopPropagation();
             onOpenDialog();

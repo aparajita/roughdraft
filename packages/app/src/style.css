@@ -1,9 +1,26 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/inter";
 
 @plugin "@tailwindcss/typography";
+
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("./fonts/SourceSans3-VariableFont_wght.woff2")
+    format("woff2-variations");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("./fonts/SourceSans3-Italic-VariableFont_wght.woff2")
+    format("woff2-variations");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -26,6 +43,7 @@
   body {
     @apply antialiased bg-background text-foreground;
     font-family: var(--font-sans) sans-serif;
+    font-optical-sizing: auto;
   }
 
   button,
@@ -34,11 +52,14 @@
   textarea {
     font: inherit;
   }
+
   * {
     @apply border-border outline-ring/50;
   }
+
   html {
     @apply font-sans;
+    font-size: 18px;
   }
 }
 
@@ -68,7 +89,7 @@
   }
 
   .tiptap .tableWrapper {
-    @apply my-4 overflow-x-auto rounded-2xl;
+    @apply overflow-x-auto rounded-2xl;
   }
 
   .tiptap table {
@@ -77,6 +98,16 @@
     @apply table-fixed;
     /* biome-ignore lint/complexity/noImportantStyles: override Tiptap inline min-width */
     min-width: 100% !important;
+  }
+
+  .tiptap td p,
+  .tiptap th p {
+    /* Tiptap's table schema requires block content, so every cell wraps its text
+       in a paragraph; the typography plugin's paragraph margin would otherwise
+       inflate every cell, and the plugin's own specificity requires !important
+       to override it. */
+    /* biome-ignore lint/complexity/noImportantStyles: override typography plugin's prose p margin */
+    margin: 0 !important;
   }
 
   .tiptap .selectedCell::after {
@@ -175,7 +206,7 @@
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", sans-serif;
+  --font-sans: "Source Sans 3", sans-serif;
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);

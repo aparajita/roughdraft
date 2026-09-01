@@ -15,8 +15,8 @@ import {
   type CommentId,
   parseCommentId,
   parseSuggestionId,
-  RecordIdAllocator,
   type RecordId,
+  RecordIdAllocator,
   type SuggestionId,
 } from "./ids.js";
 import { createLiteralSpanIndex, type OffsetRange } from "./literal-spans.js";

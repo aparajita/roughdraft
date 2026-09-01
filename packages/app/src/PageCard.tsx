@@ -13,11 +13,11 @@ import {
   EDITOR_REPLACEMENT_ANCHOR_SELECTOR,
   getRootThreadIdForCommentId,
   INSERTION_ANCHOR_SELECTOR,
-  readCommentAnchorIds,
   REPLACEMENT_ANCHOR_SELECTOR,
+  type ReviewEntry,
+  readCommentAnchorIds,
   resolveAnchorScroll,
   resolveNextCurrentEntry,
-  type ReviewEntry,
   type SuggestionAnchorItem,
 } from "./document-comments";
 import { EditorContextMenu } from "./EditorContextMenu";
@@ -30,6 +30,8 @@ import {
 import { cn } from "./lib/utils";
 import { MarkdownCodeEditor } from "./MarkdownCodeEditor";
 import { EMPTY_ANCHOR_SENTINEL, toHtml } from "./markdown";
+import { ReviewEntryFooter } from "./ReviewEntryFooter";
+import { ReviewThreadDialog } from "./ReviewThreadDialog";
 import {
   createReviewComment,
   createSuggestion,
@@ -40,8 +42,6 @@ import {
   type SuggestionAttrs,
 } from "./review";
 import { getReviewMarkupBlockedReason } from "./review-markup-selection";
-import { ReviewEntryFooter } from "./ReviewEntryFooter";
-import { ReviewThreadDialog } from "./ReviewThreadDialog";
 import { SuggestionComposerPopover } from "./SuggestionComposerPopover";
 import type { Page, StorageBackend } from "./storage";
 import {
@@ -787,7 +787,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       editorProps: {
         attributes: {
           class:
-            "tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-[70vh] prose-code:before:content-none prose-code:after:content-none prose-blockquote:not-italic [&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none prose-code:bg-stone-100 dark:prose-code:bg-slate-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-a:font-normal",
+            "tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-[70vh] prose-p:leading-[1.6] prose-h1:font-semibold prose-h2:font-semibold prose-code:before:content-none prose-code:after:content-none prose-blockquote:not-italic [&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none prose-code:bg-stone-100 dark:prose-code:bg-slate-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-a:font-normal prose-hr:p-0 prose-hr:my-2 prose-table:my-1 prose-th:text-base prose-th:pe-2 prose-td:text-base prose-td:ps-0",
         },
         handleDrop: (_view, event) => {
           const files = Array.from(event.dataTransfer?.files ?? []);
@@ -1769,7 +1769,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
           <div className={contentInsetClass}>
             <div
               data-testid="document-content-card"
-              className={cn(contentCardClass, "px-10 py-10 sm:px-14 sm:py-14")}
+              className={cn(contentCardClass, "px-6 py-6 sm:px-6 sm:py-6")}
             >
               <EditorContextMenu
                 editor={editor}

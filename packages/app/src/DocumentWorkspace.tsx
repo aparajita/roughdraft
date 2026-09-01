@@ -678,7 +678,7 @@ export function DocumentWorkspace({
                   type="button"
                   data-testid="review-handoff-button"
                   size="lg"
-                  className="h-9 rounded-r-none rounded-l-[7px] border-0 bg-primary px-3 text-sm font-bold text-primary-foreground hover:bg-stone-700 focus-visible:ring-ring disabled:opacity-100"
+                  className="h-9 rounded-r-none rounded-l-[7px] border-0 bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-stone-700 focus-visible:ring-ring disabled:opacity-100"
                   disabled={reviewHandoffButtonDisabled}
                   aria-disabled={reviewHandoffButtonDisabled || undefined}
                   onClick={() => {
@@ -761,7 +761,7 @@ export function DocumentWorkspace({
                       type="submit"
                       data-testid="review-handoff-submit-comment"
                       size="lg"
-                      className="w-full rounded-[7px] bg-black text-sm font-bold text-white hover:bg-black/85 focus-visible:ring-black/25 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                      className="w-full rounded-[7px] bg-black text-sm font-semibold text-white hover:bg-black/85 focus-visible:ring-black/25 dark:bg-white dark:text-black dark:hover:bg-white/90"
                       disabled={!trimmedOverallComment}
                     >
                       <CheckCheck className="size-4" />

@@ -11,7 +11,7 @@ function MenuTrigger({ className, ...props }: MenuPrimitive.Trigger.Props) {
     <MenuPrimitive.Trigger
       data-slot="menu-trigger"
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full text-stone-400 dark:text-stone-500 outline-none transition-colors duration-150 hover:bg-accent hover:text-stone-600 dark:hover:text-stone-300 focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-accent data-[popup-open]:text-stone-600 dark:data-[popup-open]:text-stone-300",
+        "inline-flex shrink-0 items-center justify-center rounded-full text-stone-400 dark:text-slate-500 outline-none transition-colors duration-150 hover:bg-accent hover:text-stone-600 dark:hover:text-stone-300 focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-accent data-[popup-open]:text-stone-600 dark:data-[popup-open]:text-stone-300",
         className,
       )}
       {...props}

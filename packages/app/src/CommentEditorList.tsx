@@ -281,11 +281,11 @@ function CommentRow({
         >
           <AuthorIcon className="size-2.5 shrink-0" />
         </div>
-        <div className="min-w-0 truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
+        <div className="min-w-0 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
           {authorLabel}
         </div>
         <div
-          className="shrink-0 text-[11px] text-stone-500 dark:text-stone-400"
+          className="shrink-0 text-base text-stone-500 dark:text-slate-400"
           title={absolute}
         >
           {relative}
@@ -300,6 +300,7 @@ function CommentRow({
           </MenuTrigger>
           <MenuContent>
             <MenuItem
+              className="text-base"
               data-testid={`comment-row-${comment.id}-action-edit`}
               onClick={onStartEditing}
             >
@@ -307,7 +308,7 @@ function CommentRow({
             </MenuItem>
             <MenuItem
               data-testid={`comment-row-${comment.id}-action-delete`}
-              className="text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
+              className="text-base text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
               onClick={onDeleteComment}
             >
               Delete
@@ -317,7 +318,7 @@ function CommentRow({
                 <MenuSeparator />
                 <MenuItem
                   data-testid={`comment-row-${comment.id}-action-delete-thread`}
-                  className="text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
+                  className="text-base text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
                   onClick={onDeleteThread}
                 >
                   Delete thread
@@ -334,7 +335,7 @@ function CommentRow({
             data-testid={`comment-row-${comment.id}-editor`}
             value={draftContent}
             rows={1}
-            className="mt-1.5 min-h-12 px-2.5 py-2 text-[13px] leading-5 md:text-[13px] md:leading-5"
+            className="mt-1.5 min-h-12 px-2.5 py-2 text-base leading-5 md:text-base md:leading-5"
             onKeyDown={handleEditorKeyDown}
             onChange={(event) => {
               onChangeDraft(event.target.value);
@@ -345,6 +346,7 @@ function CommentRow({
               type="button"
               variant="ghost"
               size="sm"
+              className="text-base"
               onClick={onCancelEditing}
             >
               Cancel
@@ -352,6 +354,7 @@ function CommentRow({
             <Button
               type="button"
               size="sm"
+              className="text-base"
               data-testid={`comment-row-${comment.id}-action-save`}
               disabled={draftContent.trim().length === 0}
               onClick={onSubmitEditing}
@@ -362,7 +365,7 @@ function CommentRow({
         </>
       ) : (
         <div
-          className="tiptap prose prose-sm prose-stone dark:prose-slate dark:prose-invert max-w-none mt-1 min-h-0 prose-code:before:content-none prose-code:after:content-none"
+          className="tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none mt-1 min-h-0 prose-code:before:content-none prose-code:after:content-none"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: a comment body is Markdown and renders through the document's own renderer.
           dangerouslySetInnerHTML={{ __html: bodyHtml }}
         />

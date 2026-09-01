@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { SuggestionKind } from "../src/editor-extensions";
 import {
   buildCommentThreadRailItems,
   buildReviewEntries,
@@ -8,14 +7,15 @@ import {
   getRootThreadIdForCommentId,
   groupCommentAnchorMeasurements,
   normalizeCommentMeasurement,
-  resolveAnchorScroll,
+  type ReviewEntry,
   resolveAnchoredRailLayouts,
+  resolveAnchorScroll,
   resolveCommentRailLayouts,
   resolveCommentThreadRailLayouts,
-  type ReviewEntry,
   resolveNextCurrentEntry,
   type SuggestionAnchorItem,
 } from "../src/document-comments";
+import type { SuggestionKind } from "../src/editor-extensions";
 import type { ReviewComment } from "../src/review";
 
 function createCommentsMap(comments: ReviewComment[]) {

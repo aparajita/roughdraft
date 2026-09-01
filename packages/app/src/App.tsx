@@ -374,14 +374,14 @@ export function Homepage({
       <div className="w-full">
         <div className="mx-auto max-w-[100rem] text-left">
           <p
-            className="text-[clamp(1.125rem,0.9rem+0.35vw,1.375rem)] font-bold text-stone-500 dark:text-stone-500"
+            className="text-[clamp(1.125rem,0.9rem+0.35vw,1.375rem)] font-semibold text-stone-500 dark:text-stone-500"
             data-testid="homepage-logo"
           >
             roughdraft.md
           </p>
           <div className="mt-20 sm:mt-28">
             <h1
-              className="text-[clamp(2.875rem,14.2vw,5rem)] leading-[0.88] font-bold text-slate-950 dark:text-slate-50"
+              className="text-[clamp(2.875rem,14.2vw,5rem)] leading-[0.88] font-semibold text-slate-950 dark:text-slate-50"
               data-testid="homepage-heading"
             >
               Easier collaboration
@@ -482,11 +482,11 @@ export function Homepage({
           data-testid="homepage-workflow-storyboard"
         >
           <div
-            className="homepage-workflow-intro py-8 pb-6 font-bold min-[900px]:pt-12 min-[900px]:pb-8"
+            className="homepage-workflow-intro py-8 pb-6 font-semibold min-[900px]:pt-12 min-[900px]:pb-8"
             ref={workflowIntroRef}
           >
             <h2
-              className="text-center text-[clamp(4rem,2.8rem+3vw,4.5rem)] font-bold text-slate-950 dark:text-slate-50"
+              className="text-center text-[clamp(4rem,2.8rem+3vw,4.5rem)] font-semibold text-slate-950 dark:text-slate-50"
               id="homepage-workflow-heading"
               data-testid="homepage-workflow-heading"
             >
@@ -535,15 +535,15 @@ export function Homepage({
           className="rfm-format-demo mx-auto mt-20 w-full max-w-none border-t border-slate-200 pt-10 text-left dark:border-slate-700 sm:mt-24"
         >
           <div
-            className="rfm-format-demo-intro mx-auto w-full px-4 font-bold"
+            className="rfm-format-demo-intro mx-auto w-full px-4 font-semibold"
             data-testid="rfm-format-demo-intro"
           >
             <div className="max-w-3xl">
-              <p className="text-xs font-bold tracking-[0.16em] text-stone-500 uppercase dark:text-stone-400">
+              <p className="text-xs font-semibold tracking-[0.16em] text-stone-500 uppercase dark:text-stone-400">
                 Roughdraft flavored Markdown
               </p>
               <h2
-                className="mt-3 text-3xl leading-tight font-bold text-balance text-slate-950 dark:text-slate-50 sm:text-4xl"
+                className="mt-3 text-3xl leading-tight font-semibold text-balance text-slate-950 dark:text-slate-50 sm:text-4xl"
                 id="roughdraft-markdown-heading"
               >
                 It's just Markdown
@@ -553,7 +553,7 @@ export function Homepage({
                 YAML endmatter block, to support full comment threads, and
                 suggesting changes. Read the{" "}
                 <a
-                  className="font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-950 dark:text-slate-50 dark:decoration-slate-600 dark:hover:decoration-slate-50"
+                  className="font-semibold text-slate-950 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-950 dark:text-slate-50 dark:decoration-slate-600 dark:hover:decoration-slate-50"
                   href="/roughdraft-flavored-markdown"
                 >
                   spec
@@ -588,13 +588,13 @@ function HomepageWorkflowScene({
       ref={sceneRef}
     >
       <div
-        className="min-w-0 max-w-[28rem] font-bold max-[899px]:max-w-[min(100%,27rem)]"
+        className="min-w-0 max-w-[28rem] font-semibold max-[899px]:max-w-[min(100%,27rem)]"
         data-testid="homepage-workflow-scene-copy"
       >
-        <div className="inline-flex h-12 min-w-12 items-center justify-center rounded-full border border-slate-950 bg-slate-950 px-2 text-[2.25rem] leading-none font-bold text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950">
+        <div className="inline-flex h-12 min-w-12 items-center justify-center rounded-full border border-slate-950 bg-slate-950 px-2 text-[2.25rem] leading-none font-semibold text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950">
           {step}
         </div>
-        <h3 className="mt-5 text-[clamp(2rem,1.5rem+1.5vw,2.5rem)] leading-tight font-bold text-balance text-slate-950 dark:text-slate-50">
+        <h3 className="mt-5 text-[clamp(2rem,1.5rem+1.5vw,2.5rem)] leading-tight font-semibold text-balance text-slate-950 dark:text-slate-50">
           {title}
         </h3>
         <p className="mt-4 max-w-md text-base leading-7 text-stone-600 dark:text-stone-400">
@@ -638,7 +638,7 @@ function AgentChatMock({
       data-testid="homepage-workflow-terminal"
       ref={terminalRef}
     >
-      <div className="flex min-h-10 items-center justify-between gap-4 border-b border-slate-400/20 px-3.5 text-xs font-bold text-slate-300 max-[899px]:min-h-8 max-[899px]:px-3 max-[899px]:text-[0.68rem]">
+      <div className="flex min-h-10 items-center justify-between gap-4 border-b border-slate-400/20 px-3.5 text-xs font-semibold text-slate-300 max-[899px]:min-h-8 max-[899px]:px-3 max-[899px]:text-[0.68rem]">
         <div className="flex items-center gap-1.5" aria-hidden="true">
           <span className="inline-flex size-[0.65rem] rounded-full bg-rose-500" />
           <span className="inline-flex size-[0.65rem] rounded-full bg-amber-400" />
@@ -681,13 +681,16 @@ function AgentChatMock({
             className="mx-4 grid gap-1 text-xs leading-[1.55] text-slate-300 max-[899px]:mx-3 max-[899px]:text-[0.66rem]"
             data-testid="homepage-workflow-terminal-tools"
           >
-            <div className="flex gap-3 font-bold text-slate-50">
+            <div className="flex gap-3 font-semibold text-slate-50">
               <span aria-hidden="true">•</span>
               <span>Explored</span>
             </div>
             <div className="grid gap-0.5 pr-1 pl-[1.55rem] max-[899px]:pl-[1.35rem]">
               <div className="grid grid-cols-[0.8rem_minmax(0,1fr)] gap-x-1.5 text-slate-50 [overflow-wrap:anywhere]">
-                <span className="font-bold text-slate-400" aria-hidden="true">
+                <span
+                  className="font-semibold text-slate-400"
+                  aria-hidden="true"
+                >
                   └
                 </span>
                 <span>
@@ -696,14 +699,20 @@ function AgentChatMock({
                 </span>
               </div>
               <div className="grid grid-cols-[0.8rem_minmax(0,1fr)] gap-x-1.5 text-slate-50 [overflow-wrap:anywhere]">
-                <span className="font-bold text-slate-400" aria-hidden="true" />
+                <span
+                  className="font-semibold text-slate-400"
+                  aria-hidden="true"
+                />
                 <span>
                   <span className="text-teal-300">Read</span> sed -n '1,220p'
                   packages/app/src/App.tsx
                 </span>
               </div>
               <div className="grid grid-cols-[0.8rem_minmax(0,1fr)] gap-x-1.5 text-slate-50 [overflow-wrap:anywhere]">
-                <span className="font-bold text-slate-400" aria-hidden="true" />
+                <span
+                  className="font-semibold text-slate-400"
+                  aria-hidden="true"
+                />
                 <span>
                   <span className="text-teal-300">Write</span>{" "}
                   .context/homepage-conversion-plan.md
@@ -934,7 +943,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
       data-testid="homepage-workflow-popup"
     >
       <div
-        className="flex h-10 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 text-xs font-bold text-stone-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400 max-[520px]:px-3"
+        className="flex h-10 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 text-xs font-semibold text-stone-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400 max-[520px]:px-3"
         data-testid="homepage-workflow-popup-header"
       >
         <div
@@ -973,7 +982,7 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
         >
           {showDoneButton ? (
             <Button
-              className="absolute top-3 right-3 z-[3] h-12 rounded-[7px] bg-black px-4.5 text-base font-bold text-white shadow-lg hover:bg-black/85"
+              className="absolute top-3 right-3 z-[3] h-12 rounded-[7px] bg-black px-4.5 text-base font-semibold text-white shadow-lg hover:bg-black/85"
               data-testid="homepage-workflow-handoff-button"
               type="button"
               size="sm"
@@ -1104,11 +1113,11 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
                       ref={(node) => setThreadRef(item.key, node)}
                       style={layout ? { top: layout.railTop } : undefined}
                     >
-                      <div className="flex size-8 items-center justify-center rounded-full border border-stone-300 bg-stone-200 text-[0.72rem] font-bold text-stone-700">
+                      <div className="flex size-8 items-center justify-center rounded-full border border-stone-300 bg-stone-200 text-[0.72rem] font-semibold text-stone-700">
                         N
                       </div>
                       <div>
-                        <div className="mb-1 text-[0.85rem] font-bold text-slate-950 dark:text-slate-50">
+                        <div className="mb-1 text-[0.85rem] font-semibold text-slate-950 dark:text-slate-50">
                           {item.author}
                         </div>
                         <p
@@ -1127,11 +1136,11 @@ function RoughdraftPopupMock({ workflowStage }: { workflowStage: number }) {
                                 className="mt-3 grid grid-cols-[1.65rem_minmax(0,1fr)] gap-2.5 border-t border-stone-200 pt-3"
                                 key={`${item.key}-${reply.author}`}
                               >
-                                <div className="flex size-[1.65rem] items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-[0.62rem] font-bold text-sky-700">
+                                <div className="flex size-[1.65rem] items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-[0.62rem] font-semibold text-sky-700">
                                   {reply.author}
                                 </div>
                                 <div>
-                                  <div className="mb-0.5 text-[0.76rem] font-bold text-slate-950 dark:text-slate-50">
+                                  <div className="mb-0.5 text-[0.76rem] font-semibold text-slate-950 dark:text-slate-50">
                                     {reply.author}
                                   </div>
                                   <p className="m-0 text-[0.8rem] leading-[1.65] text-stone-700 dark:text-stone-300">
