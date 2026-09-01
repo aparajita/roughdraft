@@ -259,7 +259,7 @@ export function ReviewThreadDialog({
                   type="button"
                   size="sm"
                   disabled={!canSubmit}
-                  className="text-base"
+                  className="text-base bg-primary dark:bg-slate-700 text-primary-foreground dark:text-slate-100 hover:bg-stone-700 dark:hover:bg-slate-600"
                   data-testid="review-thread-dialog-action-submit"
                   onClick={submitReply}
                 >
