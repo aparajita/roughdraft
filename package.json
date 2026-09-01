@@ -15,6 +15,7 @@
     "setup": "./scripts/setup.sh",
     "start": "./scripts/run.sh",
     "dev": "node scripts/dev.mjs",
+    "dev:open": "worktree_root=\"$(git rev-parse --show-toplevel)\"; roughdraft-dev-roughdraft open",
     "dev:install-cli": "node scripts/install-dev-cli.mjs",
     "dev:web": "node scripts/dev-web.mjs",
     "lint": "biome check . --assist-enabled=false",
