@@ -146,7 +146,7 @@ export function ReviewThreadDialog({
         style={
           { "--review-thread-dialog-inset": VIEWPORT_INSET } as CSSProperties
         }
-        className="top-[var(--review-thread-dialog-inset)] bottom-[var(--review-thread-dialog-inset)] h-auto w-[48rem] max-w-[calc(100%-var(--review-thread-dialog-inset)*2)] translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden p-4"
+        className="top-[var(--review-thread-dialog-inset)] bottom-[var(--review-thread-dialog-inset)] h-auto w-[48rem] max-w-[calc(100%-var(--review-thread-dialog-inset)*2)] translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden px-6 py-5"
       >
         {entry === null ? (
           <>
@@ -244,7 +244,6 @@ export function ReviewThreadDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
                     aria-pressed={isResolved}
                     data-testid="review-thread-dialog-action-resolve"
                     className="mr-auto text-base"
@@ -257,7 +256,6 @@ export function ReviewThreadDialog({
                 )}
                 <Button
                   type="button"
-                  size="sm"
                   disabled={!canSubmit}
                   className="text-base bg-primary dark:bg-slate-700 text-primary-foreground dark:text-slate-100 hover:bg-stone-700 dark:hover:bg-slate-600"
                   data-testid="review-thread-dialog-action-submit"
