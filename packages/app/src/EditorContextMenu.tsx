@@ -276,6 +276,7 @@ export function EditorContextMenu({
   const containerRef = useRef<HTMLDivElement>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
+  const isSelectingRef = useRef(false);
   const shortcutLabel = getAddCommentShortcutLabel(getNavigatorPlatform());
   const selectionMenuState = useEditorState({
     editor,
@@ -622,11 +623,44 @@ export function EditorContextMenu({
       });
     };
 
+    /**
+     * A mouse drag fires a `selectionchange` (and a matching ProseMirror
+     * `selectionUpdate`) per pointer move, so gating on the drag flag here
+     * keeps the selection menu from appearing mid-drag. `handleMouseUp`
+     * calls `schedulePositionUpdate` directly once the drag ends to show it
+     * for the finished selection.
+     */
+    const scheduleSelectionAwarePositionUpdate = () => {
+      if (isSelectingRef.current) return;
+      schedulePositionUpdate();
+    };
+
     const clearSelectionAction = () => {
       setSelectionActionPosition(null);
     };
 
     const handleSelectionChange = () => {
+      scheduleSelectionAwarePositionUpdate();
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+
+      const container = containerRef.current;
+      if (
+        !container ||
+        !(event.target instanceof Node) ||
+        !container.contains(event.target)
+      ) {
+        return;
+      }
+
+      isSelectingRef.current = true;
+    };
+
+    const handleMouseUp = () => {
+      if (!isSelectingRef.current) return;
+      isSelectingRef.current = false;
       schedulePositionUpdate();
     };
 
@@ -647,24 +681,28 @@ export function EditorContextMenu({
       clearSelectionAction();
     };
 
-    editor.on("selectionUpdate", schedulePositionUpdate);
-    editor.on("update", schedulePositionUpdate);
+    editor.on("selectionUpdate", scheduleSelectionAwarePositionUpdate);
+    editor.on("update", scheduleSelectionAwarePositionUpdate);
     editor.on("focus", schedulePositionUpdate);
     editor.on("blur", clearSelectionAction);
     document.addEventListener("selectionchange", handleSelectionChange);
     document.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("resize", schedulePositionUpdate);
     window.addEventListener("scroll", schedulePositionUpdate, true);
 
     schedulePositionUpdate();
 
     return () => {
-      editor.off("selectionUpdate", schedulePositionUpdate);
-      editor.off("update", schedulePositionUpdate);
+      editor.off("selectionUpdate", scheduleSelectionAwarePositionUpdate);
+      editor.off("update", scheduleSelectionAwarePositionUpdate);
       editor.off("focus", schedulePositionUpdate);
       editor.off("blur", clearSelectionAction);
       document.removeEventListener("selectionchange", handleSelectionChange);
       document.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("resize", schedulePositionUpdate);
       window.removeEventListener("scroll", schedulePositionUpdate, true);
     };
