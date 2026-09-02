@@ -43,20 +43,36 @@ export function ReviewEntryFooter({
         ? entries[currentIndex]
         : entries[0];
   const canNavigate = entries.length > 1;
+  const displayIndex = currentIndex >= 0 ? currentIndex : 0;
 
   return (
     <div
       data-testid="review-entry-footer"
-      className="review-entry-footer flex items-center gap-2 border-t border-border bg-card px-3"
+      className="review-entry-footer flex items-center gap-4 border-t border-border bg-card px-3"
     >
-      <ReviewEntryNavButton
-        testId="review-entry-footer-action-previous"
-        ariaLabel="Previous entry"
-        icon={ChevronLeft}
-        size="lg"
-        disabled={!canNavigate}
-        onClick={onGoToPreviousEntry}
-      />
+      <div className="flex items-center gap-1">
+        <ReviewEntryNavButton
+          testId="review-entry-footer-action-previous"
+          ariaLabel="Previous entry"
+          icon={ChevronLeft}
+          size="lg"
+          disabled={!canNavigate}
+          onClick={onGoToPreviousEntry}
+        />
+        <ReviewEntryNavButton
+          testId="review-entry-footer-action-next"
+          ariaLabel="Next entry"
+          icon={ChevronRight}
+          size="lg"
+          disabled={!canNavigate}
+          onClick={onGoToNextEntry}
+        />
+      </div>
+      {entries.length > 0 && (
+        <span className="whitespace-nowrap text-sm text-muted-foreground">
+          {displayIndex + 1} of {entries.length}
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <ReviewEntryChip
           entry={entry}
@@ -69,14 +85,6 @@ export function ReviewEntryFooter({
           onRejectSuggestion={entry ? onRejectSuggestion : undefined}
         />
       </div>
-      <ReviewEntryNavButton
-        testId="review-entry-footer-action-next"
-        ariaLabel="Next entry"
-        icon={ChevronRight}
-        size="lg"
-        disabled={!canNavigate}
-        onClick={onGoToNextEntry}
-      />
     </div>
   );
 }
