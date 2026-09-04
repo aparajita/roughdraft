@@ -164,7 +164,7 @@ export function ReviewThreadDialog({
         style={
           { "--review-thread-dialog-inset": VIEWPORT_INSET } as CSSProperties
         }
-        className="top-[var(--review-thread-dialog-inset)] bottom-[var(--review-thread-dialog-inset)] h-auto w-[48rem] max-w-[calc(100%-var(--review-thread-dialog-inset)*2)] translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden px-6 py-5"
+        className="top-[var(--review-thread-dialog-inset)] bottom-[var(--review-thread-dialog-inset)] h-auto w-[calc(var(--document-measure)+3rem)] max-w-[calc(100%-var(--review-thread-dialog-inset)*2)] translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden px-6 py-5"
       >
         {entry === null ? (
           <>
