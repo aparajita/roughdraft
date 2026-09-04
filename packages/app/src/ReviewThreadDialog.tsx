@@ -2,7 +2,6 @@ import { Check, X } from "lucide-react";
 import {
   type CSSProperties,
   type KeyboardEvent,
-  useEffect,
   useRef,
   useState,
 } from "react";
@@ -98,10 +97,6 @@ export function ReviewThreadDialog({
   const entryId = entry?.id ?? null;
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (entryId !== null) replyInputRef.current?.focus();
-  }, [entryId]);
-
   // A draft belongs to the thread it was typed into: it carries that thread's
   // id, so opening another entry shows an empty composer rather than the text
   // meant for somewhere else.
@@ -165,6 +160,7 @@ export function ReviewThreadDialog({
     >
       <DialogContent
         data-testid="review-thread-dialog"
+        initialFocus={replyInputRef}
         style={
           { "--review-thread-dialog-inset": VIEWPORT_INSET } as CSSProperties
         }

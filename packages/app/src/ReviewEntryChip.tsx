@@ -1,8 +1,8 @@
-import { Check, FileText, PencilLine, Trash2, X } from "lucide-react";
-import type { ReviewEntry, SuggestionOperation } from "./document-comments";
-import { cn } from "./lib/utils";
-import { ReviewButton } from "./ReviewButton";
-import type { ReviewComment } from "./review";
+import { Check, FileText, Trash2, X } from 'lucide-react'
+import type { ReviewEntry, SuggestionOperation } from './document-comments'
+import { cn } from './lib/utils'
+import { ReviewButton } from './ReviewButton'
+import type { ReviewComment } from './review'
 
 const THREAD_SEGMENT_SEPARATOR = " → ";
 
@@ -25,7 +25,7 @@ const SUGGESTION_OPERATION_LABELS: Record<SuggestionOperation, string> = {
 };
 
 function commentCountLabel(count: number): string {
-  return count === 1 ? "1 comment" : `${count} comments`;
+  return count === 1 ? "1 comment:" : `${count} comments:`;
 }
 
 /**
@@ -65,82 +65,51 @@ export function ReviewEntryChip({
     .filter((content): content is string => Boolean(content))
     .join(THREAD_SEGMENT_SEPARATOR);
 
-  let label: string;
-  let showCheckAndCross = false;
   const showDocumentIcon = entry.kind === "document-comment";
-
-  switch (entry.kind) {
-    case "document-comment":
-    case "comment-thread": {
-      label = commentCountLabel(commentCount);
-      break;
-    }
-    case "suggestion": {
-      const operationLabel = SUGGESTION_OPERATION_LABELS[entry.operation];
-      label =
-        commentCount > 0
-          ? `${operationLabel} · ${commentCountLabel(commentCount)}`
-          : operationLabel;
-      showCheckAndCross = true;
-      break;
-    }
-    default: {
-      const exhaustiveCheck: never = entry;
-      throw new Error(
-        `Unhandled review entry kind: ${JSON.stringify(exhaustiveCheck)}`,
-      );
-    }
-  }
 
   return (
     <div
       data-testid={`review-entry-chip-${entry.id}`}
       className={cn(
-        "group relative flex h-8 w-full items-center gap-1.5 overflow-hidden rounded-md border px-1",
+        "cursor-default group relative flex h-8 w-full items-center gap-0 overflow-hidden rounded-md border px-1",
         isCurrent ? "border-border bg-card" : "border-transparent",
         isResolved && "opacity-50",
       )}
+      onClick={() => {
+        onSelect?.();
+        onOpenDialog?.();
+      }}
     >
-      <button
-        type="button"
-        className="flex items-center gap-1 px-1 text-left"
-        onClick={onSelect}
-      >
+      {entry.kind === "suggestion" && (
+        <div className="flex shrink-0 items-center gap-1 px-1 text-left">
+          <span className="whitespace-nowrap text-sm leading-5 text-slate-700 dark:text-slate-300">
+            {SUGGESTION_OPERATION_LABELS[entry.operation]}
+          </span>
+          <ReviewButton
+            icon={Check}
+            label="Accept suggestion"
+            color="success"
+            testId={`review-entry-chip-${entry.id}-action-accept`}
+            onClick={() => onAcceptSuggestion?.(entry.id)}
+          />
+          <ReviewButton
+            icon={X}
+            label="Reject suggestion"
+            color="danger"
+            testId={`review-entry-chip-${entry.id}-action-reject`}
+            onClick={() => onRejectSuggestion?.(entry.id)}
+          />
+        </div>
+      )}
+      <div className="flex items-center gap-1 px-1 text-left">
         {showDocumentIcon && (
           <FileText className="size-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
         )}
-        <span className="truncate whitespace-nowrap text-sm leading-5 text-slate-700 dark:text-slate-300">
-          {label}
+        <span className="shrink-0 whitespace-nowrap text-sm leading-5 text-slate-700 dark:text-slate-300">
+          {commentCountLabel(commentCount)}
         </span>
-      </button>
-      <div className="flex shrink-0 items-center gap-0.5">
-        <ReviewButton
-          icon={PencilLine}
-          label="Open thread"
-          color="neutral"
-          testId={`review-entry-chip-${entry.id}-action-open`}
-          onClick={() => onOpenDialog?.()}
-        />
-        {showCheckAndCross && entry.kind === "suggestion" && (
-          <>
-            <ReviewButton
-              icon={Check}
-              label="Accept suggestion"
-              color="success"
-              testId={`review-entry-chip-${entry.id}-action-accept`}
-              onClick={() => onAcceptSuggestion?.(entry.id)}
-            />
-            <ReviewButton
-              icon={X}
-              label="Reject suggestion"
-              color="danger"
-              testId={`review-entry-chip-${entry.id}-action-reject`}
-              onClick={() => onRejectSuggestion?.(entry.id)}
-            />
-          </>
-        )}
       </div>
-      <div className="px-1 truncate">{threadContent}</div>
+      <div className="truncate">{threadContent}</div>
       <ReviewButton
         icon={Trash2}
         label="Delete thread"

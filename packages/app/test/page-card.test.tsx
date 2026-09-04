@@ -339,12 +339,7 @@ function getThreadDialog() {
 }
 
 async function openThreadDialog(container: HTMLElement, entryId: string) {
-  await clickElement(
-    getByTestId<HTMLButtonElement>(
-      getRailChip(container, entryId),
-      `review-entry-chip-${entryId}-action-open`,
-    ),
-  );
+  await clickElement(getRailChip(container, entryId));
 
   return getThreadDialog();
 }

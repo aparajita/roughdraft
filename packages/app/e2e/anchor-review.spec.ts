@@ -48,7 +48,7 @@ test.describe("Anchor review flows", () => {
     // the footer is the only place the chip renders.
     await page
       .getByTestId("review-entry-footer")
-      .getByTestId("review-entry-chip-rd-c1-action-open")
+      .getByTestId("review-entry-chip-rd-c1")
       .click();
 
     const dialog = page.getByTestId("review-thread-dialog");
@@ -56,6 +56,7 @@ test.describe("Anchor review flows", () => {
     await expect(dialog).toContainText("Needs detail");
 
     const composer = page.getByTestId("review-thread-dialog-composer");
+    await expect(composer).toBeFocused();
     await composer.fill("Added context looks good.");
     await composer.press("ControlOrMeta+Enter");
 
@@ -300,7 +301,7 @@ test.describe("Anchor review flows", () => {
     await footer.getByTestId("review-entry-footer-action-next").click();
     await expect(footer.getByTestId("review-entry-chip-rd-s2")).toBeVisible();
 
-    await footer.getByTestId("review-entry-chip-rd-s2-action-open").click();
+    await footer.getByTestId("review-entry-chip-rd-s2").click();
     await expect(page.getByTestId("review-thread-dialog")).toBeVisible();
 
     await page.getByTestId("review-thread-dialog-action-accept").click();

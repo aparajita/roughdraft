@@ -8,9 +8,9 @@ import { createEditorExtensions } from "../src/editor-extensions";
 import { getReviewMarkupBlockedReason } from "../src/review-markup-selection";
 
 const MAC_ADD_COMMENT_EVENT = {
-  code: "KeyM",
-  key: "m",
-  altKey: true,
+  code: "Enter",
+  key: "Enter",
+  altKey: false,
   ctrlKey: false,
   metaKey: true,
   shiftKey: false,
@@ -64,22 +64,22 @@ function commentAnchorRanges(editor: Editor) {
 
 describe("comment shortcuts", () => {
   it("formats the add comment shortcut label for Mac platforms", () => {
-    expect(getAddCommentShortcutLabel("MacIntel")).toBe("Cmd + Option + M");
-    expect(getAddCommentShortcutLabel("iPhone")).toBe("Cmd + Option + M");
+    expect(getAddCommentShortcutLabel("MacIntel")).toBe("Cmd + Return");
+    expect(getAddCommentShortcutLabel("iPhone")).toBe("Cmd + Return");
   });
 
   it("formats the add comment shortcut label for non-Mac platforms", () => {
-    expect(getAddCommentShortcutLabel("Win32")).toBe("Ctrl + Alt + M");
-    expect(getAddCommentShortcutLabel("Linux x86_64")).toBe("Ctrl + Alt + M");
+    expect(getAddCommentShortcutLabel("Win32")).toBe("Ctrl + Enter");
+    expect(getAddCommentShortcutLabel("Linux x86_64")).toBe("Ctrl + Enter");
   });
 
   it("matches the Mac add comment shortcut", () => {
     expect(
       matchesAddCommentShortcut(
         {
-          code: "KeyM",
-          key: "m",
-          altKey: true,
+          code: "Enter",
+          key: "Enter",
+          altKey: false,
           ctrlKey: false,
           metaKey: true,
           shiftKey: false,
@@ -93,24 +93,8 @@ describe("comment shortcuts", () => {
     expect(
       matchesAddCommentShortcut(
         {
-          code: "KeyM",
-          key: "M",
-          altKey: true,
-          ctrlKey: true,
-          metaKey: false,
-          shiftKey: false,
-        },
-        "Win32",
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects partial or conflicting modifier combinations", () => {
-    expect(
-      matchesAddCommentShortcut(
-        {
-          code: "KeyM",
-          key: "m",
+          code: "Enter",
+          key: "Enter",
           altKey: false,
           ctrlKey: true,
           metaKey: false,
@@ -118,14 +102,32 @@ describe("comment shortcuts", () => {
         },
         "Win32",
       ),
-    ).toBe(false);
+    ).toBe(true);
+  });
 
+  it("rejects Enter with no modifier held", () => {
     expect(
       matchesAddCommentShortcut(
         {
-          code: "KeyM",
-          key: "m",
-          altKey: true,
+          code: "Enter",
+          key: "Enter",
+          altKey: false,
+          ctrlKey: false,
+          metaKey: false,
+          shiftKey: false,
+        },
+        "Win32",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects Enter with both Ctrl and Cmd held on Mac", () => {
+    expect(
+      matchesAddCommentShortcut(
+        {
+          code: "Enter",
+          key: "Enter",
+          altKey: false,
           ctrlKey: true,
           metaKey: true,
           shiftKey: false,
@@ -135,12 +137,28 @@ describe("comment shortcuts", () => {
     ).toBe(false);
   });
 
-  it("matches the Mac shortcut from the physical key code even when Option changes the character", () => {
+  it("rejects Enter with Shift held", () => {
     expect(
       matchesAddCommentShortcut(
         {
-          code: "KeyM",
-          key: "µ",
+          code: "Enter",
+          key: "Enter",
+          altKey: false,
+          ctrlKey: false,
+          metaKey: true,
+          shiftKey: true,
+        },
+        "MacIntel",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects Enter with Alt held", () => {
+    expect(
+      matchesAddCommentShortcut(
+        {
+          code: "Enter",
+          key: "Enter",
           altKey: true,
           ctrlKey: false,
           metaKey: true,
@@ -148,16 +166,16 @@ describe("comment shortcuts", () => {
         },
         "MacIntel",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("rejects non-M physical keys even if the produced character is m", () => {
+  it("rejects a non-Enter code even with the right modifier", () => {
     expect(
       matchesAddCommentShortcut(
         {
-          code: "KeyN",
-          key: "m",
-          altKey: true,
+          code: "NumpadEnter",
+          key: "Enter",
+          altKey: false,
           ctrlKey: false,
           metaKey: true,
           shiftKey: false,
