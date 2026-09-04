@@ -52,7 +52,19 @@ const ENTRY_TITLES: Record<ReviewEntry["kind"], string> = {
 
 function isSubmitShortcut(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
   return (
-    (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "enter"
+    (event.metaKey || event.ctrlKey) &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "enter"
+  );
+}
+
+function isSubmitAndCloseShortcut(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+): boolean {
+  return (
+    (event.metaKey || event.ctrlKey) &&
+    event.shiftKey &&
+    event.key.toLowerCase() === "enter"
   );
 }
 
@@ -120,6 +132,16 @@ export function ReviewThreadDialog({
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isSubmitAndCloseShortcut(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (canSubmit) {
+        submitReply();
+        onClose();
+      }
+      return;
+    }
+
     if (isSubmitShortcut(event)) {
       event.preventDefault();
       event.stopPropagation();

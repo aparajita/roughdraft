@@ -5,7 +5,7 @@ function isApplePlatform(platform?: string | null) {
 }
 
 export function getAddCommentShortcutLabel(platform?: string | null) {
-  return isApplePlatform(platform) ? "Cmd + Option + M" : "Ctrl + Alt + M";
+  return isApplePlatform(platform) ? "Cmd + Return" : "Ctrl + Enter";
 }
 
 interface AddCommentShortcutEventLike {
@@ -21,7 +21,7 @@ export function matchesAddCommentShortcut(
   event: AddCommentShortcutEventLike,
   platform?: string | null,
 ) {
-  if (event.shiftKey || event.code !== "KeyM" || !event.altKey) {
+  if (event.shiftKey || event.altKey || event.code !== "Enter") {
     return false;
   }
 
