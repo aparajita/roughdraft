@@ -8,11 +8,13 @@ import {
 import { cn } from "./lib/utils";
 import { ReviewEntryChip } from "./ReviewEntryChip";
 import { ReviewEntryNavButton } from "./ReviewEntryNavButton";
+import type { ReviewComment } from "./review";
 
 const RAIL_BOTTOM_PADDING = 24;
 
 interface DocumentReviewRailProps {
   entries: ReviewEntry[];
+  comments: ReadonlyMap<string, ReviewComment>;
   currentEntryId: string | null;
   resolvedEntryIds: ReadonlySet<string>;
   contentHeight: number;
@@ -52,6 +54,7 @@ function isAnchoredEntry(entry: ReviewEntry): entry is AnchoredReviewEntry {
  */
 export function DocumentReviewRail({
   entries,
+  comments,
   currentEntryId,
   resolvedEntryIds,
   contentHeight,
@@ -170,6 +173,7 @@ export function DocumentReviewRail({
   const renderChip = (entry: ReviewEntry) => (
     <ReviewEntryChip
       entry={entry}
+      comments={comments}
       isCurrent={entry.id === currentEntryId}
       isResolved={resolvedEntryIds.has(entry.id)}
       onSelect={() => onSelectEntry(entry.id)}

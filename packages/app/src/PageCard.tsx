@@ -1876,6 +1876,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
             className={reviewRailClass}
             testId="document-review-rail"
             entries={entries}
+            comments={comments}
             currentEntryId={currentEntryId}
             resolvedEntryIds={resolvedEntryIds}
             contentHeight={contentHeight}
@@ -1892,6 +1893,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       {showReview ? (
         <ReviewEntryFooter
           entries={entries}
+          comments={comments}
           currentEntryId={currentEntryId}
           resolvedEntryIds={resolvedEntryIds}
           onSelectEntry={setCurrentEntry}

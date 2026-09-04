@@ -2,9 +2,13 @@ import { Check, FileText, PencilLine, Trash2, X } from "lucide-react";
 import type { ReviewEntry, SuggestionOperation } from "./document-comments";
 import { cn } from "./lib/utils";
 import { ReviewButton } from "./ReviewButton";
+import type { ReviewComment } from "./review";
+
+const THREAD_SEGMENT_SEPARATOR = " → ";
 
 export interface ReviewEntryChipProps {
   entry: ReviewEntry | null;
+  comments: ReadonlyMap<string, ReviewComment>;
   isCurrent: boolean;
   isResolved: boolean;
   onSelect?: () => void;
@@ -30,6 +34,7 @@ function commentCountLabel(count: number): string {
  */
 export function ReviewEntryChip({
   entry,
+  comments,
   isCurrent,
   isResolved,
   onSelect,
@@ -55,6 +60,10 @@ export function ReviewEntryChip({
   }
 
   const commentCount = entry.commentIds.length;
+  const threadContent = entry.commentIds
+    .map((commentId) => comments.get(commentId)?.content)
+    .filter((content): content is string => Boolean(content))
+    .join(THREAD_SEGMENT_SEPARATOR);
 
   let label: string;
   let showCheckAndCross = false;
@@ -131,6 +140,7 @@ export function ReviewEntryChip({
           </>
         )}
       </div>
+      <div className="px-1 truncate">{threadContent}</div>
       <ReviewButton
         icon={Trash2}
         label="Delete thread"

@@ -2,9 +2,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ReviewEntry } from "./document-comments";
 import { ReviewEntryChip } from "./ReviewEntryChip";
 import { ReviewEntryNavButton } from "./ReviewEntryNavButton";
+import type { ReviewComment } from "./review";
 
 interface ReviewEntryFooterProps {
   entries: ReviewEntry[];
+  comments: ReadonlyMap<string, ReviewComment>;
   currentEntryId: string | null;
   resolvedEntryIds: ReadonlySet<string>;
   onSelectEntry: (entryId: string) => void;
@@ -23,6 +25,7 @@ interface ReviewEntryFooterProps {
  */
 export function ReviewEntryFooter({
   entries,
+  comments,
   currentEntryId,
   resolvedEntryIds,
   onSelectEntry,
@@ -76,6 +79,7 @@ export function ReviewEntryFooter({
       <div className="min-w-0 flex-1">
         <ReviewEntryChip
           entry={entry}
+          comments={comments}
           isCurrent
           isResolved={entry ? resolvedEntryIds.has(entry.id) : false}
           onSelect={entry ? () => onSelectEntry(entry.id) : undefined}
