@@ -74,57 +74,8 @@ import type { CompleteReviewOptions, Page, StorageBackend } from "./storage";
 
 type FileCopyAction = "path" | "filename" | "markdown" | "rich-text";
 const FILE_COPY_PREVIEW_MAX_LENGTH = 34;
-const reviewCompleteTitles = [
-  "Great work!",
-  "Nice one!",
-  "Well done!",
-  "All set!",
-  "Review complete!",
-  "That’ll do!",
-  "Lovely stuff!",
-  "Job done!",
-  "Done and dusted!",
-  "Nailed it!",
-  "Good stuff!",
-  "Sorted!",
-  "Cracking work!",
-  "Top work!",
-  "Brilliant!",
-  "Ace!",
-  "Spot on!",
-  "Beauty!",
-  "Too easy!",
-  "Good on ya!",
-  "You’re golden!",
-  "That’s the ticket!",
-  "And that’s that!",
-  "Wrapped!",
-  "In the bag!",
-  "Shipshape!",
-  "Right as rain!",
-] as const;
-type ReviewCompleteTitle = (typeof reviewCompleteTitles)[number];
-
 function buildReviewHandoffCopyMessage(documentPath: string) {
   return `I am done reviewing this file: ${documentPath}`;
-}
-
-function getRandomReviewCompleteTitle(random: () => number = Math.random) {
-  const index = Math.floor(random() * reviewCompleteTitles.length);
-  return reviewCompleteTitles[Math.min(index, reviewCompleteTitles.length - 1)];
-}
-
-function getRandomReviewCompleteTitleExcept(
-  currentTitle: ReviewCompleteTitle,
-  random: () => number = Math.random,
-): ReviewCompleteTitle {
-  const otherTitles = reviewCompleteTitles.filter(
-    (title) => title !== currentTitle,
-  );
-  if (otherTitles.length === 0) return currentTitle;
-
-  const index = Math.floor(random() * otherTitles.length);
-  return otherTitles[Math.min(index, otherTitles.length - 1)];
 }
 
 const documentInteractionModeOptions = [
@@ -349,9 +300,6 @@ export function DocumentWorkspace({
   const [reviewWatcherCount, setReviewWatcherCount] = useState(0);
   const [reviewHandoffPopoverOpen, setReviewHandoffPopoverOpen] =
     useState(false);
-  const [reviewCompleteTitle, setReviewCompleteTitle] = useState(() =>
-    getRandomReviewCompleteTitle(),
-  );
   const [fileCopyMenuOpen, setFileCopyMenuOpen] = useState(false);
   const [copiedFileAction, setCopiedFileAction] =
     useState<FileCopyAction | null>(null);
@@ -433,14 +381,6 @@ export function DocumentWorkspace({
       setReviewHandoffState("idle");
     }
   }, [reviewHandoffState, reviewWatcherCount]);
-
-  useEffect(() => {
-    if (reviewHandoffState === "notified") {
-      setReviewCompleteTitle((currentTitle) =>
-        getRandomReviewCompleteTitleExcept(currentTitle),
-      );
-    }
-  }, [reviewHandoffState]);
 
   useEffect(() => {
     return () => {
@@ -617,12 +557,6 @@ export function DocumentWorkspace({
       : reviewHandoffState === "error" || reviewHandoffState === "undelivered"
         ? AlertTriangle
         : null;
-  const reviewHandoffStatusTitle =
-    reviewHandoffState === "undelivered"
-      ? "No agent is watching now"
-      : reviewHandoffState === "error"
-        ? "Could not notify agent"
-        : reviewCompleteTitle;
   const reviewHandoffStatusBody =
     reviewHandoffState === "undelivered"
       ? "The handoff was not delivered because the watcher is no longer connected."
@@ -646,6 +580,11 @@ export function DocumentWorkspace({
       className={cn(
         "min-h-0 flex-1 overflow-y-auto px-6 pb-4 sm:px-6",
         conflictNotice ? "pt-40 sm:pt-28" : "pt-4",
+        // Below the rail breakpoint the footer is fixed over the viewport, so
+        // this scroll container ends above it rather than behind it — that
+        // keeps the container's own scrollbar clear of the footer instead of
+        // hiding the thumb underneath it.
+        reviewFooterVisible && "mb-[var(--review-footer-height)] rail:mb-0",
       )}
     >
       <RemoteSessionBanner backend={backend} />

@@ -806,7 +806,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       editorProps: {
         attributes: {
           class:
-            "tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-[70vh] prose-h1:font-semibold prose-h1:leading-[1.25] prose-h2:font-semibold prose-h2:leading-[1.25] prose-h3:leading-[1.25] prose-code:before:content-none prose-code:after:content-none prose-blockquote:not-italic [&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none prose-code:bg-stone-100 dark:prose-code:bg-slate-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-a:font-normal prose-hr:p-0 prose-hr:my-3 prose-table:my-1 prose-th:text-base prose-th:pe-2 prose-td:text-base prose-td:ps-0",
+            "tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-[70vh] prose-h1:font-semibold prose-h1:leading-[1.1] prose-h2:font-semibold prose-h2:leading-[1.25] prose-h3:leading-[1.25] prose-code:before:content-none prose-code:after:content-none prose-blockquote:not-italic [&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none prose-code:bg-stone-100 dark:prose-code:bg-slate-800 prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-a:font-normal prose-hr:p-0 prose-hr:my-3 prose-table:my-1 prose-th:text-base prose-th:pe-2 prose-td:text-base prose-td:ps-0",
         },
         handleDrop: (_view, event) => {
           const files = Array.from(event.dataTransfer?.files ?? []);
@@ -1821,9 +1821,11 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
   );
   const contentInsetClass = cn(
     "pb-24",
-    // The footer is fixed over the document below the rail breakpoint, so the
-    // document ends above it rather than behind it.
-    showReview && "pb-[var(--review-footer-height)] rail:pb-24",
+    // Below the rail breakpoint the scroll container itself already reserves
+    // clearance for the fixed footer (see DocumentWorkspace's `mb-` on the
+    // scroll container), so the document only needs its ordinary bottom
+    // breathing room here, not another footer-height inset on top of it.
+    showReview && "pb-4 rail:pb-24",
   );
   const reviewRailClass =
     "review-layout-rail document-comment-rail hidden rail:block";

@@ -207,7 +207,7 @@
 
   /* We'll keep the rail code, but I prefer the footer navigation interface */
   --breakpoint-rail: 10000px;
-  --document-measure: 38rem;
+  --document-measure: 42rem;
   --review-footer-height: 3.5rem;
 }
 
@@ -300,7 +300,7 @@
 }
 
 @utility prose {
-  font-size: 1.25rem;   /* 18px */
+  font-size: 1.25rem; /* 18px */
   line-height: 1.4;
 }
 

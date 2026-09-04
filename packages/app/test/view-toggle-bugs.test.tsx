@@ -1096,7 +1096,6 @@ describe("review handoff watcher affordance", () => {
   });
 
   it("reopens the sent popover from the muted primary button", async () => {
-    vi.spyOn(Math, "random").mockReturnValue(0);
     const writeText = vi.fn<Clipboard["writeText"]>().mockResolvedValue();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -1124,7 +1123,6 @@ describe("review handoff watcher affordance", () => {
 
     expect(onCompleteReview).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Sent");
-    expect(document.body.textContent).toContain("Nice one!");
     expect(document.body.textContent).toContain(
       "Your agent is now working in the background on this, in all likelihood. If our signal didn't make it, just click here to copy a line you can send it to keep going.",
     );
