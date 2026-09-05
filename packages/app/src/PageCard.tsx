@@ -1,5 +1,6 @@
 import { RecordIdAllocator } from "@roughdraft/rfm";
 import type { JSONContent } from "@tiptap/core";
+import { DOMSerializer } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -26,9 +27,11 @@ import {
 } from "./comment-shortcuts";
 import { EditorContextMenu } from "./EditorContextMenu";
 import {
+  collectSuggestionRanges,
   commentHighlightPluginKey,
   createEditorExtensions,
   inlineNodeText,
+  REPLACE_ATTRIBUTE,
   suggestionHighlightPluginKey,
 } from "./editor-extensions";
 import { cn } from "./lib/utils";
@@ -150,6 +153,7 @@ interface PendingCommentState {
   commentId: string;
   from: number;
   to: number;
+  /** The editor's markup for the selection, shown as the dialog's excerpt. */
   excerpt: string;
 }
 
@@ -429,31 +433,6 @@ function getDocumentSuggestionAnchorItems(
   );
 }
 
-function getSuggestionRange(editor: Editor | null, suggestionId: string) {
-  if (!editor) return null;
-
-  let from: number | null = null;
-  let to: number | null = null;
-
-  editor.state.doc.descendants((node, pos) => {
-    if (!node.isText) return;
-
-    const hasSuggestion = node.marks.some(
-      (mark) =>
-        mark.type.name === "suggestion" &&
-        mark.attrs.suggestionId === suggestionId,
-    );
-    if (!hasSuggestion) return;
-
-    from = from == null ? pos : Math.min(from, pos);
-    to = to == null ? pos + node.nodeSize : Math.max(to, pos + node.nodeSize);
-  });
-
-  if (from == null || to == null) return null;
-
-  return { from, to };
-}
-
 function addCommentIdsToSuggestion(
   editor: Editor | null,
   suggestionId: string,
@@ -585,7 +564,46 @@ function scrollDocumentPaneToTop(editor: Editor | null) {
   }
 }
 
-/** The document text an entry is anchored to, or null when it has no anchor. */
+/**
+ * The attributes that identify a rendered anchor. The editor's copy of the
+ * anchor already carries them, so a second copy shown elsewhere on the page
+ * drops them to keep every id on the page unique.
+ */
+const ANCHOR_IDENTITY_ATTRIBUTES = ["id", REPLACE_ATTRIBUTE];
+
+/**
+ * The editor's own markup for a range of the document: the schema's
+ * `renderHTML` output, so every mark in the range looks as it does in the
+ * editor. Decorations are not part of it, so hover and selection state on
+ * the editor's copy do not leak in.
+ */
+function serializeRangeHtml(editor: Editor, from: number, to: number): string {
+  const container = document.createElement("div");
+  const serializer = DOMSerializer.fromSchema(editor.schema);
+  container.appendChild(
+    serializer.serializeFragment(editor.state.doc.slice(from, to).content),
+  );
+
+  for (const element of container.querySelectorAll(
+    ANCHOR_IDENTITY_ATTRIBUTES.map((name) => `[${name}]`).join(","),
+  )) {
+    for (const name of ANCHOR_IDENTITY_ATTRIBUTES) {
+      element.removeAttribute(name);
+    }
+  }
+
+  return container.innerHTML;
+}
+
+/** The whole span a suggestion covers, or null when the document has none of it. */
+function getSuggestionRange(editor: Editor, suggestionId: string) {
+  const ranges = collectSuggestionRanges(editor.state.doc, suggestionId);
+  if (ranges.length === 0) return null;
+
+  return { from: ranges[0].from, to: ranges[ranges.length - 1].to };
+}
+
+/** The editor's markup for the text an entry is anchored to, or null when it has no anchor. */
 function resolveEntryExcerpt(
   editor: Editor | null,
   entry: ReviewEntry,
@@ -598,7 +616,7 @@ function resolveEntryExcerpt(
       : getSuggestionRange(editor, entry.id);
   if (!range) return null;
 
-  return editor.state.doc.textBetween(range.from, range.to, "\n");
+  return serializeRangeHtml(editor, range.from, range.to);
 }
 
 /** An entry's comments, oldest first: the order the dialog's thread reads in. */
@@ -1299,7 +1317,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
       commentId,
       from,
       to,
-      excerpt: currentEditor.state.doc.textBetween(from, to, "\n"),
+      excerpt: serializeRangeHtml(currentEditor, from, to),
     });
     setCurrentEntryId(commentId);
     setDialogEntryId(commentId);

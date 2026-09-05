@@ -42,6 +42,9 @@ const allowedSelectorPatterns = [
   // the class the marks render; decorations are addressed by `data-testid`.
   /^\.comment-anchor(?:\[id\^="rd-c"\])?$/,
   /^\.suggestion\[data-rd-replace\^="rd-s"\]$/,
+  // A copy of an anchor outside the editor, such as the thread dialog's
+  // excerpt, keeps the mark's tag and class but not its id.
+  /^(?:del|ins)(?:\.suggestion)?$/,
   /^\[id\^?="rd-[cs]\d*"\]$/,
   /^\[data-comment-thread-root-id\]/,
   /^\[data-comment-thread-container="true"\]$/,

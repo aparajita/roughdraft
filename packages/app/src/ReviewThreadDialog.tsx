@@ -20,6 +20,11 @@ import type { ReviewComment } from "./review";
 export interface ReviewThreadDialogProps {
   entry: ReviewEntry | null;
   comments: ReviewComment[];
+  /**
+   * The editor's own markup for the text the entry is anchored to, so a
+   * suggestion's `del` and `ins` and every other inline mark look as they do
+   * in the editor. Null for an entry with no anchor.
+   */
   excerpt: string | null;
   closedReason: string | null;
   onClose: () => void;
@@ -199,10 +204,10 @@ export function ReviewThreadDialog({
               {excerpt !== null && (
                 <div
                   data-testid="review-thread-dialog-excerpt"
-                  className="rounded-md bg-muted/60 px-2.5 py-2 mb-2 text-base whitespace-pre-wrap text-slate-700 dark:text-slate-300"
-                >
-                  {excerpt}
-                </div>
+                  className="rounded-md bg-muted/60 px-2.5 py-2 mb-2 text-base text-slate-700 dark:text-slate-300"
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: the excerpt is the editor's own serialization of the document, so the schema's `renderHTML` decides every tag and attribute in it.
+                  dangerouslySetInnerHTML={{ __html: excerpt }}
+                />
               )}
             </div>
             <div className="min-h-0 overflow-y-auto pr-1">

@@ -1887,6 +1887,103 @@ describe("PageCard editor integration", () => {
     expect(savedMarkdown).toContain("rd-s1:");
   });
 
+  it("renders a replacement suggestion's deletion and insertion in the thread dialog excerpt", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-excerpt-replacement-markup-1",
+        title: "Doc Excerpt Replacement Markup 1",
+        content: reviewDocument(
+          'Some <span id="rd-s1"><del>old</del><ins>new</ins></span> text',
+          suggestionRecords({ id: "rd-s1" }),
+        ),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    const dialog = await openThreadDialog(rendered.container, "rd-s1");
+    const excerpt = getByTestId(dialog, "review-thread-dialog-excerpt");
+    const deletion = excerpt.querySelector("del.suggestion");
+    const insertion = excerpt.querySelector("ins.suggestion");
+
+    expect(deletion?.textContent).toBe("old");
+    expect(insertion?.textContent).toBe("new");
+    expect(deletion?.compareDocumentPosition(insertion as Node) ?? 0).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("renders a deletion-only suggestion as a del in the thread dialog excerpt", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-excerpt-deletion-markup-1",
+        title: "Doc Excerpt Deletion Markup 1",
+        content: reviewDocument(
+          'Some <del id="rd-s1">removed</del> text',
+          suggestionRecords({ id: "rd-s1" }),
+        ),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    const dialog = await openThreadDialog(rendered.container, "rd-s1");
+    const excerpt = getByTestId(dialog, "review-thread-dialog-excerpt");
+
+    expect(excerpt.querySelector("del.suggestion")?.textContent).toBe(
+      "removed",
+    );
+    expect(excerpt.querySelector("ins")).toBeNull();
+  });
+
+  it("renders inline marks inside a comment anchor in the thread dialog excerpt", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-excerpt-inline-marks-1",
+        title: "Doc Excerpt Inline Marks 1",
+        content: reviewDocument(
+          '<span id="rd-c1">alpha **bold** omega</span>',
+          commentRecords({ id: "rd-c1", body: "Comment body" }),
+        ),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    const dialog = await openThreadDialog(rendered.container, "rd-c1");
+    const excerpt = getByTestId(dialog, "review-thread-dialog-excerpt");
+
+    // The tag is the behavior under test.
+    expect(excerpt.querySelector("strong")?.textContent).toBe("bold"); // selector-check-ignore
+  });
+
+  it("renders a hard break inside a deleted range in the thread dialog excerpt", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-excerpt-hard-break-1",
+        title: "Doc Excerpt Hard Break 1",
+        content: reviewDocument(
+          'Some <del id="rd-s1">line one<br>line two</del> text',
+          suggestionRecords({ id: "rd-s1" }),
+        ),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    // The tag is the behavior under test.
+    expect(rendered.container.querySelector("del br")).not.toBeNull(); // selector-check-ignore
+
+    const dialog = await openThreadDialog(rendered.container, "rd-s1");
+    const excerpt = getByTestId(dialog, "review-thread-dialog-excerpt");
+
+    expect(excerpt.querySelector("br")).not.toBeNull(); // selector-check-ignore
+  });
+
   it("renders a comment anchor and a replacement suggestion", async () => {
     const rendered = await renderPageCard({
       page: {
