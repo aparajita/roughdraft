@@ -24,7 +24,13 @@ const SUGGESTION_OPERATION_LABELS: Record<SuggestionOperation, string> = {
   replace: "Replace",
 };
 
+const NO_COMMENTS_LABEL = "No comments";
+
 function commentCountLabel(count: number): string {
+  if (count === 0) {
+    return NO_COMMENTS_LABEL;
+  }
+
   return count === 1 ? "1 comment:" : `${count} comments:`;
 }
 
@@ -53,7 +59,7 @@ export function ReviewEntryChip({
         )}
       >
         <span className="truncate whitespace-nowrap text-sm leading-5 text-muted-foreground">
-          No comments
+          {NO_COMMENTS_LABEL}
         </span>
       </div>
     );
