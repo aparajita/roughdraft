@@ -701,7 +701,7 @@ export function DocumentWorkspace({
                       type="submit"
                       data-testid="review-handoff-submit-comment"
                       size="lg"
-                      className="w-full rounded-[7px] bg-black text-sm font-semibold bg-primary dark:bg-slate-700 text-primary-foreground dark:text-slate-100 hover:bg-stone-700 dark:hover:bg-slate-600"
+                      className="w-full rounded-[7px] bg-black text-base font-semibold bg-primary dark:bg-slate-700 text-primary-foreground dark:text-slate-100 hover:bg-stone-700 dark:hover:bg-slate-600"
                       disabled={!trimmedOverallComment}
                     >
                       <CheckCheck className="size-4" />
