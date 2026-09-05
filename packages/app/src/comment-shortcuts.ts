@@ -4,6 +4,18 @@ function isApplePlatform(platform?: string | null) {
   return /mac|iphone|ipad|ipod/i.test(platform);
 }
 
+export function getNavigatorPlatform() {
+  const navigatorWithUserAgentData = navigator as Navigator & {
+    userAgentData?: {
+      platform?: string;
+    };
+  };
+
+  return (
+    navigatorWithUserAgentData.userAgentData?.platform ?? navigator.platform
+  );
+}
+
 export function getAddCommentShortcutLabel(platform?: string | null) {
   return isApplePlatform(platform) ? "Cmd + Return" : "Ctrl + Enter";
 }

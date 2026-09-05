@@ -1,8 +1,8 @@
-import { Check, FileText, Trash2, X } from 'lucide-react'
-import type { ReviewEntry, SuggestionOperation } from './document-comments'
-import { cn } from './lib/utils'
-import { ReviewButton } from './ReviewButton'
-import type { ReviewComment } from './review'
+import { Check, FileText, Trash2, X } from "lucide-react";
+import type { ReviewEntry, SuggestionOperation } from "./document-comments";
+import { cn } from "./lib/utils";
+import { ReviewButton } from "./ReviewButton";
+import type { ReviewComment } from "./review";
 
 const THREAD_SEGMENT_SEPARATOR = " → ";
 

@@ -139,8 +139,9 @@ The writer drops a record whose anchor is absent from the body, and strips an an
 
 | Keys | Action |
 | --- | --- |
-| `Cmd`/`Ctrl`+`Opt`/`Alt`+`M` | Comment on the selection |
-| `Cmd`/`Ctrl`+`Enter` | Submit the composer |
+| `Cmd`/`Ctrl`+`Enter` in the document, with a selection | Comment on the selection |
+| `Cmd`/`Ctrl`+`Enter` in the document with no selection, the rail, or the footer | Open the current entry's thread |
+| `Cmd`/`Ctrl`+`Enter` in a composer | Submit the composer |
 | `Escape` | Close the dialog |
 | `Cmd`/`Ctrl`+`S` | Save |
 

@@ -20,6 +20,10 @@ import {
   resolveNextCurrentEntry,
   type SuggestionAnchorItem,
 } from "./document-comments";
+import {
+  getNavigatorPlatform,
+  matchesAddCommentShortcut,
+} from "./comment-shortcuts";
 import { EditorContextMenu } from "./EditorContextMenu";
 import {
   commentHighlightPluginKey,
@@ -662,6 +666,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
    * true — no rule two setters have to remember.
    */
   const currentEntryIdRef = useRef<string | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const entriesRef = useRef<ReviewEntry[]>([]);
   const [currentEntryId, setCurrentEntryId] = useState<string | null>(null);
   const [hoveredEntryId, setHoveredEntryId] = useState<string | null>(null);
@@ -1046,12 +1051,17 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
     // The anchor is read after the document has drawn the change that made this
     // entry current — accepting a suggestion moves every anchor below it.
     requestAnimationFrame(() => {
+      // The frame can arrive after the card has unmounted, when the editor's
+      // view is gone and reading it throws.
+      const currentEditor = editorRef.current;
+      if (!currentEditor || currentEditor.isDestroyed) return;
+
       if (entry.kind === "document-comment") {
-        scrollDocumentPaneToTop(editorRef.current);
+        scrollDocumentPaneToTop(currentEditor);
         return;
       }
 
-      const anchor = findEntryAnchorElement(editorRef.current, entry);
+      const anchor = findEntryAnchorElement(currentEditor, entry);
       if (anchor) scrollAnchorIntoView(anchor);
     });
   }, []);
@@ -1808,6 +1818,49 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
   const showReview = interactionMode !== "viewing";
 
+  /**
+   * The comment shortcut with nothing selected opens the current entry's
+   * thread, as clicking its chip does. It is read wherever focus rests inside
+   * the surface — the document, the rail, the footer's navigation buttons —
+   * and left alone in the dialog and the suggestion composer, which are
+   * portaled outside it and read the same keys as submit.
+   */
+  useEffect(() => {
+    if (!showReview) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const root = surfaceRef.current;
+      const active = document.activeElement;
+      if (
+        !root ||
+        !active ||
+        !root.contains(active) ||
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        !matchesAddCommentShortcut(event, getNavigatorPlatform())
+      ) {
+        return;
+      }
+
+      const currentEditor = editorRef.current;
+      if (currentEditor?.isFocused && !currentEditor.state.selection.empty) {
+        return;
+      }
+
+      const entryId = currentEntryIdRef.current;
+      if (!entryId) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openDialog(entryId);
+    };
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [openDialog, showReview]);
+
   useEffect(() => {
     onReviewFooterVisibleChange?.(showReview);
     return () => onReviewFooterVisibleChange?.(false);
@@ -1832,6 +1885,7 @@ const RichTextEditorSurface = memo(function RichTextEditorSurface({
 
   return (
     <div
+      ref={surfaceRef}
       className="cursor-text bg-transparent"
       data-testid="page-card-rich-text"
     >

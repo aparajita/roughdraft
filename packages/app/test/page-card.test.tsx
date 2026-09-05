@@ -208,14 +208,18 @@ async function addCommentWithShortcut() {
     return;
   }
 
+  await pressCommentShortcut();
+}
+
+/** Presses Cmd/Ctrl+Enter, the platform's comment shortcut, on the document. */
+async function pressCommentShortcut() {
   const isApplePlatform = /mac|iphone|ipad|ipod/i.test(navigator.platform);
 
   await act(async () => {
     document.dispatchEvent(
       new KeyboardEvent("keydown", {
-        key: "m",
-        code: "KeyM",
-        altKey: true,
+        key: "Enter",
+        code: "Enter",
         ctrlKey: !isApplePlatform,
         metaKey: isApplePlatform,
         bubbles: true,
@@ -225,6 +229,22 @@ async function addCommentWithShortcut() {
     await Promise.resolve();
   });
   await flushReact();
+  await flushReact();
+}
+
+/** Puts a collapsed caret one character into `text`. */
+async function placeCaretIn(editor: Editor, text: string) {
+  const range = findTextRange(editor, text);
+  expect(range).not.toBeNull();
+  if (!range) {
+    throw new Error(`Could not find text range for "${text}"`);
+  }
+
+  await act(async () => {
+    editor.commands.focus();
+    editor.commands.setTextSelection(range.from + 1);
+  });
+
   await flushReact();
 }
 
@@ -1654,6 +1674,77 @@ describe("PageCard editor integration", () => {
     await submitThreadDialogReply(dialog, "Some comment text");
 
     expect(rendered.getEditor().state.selection.empty).toBe(true);
+  });
+
+  it("opens the current entry's thread dialog with the comment shortcut when nothing is selected", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-current-entry-shortcut-1",
+        title: "Doc Current Entry Shortcut 1",
+        content: alphaCommentDocument("Paragraph"),
+      },
+      selected: true,
+    });
+
+    await placeCaretIn(rendered.getEditor(), "alpha");
+    // The entry becomes current once its anchor has been measured.
+    await flushAnimationFrame();
+    expect(queryByTestId(document, "review-thread-dialog")).toBeNull();
+
+    await pressCommentShortcut();
+
+    expect(
+      getByTestId(getThreadDialog(), "comment-row-rd-c1").textContent,
+    ).toContain("Comment body");
+  });
+
+  it("opens the current entry's thread dialog with the comment shortcut from the footer navigation", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-footer-nav-shortcut-1",
+        title: "Doc Footer Nav Shortcut 1",
+        content: reviewDocument(
+          '<span id="rd-c1">alpha</span>\n\n<span id="rd-c2">beta</span>',
+          commentRecords(
+            { id: "rd-c1", body: "First comment" },
+            { id: "rd-c2", body: "Second comment" },
+          ),
+        ),
+      },
+      selected: true,
+    });
+
+    await flushAnimationFrame();
+
+    const nextButton = getByTestId<HTMLButtonElement>(
+      rendered.container,
+      "review-entry-footer-action-next",
+    );
+    nextButton.focus();
+    await clickElement(nextButton);
+    expect(document.activeElement).toBe(nextButton);
+
+    await pressCommentShortcut();
+
+    expect(
+      getByTestId(getThreadDialog(), "comment-row-rd-c2").textContent,
+    ).toContain("Second comment");
+  });
+
+  it("leaves the comment shortcut alone when nothing is selected and there is no entry", async () => {
+    const rendered = await renderPageCard({
+      page: {
+        id: "doc-no-entry-shortcut-1",
+        title: "Doc No Entry Shortcut 1",
+        content: "Plain paragraph",
+      },
+      selected: true,
+    });
+
+    await placeCaretIn(rendered.getEditor(), "Plain");
+    await pressCommentShortcut();
+
+    expect(queryByTestId(document, "review-thread-dialog")).toBeNull();
   });
 
   it("deletes a whole root comment thread from the thread action", async () => {

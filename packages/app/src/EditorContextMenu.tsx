@@ -24,6 +24,7 @@ import {
 } from "react";
 import {
   getAddCommentShortcutLabel,
+  getNavigatorPlatform,
   matchesAddCommentShortcut,
 } from "./comment-shortcuts";
 import {
@@ -76,18 +77,6 @@ interface LinkPopoverState {
 }
 
 const SELECTION_MENU_VIEWPORT_MARGIN = 8;
-
-function getNavigatorPlatform() {
-  const navigatorWithUserAgentData = navigator as Navigator & {
-    userAgentData?: {
-      platform?: string;
-    };
-  };
-
-  return (
-    navigatorWithUserAgentData.userAgentData?.platform ?? navigator.platform
-  );
-}
 
 function isResolvedLinkTarget(value: string) {
   return /^(?:[a-z]+:)?\/\//i.test(value) || value.startsWith("data:");
