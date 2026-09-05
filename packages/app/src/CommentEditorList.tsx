@@ -184,11 +184,12 @@ export function CommentEditorList({
     <div
       data-testid={testId}
       data-comment-thread-container="true"
-      className="space-y-3"
+      className="flex flex-col"
     >
-      {orderedComments.map((comment) => (
+      {orderedComments.map((comment, index) => (
         <CommentRow
           key={comment.id}
+          isFirst={index === 0}
           comment={comment}
           now={now}
           isEditing={editingCommentIds.includes(comment.id)}
@@ -210,8 +211,16 @@ export function CommentEditorList({
   );
 }
 
+/**
+ * The border shared by a comment box, its header rule and the timeline
+ * connector, so the thread reads as one drawn line.
+ */
+const THREAD_LINE_CLASS = "border-thread-border";
+
 interface CommentRowProps {
   comment: ReviewComment;
+  /** The first row has no comment above it to connect to. */
+  isFirst: boolean;
   now: Date;
   isEditing: boolean;
   draftContent: string;
@@ -225,6 +234,7 @@ interface CommentRowProps {
 
 function CommentRow({
   comment,
+  isFirst,
   now,
   isEditing,
   draftContent,
@@ -269,107 +279,122 @@ function CommentRow({
       data-comment-thread-root-id={isRoot ? comment.id : undefined}
       className="min-w-0"
     >
-      <div className="flex min-w-0 items-center gap-1.5">
+      {!isFirst && (
         <div
           aria-hidden="true"
-          className={cn(
-            "flex size-5 shrink-0 items-center justify-center rounded-full border shadow-sm",
-            isAiAuthor
-              ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900 dark:text-sky-400"
-              : "border-stone-300 bg-stone-300 text-stone-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300",
-          )}
-        >
-          <AuthorIcon className="size-2.5 shrink-0" />
-        </div>
-        <div className="min-w-0 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
-          {authorLabel}
-        </div>
-        <div
-          className="shrink-0 text-base text-stone-500 dark:text-slate-400"
-          title={absolute}
-        >
-          {relative}
-        </div>
-        <Menu>
-          <MenuTrigger
-            aria-label="Comment actions"
-            data-testid={`comment-row-${comment.id}-menu`}
-            className="ml-auto size-6"
-          >
-            <MoreHorizontal className="size-3.5" />
-          </MenuTrigger>
-          <MenuContent>
-            <MenuItem
-              className="text-base"
-              data-testid={`comment-row-${comment.id}-action-edit`}
-              onClick={onStartEditing}
-            >
-              Edit
-            </MenuItem>
-            <MenuItem
-              data-testid={`comment-row-${comment.id}-action-delete`}
-              className="text-base text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
-              onClick={onDeleteComment}
-            >
-              Delete
-            </MenuItem>
-            {isRoot ? (
-              <>
-                <MenuSeparator />
-                <MenuItem
-                  data-testid={`comment-row-${comment.id}-action-delete-thread`}
-                  className="text-base text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
-                  onClick={onDeleteThread}
-                >
-                  Delete thread
-                </MenuItem>
-              </>
-            ) : null}
-          </MenuContent>
-        </Menu>
-      </div>
-      {isEditing ? (
-        <>
-          <Textarea
-            autoFocus
-            data-testid={`comment-row-${comment.id}-editor`}
-            value={draftContent}
-            rows={1}
-            className="mt-1.5 min-h-12 px-2.5 py-2 text-base leading-5 md:text-base md:leading-5"
-            onKeyDown={handleEditorKeyDown}
-            onChange={(event) => {
-              onChangeDraft(event.target.value);
-            }}
-          />
-          <div className="mt-1.5 flex items-center justify-end gap-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-base"
-              onClick={onCancelEditing}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="text-base"
-              data-testid={`comment-row-${comment.id}-action-save`}
-              disabled={draftContent.trim().length === 0}
-              onClick={onSubmitEditing}
-            >
-              Save
-            </Button>
-          </div>
-        </>
-      ) : (
-        <div
-          className="tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none mt-1 min-h-0 prose-code:before:content-none prose-code:after:content-none"
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: a comment body is Markdown and renders through the document's own renderer.
-          dangerouslySetInnerHTML={{ __html: bodyHtml }}
+          className={cn("ml-4 h-6 w-0.5 border-l-2", THREAD_LINE_CLASS)}
         />
       )}
+      <div className={cn("rounded-md border", THREAD_LINE_CLASS)}>
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-1.5 rounded-t-md border-b bg-thread-header px-4 py-2",
+            THREAD_LINE_CLASS,
+          )}
+        >
+          <div
+            aria-hidden="true"
+            className={cn(
+              "flex size-5 shrink-0 items-center justify-center rounded-full border shadow-sm",
+              isAiAuthor
+                ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900 dark:text-sky-400"
+                : "border-stone-300 bg-stone-300 text-stone-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300",
+            )}
+          >
+            <AuthorIcon className="size-2.5 shrink-0" />
+          </div>
+          <div className="min-w-0 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+            {authorLabel}
+          </div>
+          <div
+            className="shrink-0 text-base text-stone-500 dark:text-slate-400"
+            title={absolute}
+          >
+            {relative}
+          </div>
+          <Menu>
+            <MenuTrigger
+              aria-label="Comment actions"
+              data-testid={`comment-row-${comment.id}-menu`}
+              className="ml-auto size-6"
+            >
+              <MoreHorizontal className="size-3.5" />
+            </MenuTrigger>
+            <MenuContent>
+              <MenuItem
+                className="text-base"
+                data-testid={`comment-row-${comment.id}-action-edit`}
+                onClick={onStartEditing}
+              >
+                Edit
+              </MenuItem>
+              <MenuItem
+                data-testid={`comment-row-${comment.id}-action-delete`}
+                className="text-base text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
+                onClick={onDeleteComment}
+              >
+                Delete
+              </MenuItem>
+              {isRoot ? (
+                <>
+                  <MenuSeparator />
+                  <MenuItem
+                    data-testid={`comment-row-${comment.id}-action-delete-thread`}
+                    className="text-base text-rose-700 dark:text-rose-400 data-[highlighted]:bg-rose-100 dark:data-[highlighted]:bg-rose-900/40 data-[highlighted]:text-rose-700 dark:data-[highlighted]:text-rose-400"
+                    onClick={onDeleteThread}
+                  >
+                    Delete thread
+                  </MenuItem>
+                </>
+              ) : null}
+            </MenuContent>
+          </Menu>
+        </div>
+        <div className="px-4 py-3">
+          {isEditing ? (
+            <>
+              <Textarea
+                autoFocus
+                data-testid={`comment-row-${comment.id}-editor`}
+                value={draftContent}
+                rows={1}
+                className="min-h-12 px-2.5 py-2 text-base leading-5 md:text-base md:leading-5"
+                onKeyDown={handleEditorKeyDown}
+                onChange={(event) => {
+                  onChangeDraft(event.target.value);
+                }}
+              />
+              <div className="mt-1.5 flex items-center justify-end gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-base"
+                  onClick={onCancelEditing}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="text-base"
+                  data-testid={`comment-row-${comment.id}-action-save`}
+                  disabled={draftContent.trim().length === 0}
+                  onClick={onSubmitEditing}
+                >
+                  Save
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div
+              className="tiptap prose prose-stone dark:prose-slate dark:prose-invert max-w-none min-h-0 prose-code:before:content-none prose-code:after:content-none"
+              // biome-ignore lint/security/noDangerouslySetInnerHtml: a comment body is Markdown and renders through the document's own renderer.
+              dangerouslySetInnerHTML={{ __html: bodyHtml }}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

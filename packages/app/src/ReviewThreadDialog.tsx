@@ -199,7 +199,7 @@ export function ReviewThreadDialog({
               {excerpt !== null && (
                 <div
                   data-testid="review-thread-dialog-excerpt"
-                  className="rounded-md bg-muted/40 px-2.5 py-2 mb-2 text-base whitespace-pre-wrap text-slate-700 dark:text-slate-300"
+                  className="rounded-md bg-muted/60 px-2.5 py-2 mb-2 text-base whitespace-pre-wrap text-slate-700 dark:text-slate-300"
                 >
                   {excerpt}
                 </div>
